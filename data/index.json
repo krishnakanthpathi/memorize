@@ -1,6 +1,6 @@
 {
   "total_memories": 1,
-  "last_updated": "2026-08-02T16:25:37.276655+00:00",
+  "last_updated": "2026-08-02T16:36:35.277268+00:00",
   "last_synced": null,
   "categories": {
     "personal": {
@@ -28,10 +28,37 @@
     }
   },
   "tag_index": {
+    "woke": [
+      "d2dc8d53-41f2-428f-b139-e5f9019ddf92"
+    ],
+    "wake": [
+      "d2dc8d53-41f2-428f-b139-e5f9019ddf92"
+    ],
     "daily-routine": [
       "d2dc8d53-41f2-428f-b139-e5f9019ddf92"
     ],
+    "today": [
+      "d2dc8d53-41f2-428f-b139-e5f9019ddf92"
+    ],
+    "6am": [
+      "d2dc8d53-41f2-428f-b139-e5f9019ddf92"
+    ],
+    "hour": [
+      "d2dc8d53-41f2-428f-b139-e5f9019ddf92"
+    ],
+    "time": [
+      "d2dc8d53-41f2-428f-b139-e5f9019ddf92"
+    ],
+    "earlier": [
+      "d2dc8d53-41f2-428f-b139-e5f9019ddf92"
+    ],
+    "7am": [
+      "d2dc8d53-41f2-428f-b139-e5f9019ddf92"
+    ],
     "sleep-improvement": [
+      "d2dc8d53-41f2-428f-b139-e5f9019ddf92"
+    ],
+    "usual": [
       "d2dc8d53-41f2-428f-b139-e5f9019ddf92"
     ]
   },
@@ -39,12 +66,24 @@
     {
       "id": "d2dc8d53-41f2-428f-b139-e5f9019ddf92",
       "title": "Woke up at 6AM",
-      "content": "I woke up at 6AM today, which is 1 hour earlier than my usual wake up time of 7AM.",
       "category": "personal",
       "tags": [
         "daily-routine",
         "sleep-improvement"
       ],
+      "keywords": [
+        "woke",
+        "6am",
+        "today",
+        "hour",
+        "earlier",
+        "usual",
+        "wake",
+        "time",
+        "7am"
+      ],
+      "file_path": "",
+      "snippet": "I woke up at 6AM today, which is 1 hour earlier than my usual wake up time of 7AM.",
       "content_hash": "a2842858975000cfb9a0206f690b8a0c99d207e8575863c30999ddf1d1c8134e",
       "created_at": "2026-08-02T17:18:30.936773+05:30",
       "updated_at": "2026-08-02T17:18:30.936773+05:30"

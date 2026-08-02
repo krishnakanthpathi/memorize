@@ -1,3 +1,4 @@
+from search.filter_extractor import extract_keywords_and_snippet
 import json
 import os
 
@@ -67,31 +68,53 @@ def save_index(index_data: Dict[str, Any]) -> bool:
 @handle_errors
 def add_memory_to_index(memory_entry: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Adds a new memory metadata entry to index.json and updates stats & tag maps.
+    Adds a memory metadata entry to index.json. Stores a clean snippet,
+    extracted keywords, and file_path to keep index.json lightweight and fast.
     """
     index_data = load_index()
 
-    # 1. Increment total count
+    # 1. Extract clean snippet and unique keywords from content
+    full_content = memory_entry.get("content", "")
+    snippet, extracted_keywords = extract_keywords_and_snippet(full_content)
+
+    user_tags = memory_entry.get("tags", [])
+    # Combine user tags + extracted keywords for reverse lookup index
+    all_indexed_terms = list(set(user_tags + extracted_keywords))
+
+    # 2. Lightweight metadata record (No full content stored in JSON!)
+    lightweight_entry = {
+        "id": memory_entry["id"],
+        "title": memory_entry["title"],
+        "category": memory_entry["category"],
+        "tags": user_tags,
+        "keywords": extracted_keywords,
+        "file_path": memory_entry.get("file_path", ""),
+        "snippet": snippet,
+        "content_hash": memory_entry.get("content_hash", ""),
+        "created_at": memory_entry.get("created_at", ""),
+        "updated_at": memory_entry.get("updated_at", ""),
+    }
+
+    # 3. Update total memories count
     index_data["total_memories"] += 1
 
-    # 2. Update category statistics
+    # 4. Update category statistics
     cat = memory_entry["category"]
     if cat in index_data["categories"]:
         index_data["categories"][cat]["count"] += 1
-        for tag in memory_entry.get("tags", []):
+        for tag in user_tags:
             if tag not in index_data["categories"][cat]["tags"]:
                 index_data["categories"][cat]["tags"].append(tag)
 
-    # 3. Update reverse tag lookup index
+    # 5. Update reverse lookup index (for both user tags & extracted keywords)
     mem_id = memory_entry["id"]
-    for tag in memory_entry.get("tags", []):
-        if tag not in index_data["tag_index"]:
-            index_data["tag_index"][tag] = []
-        if mem_id not in index_data["tag_index"][tag]:
-            index_data["tag_index"][tag].append(mem_id)
+    for term in all_indexed_terms:
+        if term not in index_data["tag_index"]:
+            index_data["tag_index"][term] = []
+        if mem_id not in index_data["tag_index"][term]:
+            index_data["tag_index"][term].append(mem_id)
 
-    # 4. Append memory metadata entry
-    index_data["memories"].append(memory_entry)
-
+    # 6. Append entry & save atomically
+    index_data["memories"].append(lightweight_entry)
     save_index(index_data)
     return index_data
