@@ -1,7 +1,9 @@
 import hashlib
 from pathlib import Path
 
+from core.logger import handle_errors
 
+@handle_errors
 def compute_string_hash(content: str) -> str:
     """
     Computes a SHA-256 hash for a given text string.
@@ -9,7 +11,7 @@ def compute_string_hash(content: str) -> str:
     """
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
-
+@handle_errors
 def compute_file_hash(file_path: Path, chunk_size: int = 65536) -> str:
     """
     Computes a SHA-256 hash for a binary media file (image, audio, video, document).
