@@ -43,3 +43,22 @@ WEIGHT_VECTOR_SIMILARITY = 0.50
 WEIGHT_TAG_MATCH = 0.30
 WEIGHT_CATEGORY_MATCH = 0.20
 RELEVANCE_SCORE_THRESHOLD = 0.65
+
+
+# Model-Specific Chunk Sizes & Overlaps
+MODEL_CHUNK_CONFIGS = {
+    # OpenAI Models
+    "text-embedding-3-small": {"chunk_size": 500, "overlap": 50},
+    "text-embedding-3-large": {"chunk_size": 800, "overlap": 80},
+    
+    # Ollama Models
+    "nomic-embed-text": {"chunk_size": 500, "overlap": 50},
+    "mxbai-embed-large": {"chunk_size": 512, "overlap": 50},
+    
+    # Local HuggingFace Models
+    "all-MiniLM-L6-v2": {"chunk_size": 256, "overlap": 30},
+    "bge-small-en-v1.5": {"chunk_size": 512, "overlap": 50},
+    
+    # Gemini / Grok / xAI
+    "embedding-001": {"chunk_size": 500, "overlap": 50},
+}

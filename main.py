@@ -1,3 +1,5 @@
+from config.constants import EMBEDDING_MODEL_NAME
+from vector.chunker import chunk_text
 from storage.index_manager import add_memory_to_index
 from storage.index_manager import save_index
 from storage.index_manager import load_index
@@ -139,6 +141,23 @@ def test_add_memory_to_index(memory_entry: dict) -> dict:
     Adds a new memory metadata entry to index.json and updates stats & tag maps.
     """
     return add_memory_to_index(memory_entry)
+
+
+@mcp.tool()
+def test_chunk_text(
+    memory_id: str,
+    text: str,
+    model_name: str = EMBEDDING_MODEL_NAME,
+) -> dict:
+    """
+    Chunks text accurately using the exact token limits of the active model.
+    """
+    result = chunk_text(memory_id, text, model_name)
+    return {
+        "status": "success",
+        "chunked_data": result,
+    }
+
 
 def main():
     sys.stderr.write("Started Memorize MCP Server\n")
