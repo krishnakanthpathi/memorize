@@ -1,3 +1,7 @@
+from storage.index_manager import add_memory_to_index
+from storage.index_manager import save_index
+from storage.index_manager import load_index
+from storage.index_manager import get_initial_index_structure
 from storage.markdown_handler import delete_markdown_file
 import sys
 from pathlib import Path
@@ -106,6 +110,35 @@ def test_delete_markdown_file(file_path: str) -> dict:
         "file_path": file_path,
         "deleted": result,
     }
+
+
+@mcp.tool()
+def test_get_initial_index_structure() -> dict:
+    """
+    Returns a blank index structure.
+    """
+    return get_initial_index_structure()
+
+@mcp.tool()
+def test_load_index() -> dict:
+    """
+    Loads data/index.json. Seeds a fresh index file if missing or empty.
+    """
+    return load_index()
+
+@mcp.tool()
+def test_save_index(index_data: dict) -> dict:
+    """
+    Atomically writes index_data to data/index.json using a temp file.
+    """
+    return save_index(index_data)
+
+@mcp.tool()
+def test_add_memory_to_index(memory_entry: dict) -> dict:
+    """
+    Adds a new memory metadata entry to index.json and updates stats & tag maps.
+    """
+    return add_memory_to_index(memory_entry)
 
 def main():
     sys.stderr.write("Started Memorize MCP Server\n")
