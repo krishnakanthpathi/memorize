@@ -2,13 +2,14 @@ import os
 from pathlib import Path
 
 # Base Repository Path
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Storage Paths
-INDEX_PATH = BASE_DIR / "index.json"
-CHROMA_DIR = BASE_DIR / "chroma_db"
+# Storage Data Directory
+DATA_DIR = BASE_DIR / "data"
+INDEX_PATH = DATA_DIR / "index.json"
+CHROMA_DIR = DATA_DIR / "chroma_db"
 
-MEMORIES_DIR = BASE_DIR / "memories"
+MEMORIES_DIR = DATA_DIR / "memories"
 MEMORIES_CATEGORIES = {
     "personal": MEMORIES_DIR / "personal",
     "job": MEMORIES_DIR / "job",
@@ -17,7 +18,7 @@ MEMORIES_CATEGORIES = {
     "media": MEMORIES_DIR / "media",
 }
 
-MEDIA_STORE_DIR = BASE_DIR / "media_store"
+MEDIA_STORE_DIR = DATA_DIR / "media_store"
 MEDIA_STORE_SUBDIRS = {
     "images": MEDIA_STORE_DIR / "images",
     "videos": MEDIA_STORE_DIR / "videos",
