@@ -1,0 +1,44 @@
+import os
+from pathlib import Path
+
+# Base Repository Path
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+# Storage Paths
+INDEX_PATH = BASE_DIR / "index.json"
+CHROMA_DIR = BASE_DIR / "chroma_db"
+
+MEMORIES_DIR = BASE_DIR / "memories"
+MEMORIES_CATEGORIES = {
+    "personal": MEMORIES_DIR / "personal",
+    "job": MEMORIES_DIR / "job",
+    "study": MEMORIES_DIR / "study",
+    "routine": MEMORIES_DIR / "routine",
+    "media": MEMORIES_DIR / "media",
+}
+
+MEDIA_STORE_DIR = BASE_DIR / "media_store"
+MEDIA_STORE_SUBDIRS = {
+    "images": MEDIA_STORE_DIR / "images",
+    "videos": MEDIA_STORE_DIR / "videos",
+    "audio": MEDIA_STORE_DIR / "audio",
+    "documents": MEDIA_STORE_DIR / "documents",
+}
+
+# RAG & Embedding Settings
+DEFAULT_CHUNK_SIZE = 500  # tokens
+DEFAULT_CHUNK_OVERLAP = 50  # tokens
+FALLBACK_EMBEDDING_MODEL = "all-MiniLM-L6-v2"  # Local HuggingFace model
+
+# OpenAI primary model
+EMBEDDING_MODEL_NAME = "text-embedding-3-small"
+
+# Ollama embeddings model
+OLLAMA_EMBEDDING_MODEL = "nomic-embed-text"
+OLLAMA_OLLAMA_BASE_URL = "http://localhost:11434"
+
+# Hybrid Search Relevance Weights
+WEIGHT_VECTOR_SIMILARITY = 0.50
+WEIGHT_TAG_MATCH = 0.30
+WEIGHT_CATEGORY_MATCH = 0.20
+RELEVANCE_SCORE_THRESHOLD = 0.65
