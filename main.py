@@ -23,6 +23,7 @@ from storage.markdown_handler import (
     read_markdown_file,
 )
 from utils.model_fetcher import fetch_and_bifurcate_models
+
 from vector.chunker import chunk_text
 from vector.embedder import (
     generate_local_embeddings,
@@ -36,6 +37,9 @@ from vector.vector_db import (
     query_vector_db,
 )
 from vector.vector_db import get_chroma_client
+
+from search.relevance_scorer import search_hybrid_relevance
+
 
 # Initialize FastMCP Server
 mcp = FastMCP("Memorize Server")
@@ -290,6 +294,21 @@ def test_peek_vector_db(limit: int = 10) -> dict:
     """
     return peek_vector_db(limit=limit)
 
+@mcp.tool()
+def hybrid_search_memories(
+    query: str,
+    category_filter: Optional[str] = None,
+    top_k: int = 5,
+) -> List[dict]:
+    """
+    Performs hybrid relevance search combining Vector Similarity (50%), Tag Match (30%),
+    and Category Match (20%) to return ranked top memories.
+    """
+    return search_hybrid_relevance(
+        query=query,
+        category_filter=category_filter if category_filter else None,
+        top_k=top_k,
+    )
 
 
 def main():
