@@ -1,12 +1,13 @@
-import unittest
-import tempfile
 import json
 from pathlib import Path
+import tempfile
+import unittest
+
 from storage.index_manager import (
-    load_index,
-    save_index,
     add_memory_to_index,
     get_initial_index_structure,
+    load_index,
+    save_index,
 )
 
 

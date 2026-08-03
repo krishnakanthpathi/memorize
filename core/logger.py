@@ -1,9 +1,8 @@
-import sys
-import logging
 import functools
+import logging
+import sys
 import traceback
-
-from typing import Callable, Any
+from typing import Any, Callable
 
 # Configure standard logger to write strictly to stderr
 logger = logging.getLogger("memorize")

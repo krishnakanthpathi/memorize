@@ -1,8 +1,9 @@
 import argparse
 import os
 from typing import Any, Dict, List, Optional
-import requests
+
 from dotenv import load_dotenv
+import requests
 
 from config.constants import OPENAI_BASE_URL
 from core.logger import logger

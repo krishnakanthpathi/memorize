@@ -1,23 +1,34 @@
-from vector.embedder import generate_openai_embeddings
-
-from config.constants import EMBEDDING_MODEL_NAME
-
-from vector.chunker import chunk_text
-from storage.index_manager import add_memory_to_index
-from storage.index_manager import save_index
-from storage.index_manager import load_index
-from storage.index_manager import get_initial_index_structure
-from storage.markdown_handler import delete_markdown_file
-import sys
 from pathlib import Path
+import sys
+from typing import List, Optional
+
 from mcp.server.fastmcp import FastMCP
 
-from core.id_generator import generate_memory_id, generate_chunk_id
+from config.constants import (
+    EMBEDDING_MODEL_NAME,
+    FALLBACK_EMBEDDING_MODEL,
+    OLLAMA_EMBEDDING_MODEL,
+)
 from core.hashing import compute_string_hash
-from storage.markdown_handler import create_markdown_file, read_markdown_file
-
-from typing import List, Optional
+from core.id_generator import generate_chunk_id, generate_memory_id
+from storage.index_manager import (
+    add_memory_to_index,
+    get_initial_index_structure,
+    load_index,
+    save_index,
+)
+from storage.markdown_handler import (
+    create_markdown_file,
+    delete_markdown_file,
+    read_markdown_file,
+)
 from utils.model_fetcher import fetch_and_bifurcate_models
+from vector.chunker import chunk_text
+from vector.embedder import (
+    generate_local_embeddings,
+    generate_ollama_embeddings,
+    generate_openai_embeddings,
+)
 
 # Initialize FastMCP Server
 mcp = FastMCP("Memorize Server")
@@ -178,6 +189,36 @@ def test_generate_openai_embeddings(
         "status": "success",
         "embeddings": result,
     }
+
+@mcp.tool()
+def test_generate_ollama_embeddings(
+    texts: List[str], 
+    model_name: str = OLLAMA_EMBEDDING_MODEL
+) -> dict:
+    """
+    Generates embeddings using Ollama API. 
+    """
+    result = generate_ollama_embeddings(texts, model_name)
+    return {
+        "status": "success",
+        "embeddings": result,
+    }
+
+
+@mcp.tool()
+def test_generate_local_embeddings(
+    texts: List[str],
+    model_name: str = FALLBACK_EMBEDDING_MODEL,
+) -> dict:
+    """
+    Generates embeddings using local SentenceTransformer.
+    """
+    result = generate_local_embeddings(texts, model_name=model_name)
+    return {
+        "status": "success",
+        "embeddings": result,
+    }
+    
 
 
 @mcp.tool()

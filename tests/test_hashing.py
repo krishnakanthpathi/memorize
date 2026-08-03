@@ -1,7 +1,8 @@
-import unittest
-import tempfile
 from pathlib import Path
-from core.hashing import compute_string_hash, compute_file_hash
+import tempfile
+import unittest
+
+from core.hashing import compute_file_hash, compute_string_hash
 
 
 class TestHashing(unittest.TestCase):

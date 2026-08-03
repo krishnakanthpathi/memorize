@@ -1,13 +1,12 @@
-from search.filter_extractor import extract_keywords_and_snippet
+from datetime import datetime, timezone
 import json
 import os
-
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 from config.constants import INDEX_PATH, MEMORIES_CATEGORIES
-from core.logger import logger, handle_errors
+from core.logger import handle_errors, logger
+from search.filter_extractor import extract_keywords_and_snippet
 
 
 def get_initial_index_structure() -> Dict[str, Any]:

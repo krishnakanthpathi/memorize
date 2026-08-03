@@ -8,6 +8,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 INDEX_PATH = DATA_DIR / "index.json"
 CHROMA_DIR = DATA_DIR / "chroma_db"
+MODELS_DIR = DATA_DIR / "models"
+MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 MEMORIES_DIR = DATA_DIR / "memories"
 MEMORIES_CATEGORIES = {
@@ -37,7 +39,7 @@ EMBEDDING_MODEL_NAME = "titan-embed-text-v2"
 
 # Ollama embeddings model
 OLLAMA_EMBEDDING_MODEL = "nomic-embed-text"
-OLLAMA_OLLAMA_BASE_URL = "http://localhost:11434"
+OLLAMA_OLLAMA_BASE_URL = "http://100.105.203.102:11434"
 
 # Hybrid Search Relevance Weights
 WEIGHT_VECTOR_SIMILARITY = 0.50

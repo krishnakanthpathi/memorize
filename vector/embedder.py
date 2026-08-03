@@ -1,16 +1,17 @@
-from config.constants import OPENAI_BASE_URL
 import os
-import requests
 from typing import List, Union
+
+import requests
 
 from config.constants import (
     EMBEDDING_MODEL_NAME,
+    FALLBACK_EMBEDDING_MODEL,
+    MODELS_DIR,
     OLLAMA_EMBEDDING_MODEL,
     OLLAMA_OLLAMA_BASE_URL,
-    FALLBACK_EMBEDDING_MODEL,
+    OPENAI_BASE_URL,
 )
 from core.logger import handle_errors, logger
-
 
 @handle_errors
 def generate_embeddings(
@@ -78,15 +79,36 @@ def generate_ollama_embeddings(
     logger.info(f"Generated {len(texts)} embeddings via Ollama ({model_name}).")
     return embeddings
 
-@handle_errors
-def generate_local_embeddings(texts: List[str]) -> List[List[float]]:
-    """Generates embeddings using local sentence-transformers (completely offline)."""
-    from sentence_transformers import SentenceTransformer
+_LOCAL_MODEL_CACHE = {}
 
-    model = SentenceTransformer(FALLBACK_EMBEDDING_MODEL)
+
+def get_local_model(model_name: str = FALLBACK_EMBEDDING_MODEL):
+    """
+    Lazy-loads and caches SentenceTransformer model instances in DATA_DIR/models
+    to prevent re-downloading and re-instantiating on every call.
+    """
+    if model_name not in _LOCAL_MODEL_CACHE:
+        from sentence_transformers import SentenceTransformer
+
+        logger.info(
+            f"Initializing local SentenceTransformer '{model_name}' (cache_folder={MODELS_DIR})..."
+        )
+        _LOCAL_MODEL_CACHE[model_name] = SentenceTransformer(
+            model_name,
+            cache_folder=str(MODELS_DIR),
+        )
+    return _LOCAL_MODEL_CACHE[model_name]
+
+
+@handle_errors
+def generate_local_embeddings(
+    texts: List[str], model_name: str = FALLBACK_EMBEDDING_MODEL
+) -> List[List[float]]:
+    """Generates embeddings using local sentence-transformers (completely offline)."""
+    model = get_local_model(model_name)
     embeddings = model.encode(texts, show_progress_bar=False)
     logger.info(
-        f"Generated {len(texts)} embeddings via local SentenceTransformer ({FALLBACK_EMBEDDING_MODEL})."
+        f"Generated {len(texts)} embeddings via local SentenceTransformer ({model_name})."
     )
     return embeddings.tolist()
 
