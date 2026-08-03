@@ -1,6 +1,7 @@
 import functools
 import logging
 import sys
+import time
 import traceback
 from typing import Any, Callable
 
@@ -42,5 +43,26 @@ def handle_errors(func: Callable[..., Any]) -> Callable[..., Any]:
                 "message": error_msg,
                 "function": func_name,
             }
+
+    return wrapper
+
+
+def time_execution(func: Callable[..., Any]) -> Callable[..., Any]:
+    """
+    Decorator that calculates and logs the execution duration of a function in milliseconds.
+    If the return value is a dict, it attaches an 'execution_time_ms' key for timing stats.
+    """
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        start_time = time.perf_counter()
+        result = func(*args, **kwargs)
+        elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
+
+        logger.info(f"Execution time for '{func.__name__}': {elapsed_ms} ms")
+
+        if isinstance(result, dict) and "execution_time_ms" not in result:
+            result["execution_time_ms"] = elapsed_ms
+
+        return result
 
     return wrapper

@@ -2,7 +2,7 @@ from typing import Any, Dict, List, Optional
 import chromadb
 
 from config.constants import CHROMA_DIR, CHROMA_HOST, CHROMA_PORT
-from core.logger import handle_errors, logger
+from core.logger import handle_errors, logger, time_execution
 
 CHROMA_CLIENT = None
 
@@ -49,6 +49,7 @@ def get_or_create_collection(collection_name: str = "memories"):
 
 
 @handle_errors
+@time_execution
 def add_chunks_to_vector_db(
     chunks: List[Dict[str, Any]],
     embeddings: List[List[float]],
@@ -113,6 +114,7 @@ def add_chunks_to_vector_db(
 
 
 @handle_errors
+@time_execution
 def query_vector_db(
     query_embedding: List[float],
     n_results: int = 10,

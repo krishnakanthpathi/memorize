@@ -1,19 +1,23 @@
 import os
+import requests
+
 from typing import List, Union
 
-import requests
 
 from config.constants import (
     EMBEDDING_MODEL_NAME,
     FALLBACK_EMBEDDING_MODEL,
+    LOCAL_MODEL_CACHE,
     MODELS_DIR,
     OLLAMA_EMBEDDING_MODEL,
     OLLAMA_OLLAMA_BASE_URL,
     OPENAI_BASE_URL,
 )
-from core.logger import handle_errors, logger
+from core.logger import handle_errors, logger, time_execution
+
 
 @handle_errors
+@time_execution
 def generate_embeddings(
     texts: Union[str, List[str]],
     model_name: str = EMBEDDING_MODEL_NAME,
@@ -76,11 +80,8 @@ def generate_ollama_embeddings(
         data = response.json()
         embeddings.append(data["embedding"])
 
-    logger.info(f"Generated {len(texts)} embeddings via Ollama ({model_name}).")
+    logger.info(f"Generated {len(texts)} embeddings via Ollama ({model_name}).")    
     return embeddings
-
-LOCAL_MODEL_CACHE = {}
-
 
 def get_local_model(model_name: str = FALLBACK_EMBEDDING_MODEL):
     """
@@ -101,6 +102,7 @@ def get_local_model(model_name: str = FALLBACK_EMBEDDING_MODEL):
 
 
 @handle_errors
+@time_execution
 def generate_local_embeddings(
     texts: List[str], model_name: str = FALLBACK_EMBEDDING_MODEL
 ) -> List[List[float]]:
