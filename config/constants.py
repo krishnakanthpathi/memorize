@@ -32,7 +32,8 @@ DEFAULT_CHUNK_OVERLAP = 50  # tokens
 FALLBACK_EMBEDDING_MODEL = "all-MiniLM-L6-v2"  # Local HuggingFace model
 
 # OpenAI primary model
-EMBEDDING_MODEL_NAME = "text-embedding-3-small"
+OPENAI_BASE_URL = "https://bedrock-mantle.ap-southeast-2.api.aws/v1"
+EMBEDDING_MODEL_NAME = "titan-embed-text-v2"
 
 # Ollama embeddings model
 OLLAMA_EMBEDDING_MODEL = "nomic-embed-text"

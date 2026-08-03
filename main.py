@@ -1,4 +1,7 @@
+from vector.embedder import generate_openai_embeddings
+
 from config.constants import EMBEDDING_MODEL_NAME
+
 from vector.chunker import chunk_text
 from storage.index_manager import add_memory_to_index
 from storage.index_manager import save_index
@@ -12,6 +15,9 @@ from mcp.server.fastmcp import FastMCP
 from core.id_generator import generate_memory_id, generate_chunk_id
 from core.hashing import compute_string_hash
 from storage.markdown_handler import create_markdown_file, read_markdown_file
+
+from typing import List, Optional
+from utils.model_fetcher import fetch_and_bifurcate_models
 
 # Initialize FastMCP Server
 mcp = FastMCP("Memorize Server")
@@ -157,6 +163,36 @@ def test_chunk_text(
         "status": "success",
         "chunked_data": result,
     }
+
+@mcp.tool()
+def test_generate_openai_embeddings(
+    texts: List[str],
+    api_key: str,
+    model_name: str = EMBEDDING_MODEL_NAME,
+) -> dict:
+    """
+    Generates embeddings using OpenAI API. 
+    """
+    result = generate_openai_embeddings(texts, model_name, api_key)
+    return {
+        "status": "success",
+        "embeddings": result,
+    }
+
+
+@mcp.tool()
+def list_available_models(
+    base_url: str = "",
+    api_key: str = "",
+) -> dict:
+    """
+    Fetches all available models from base_url/api_key and bifurcates them into embedding vs generative models.
+    """
+    return fetch_and_bifurcate_models(
+        base_url=base_url if base_url else None,
+        api_key=api_key if api_key else None,
+    )
+
 
 
 def main():
