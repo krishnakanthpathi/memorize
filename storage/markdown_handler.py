@@ -6,9 +6,9 @@ from typing import Any, Dict, Tuple, Union
 
 import yaml
 
-from config.constants import MEMORIES_CATEGORIES
 from core.hashing import compute_string_hash
 from core.logger import handle_errors, logger
+from utils import get_category_dir
 
 
 @handle_errors
@@ -47,8 +47,7 @@ def create_markdown_file(
         updated_at = now_iso
     if not content_hash:
         content_hash = compute_string_hash(content)
-    category_dir = MEMORIES_CATEGORIES.get(category, MEMORIES_CATEGORIES["personal"])
-    category_dir.mkdir(parents=True, exist_ok=True)
+    category_dir = get_category_dir(category)
 
     filename = title_to_filename(title)
     file_path = category_dir / filename

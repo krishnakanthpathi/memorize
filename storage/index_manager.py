@@ -4,9 +4,10 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from config.constants import INDEX_PATH, MEMORIES_CATEGORIES
+from config.constants import INDEX_PATH, MEMORIES_DIR
 from core.logger import handle_errors, logger
 from search.filter_extractor import extract_keywords_and_snippet
+from utils import get_available_categories, get_category_dir
 
 
 def get_initial_index_structure() -> Dict[str, Any]:
@@ -16,7 +17,7 @@ def get_initial_index_structure() -> Dict[str, Any]:
         "last_updated": None,
         "last_synced": None,
         "categories": {
-            name: {"count": 0, "tags": []} for name in MEMORIES_CATEGORIES.keys()
+            name: {"count": 0, "tags": []} for name in get_available_categories()
         },
         "tag_index": {},
         "memories": [],
@@ -97,13 +98,15 @@ def add_memory_to_index(memory_entry: Dict[str, Any]) -> Dict[str, Any]:
     # 3. Update total memories count
     index_data["total_memories"] += 1
 
-    # 4. Update category statistics
-    cat = memory_entry["category"]
-    if cat in index_data["categories"]:
-        index_data["categories"][cat]["count"] += 1
-        for tag in user_tags:
-            if tag not in index_data["categories"][cat]["tags"]:
-                index_data["categories"][cat]["tags"].append(tag)
+    # 4. Update category statistics (auto-register category if new)
+    cat = memory_entry["category"].lower()
+    if cat not in index_data["categories"]:
+        index_data["categories"][cat] = {"count": 0, "tags": []}
+
+    index_data["categories"][cat]["count"] += 1
+    for tag in user_tags:
+        if tag not in index_data["categories"][cat]["tags"]:
+            index_data["categories"][cat]["tags"].append(tag)
 
     # 5. Update reverse lookup index (for both user tags & extracted keywords)
     mem_id = memory_entry["id"]
@@ -116,4 +119,56 @@ def add_memory_to_index(memory_entry: Dict[str, Any]) -> Dict[str, Any]:
     # 6. Append entry & save atomically
     index_data["memories"].append(lightweight_entry)
     save_index(index_data)
+    return index_data
+
+
+@handle_errors
+def add_category_to_index(category: str) -> Dict[str, Any]:
+    """
+    Dynamically registers a new category in index.json and creates its folder structure.
+    """
+    cat_lower = category.strip().lower()
+    if not cat_lower:
+        return load_index()
+
+    # 1. Ensure disk directory exists
+    cat_dir = get_category_dir(cat_lower)
+
+    # 2. Update index.json structure
+    index_data = load_index()
+    categories = index_data.setdefault("categories", {})
+    if cat_lower not in categories:
+        categories[cat_lower] = {"count": 0, "tags": []}
+        index_data["last_updated"] = datetime.now(timezone.utc).isoformat()
+        save_index(index_data)
+        logger.info(f"Dynamically registered new category '{cat_lower}' in index.json")
+
+    return index_data
+
+
+@handle_errors
+def delete_category_from_index(category: str) -> Dict[str, Any]:
+    """
+    Deletes a category from index.json and removes its directory on disk.
+    """
+    cat_lower = category.strip().lower()
+    if not cat_lower:
+        return load_index()
+
+    # 1. Remove folder on disk if present
+    cat_dir = MEMORIES_DIR / cat_lower
+    if cat_dir.exists():
+        import shutil
+        shutil.rmtree(cat_dir)
+        logger.info(f"Deleted category directory: {cat_dir}")
+
+    # 2. Clean index.json
+    index_data = load_index()
+    categories = index_data.get("categories", {})
+    if cat_lower in categories:
+        del categories[cat_lower]
+        index_data["last_updated"] = datetime.now(timezone.utc).isoformat()
+        save_index(index_data)
+        logger.info(f"Deleted category '{cat_lower}' from index.json")
+
     return index_data

@@ -200,3 +200,29 @@ This guide provides step-by-step instructions and ready-to-copy JSON inputs to t
   "top_k": 5
 }
 ```
+
+---
+
+### 9. Layer 7: Auto-Classification & Dynamic Category Management
+
+#### Tool: `auto_classify_memory`
+- **Description**: Automatically classifies raw text notes and extracts relevant tags (creates new categories dynamically if needed).
+- **Input**:
+```json
+{
+  "text": "Bought 10 shares of Tesla stock today for my long-term investment portfolio."
+}
+```
+
+#### Tool: `get_categories`
+- **Description**: Returns all currently available memory categories on disk and in index.json.
+- **Input**: `{}`
+
+#### Tool: `add_category`
+- **Description**: Manually registers a new category and creates its storage directory.
+- **Input**:
+```json
+{
+  "category": "fitness"
+}
+```

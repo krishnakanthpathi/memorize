@@ -11,8 +11,12 @@ from config.constants import (
 )
 from core.hashing import compute_string_hash
 from core.id_generator import generate_chunk_id, generate_memory_id
+from classification.classifier import classify_memory
+from search.relevance_scorer import search_hybrid_relevance
 from storage.index_manager import (
+    add_category_to_index,
     add_memory_to_index,
+    delete_category_from_index,
     get_initial_index_structure,
     load_index,
     save_index,
@@ -22,8 +26,8 @@ from storage.markdown_handler import (
     delete_markdown_file,
     read_markdown_file,
 )
+from utils import get_available_categories
 from utils.model_fetcher import fetch_and_bifurcate_models
-
 from vector.chunker import chunk_text
 from vector.embedder import (
     generate_local_embeddings,
@@ -33,12 +37,10 @@ from vector.embedder import (
 from vector.vector_db import (
     add_chunks_to_vector_db,
     delete_chunks_by_memory_id,
+    get_chroma_client,
     peek_vector_db,
     query_vector_db,
 )
-from vector.vector_db import get_chroma_client
-
-from search.relevance_scorer import search_hybrid_relevance
 
 
 # Initialize FastMCP Server
@@ -309,6 +311,39 @@ def hybrid_search_memories(
         category_filter=category_filter if category_filter else None,
         top_k=top_k,
     )
+
+
+@mcp.tool()
+def auto_classify_memory(text: str) -> dict:
+    """
+    Analyzes raw text, automatically assigns a category (creating new ones dynamically if needed),
+    and extracts relevant tags.
+    """
+    return classify_memory(text=text)
+
+
+@mcp.tool()
+def get_categories() -> dict:
+    """
+    Returns all currently available memory categories on disk and in index.json.
+    """
+    return {"status": "success", "categories": get_available_categories()}
+
+
+@mcp.tool()
+def add_category(category: str) -> dict:
+    """
+    Dynamically registers a new category in index.json and creates its storage directory.
+    """
+    return add_category_to_index(category=category)
+
+
+@mcp.tool()
+def delete_category(category: str) -> dict:
+    """
+    Deletes a category from index.json and removes its directory on disk.
+    """
+    return delete_category_from_index(category=category)
 
 
 def main():

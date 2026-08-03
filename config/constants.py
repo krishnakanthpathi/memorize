@@ -12,13 +12,9 @@ MODELS_DIR = DATA_DIR / "models"
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 MEMORIES_DIR = DATA_DIR / "memories"
-MEMORIES_CATEGORIES = {
-    "personal": MEMORIES_DIR / "personal",
-    "job": MEMORIES_DIR / "job",
-    "study": MEMORIES_DIR / "study",
-    "routine": MEMORIES_DIR / "routine",
-    "media": MEMORIES_DIR / "media",
-}
+MEMORIES_DIR.mkdir(parents=True, exist_ok=True)
+
+DEFAULT_CATEGORIES = ["personal", "job", "study", "routine", "media"]
 
 MEDIA_STORE_DIR = DATA_DIR / "media_store"
 MEDIA_STORE_SUBDIRS = {
@@ -73,3 +69,6 @@ MODEL_CHUNK_CONFIGS = {
 
 CHROMA_CLIENT = None
 LOCAL_MODEL_CACHE = {}
+
+# Ollama Classification Model
+OLLAMA_CLASSIFICATION_MODEL="gpt-oss:120b-cloud"
