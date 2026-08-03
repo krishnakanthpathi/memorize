@@ -29,6 +29,13 @@ from vector.embedder import (
     generate_ollama_embeddings,
     generate_openai_embeddings,
 )
+from vector.vector_db import (
+    add_chunks_to_vector_db,
+    delete_chunks_by_memory_id,
+    peek_vector_db,
+    query_vector_db,
+)
+from vector.vector_db import get_chroma_client
 
 # Initialize FastMCP Server
 mcp = FastMCP("Memorize Server")
@@ -233,6 +240,55 @@ def list_available_models(
         base_url=base_url if base_url else None,
         api_key=api_key if api_key else None,
     )
+
+@mcp.tool()
+def test_get_chroma_client() -> dict:
+    # display the colletion 'memories' list all the content in that collection
+    # get collection memories
+    collection=get_chroma_client().get_or_create_collection(name='memories')
+    data=collection.get()
+    return {"status": "success", "data": data}
+
+@mcp.tool()
+def test_add_chunks_to_vector_db(chunks: List[dict], embeddings: List[List[float]]) -> dict:
+    """
+    Upserts vector chunks and embeddings into ChromaDB.
+
+    Note: The collection expects 384-dimensional embeddings (e.g. from all-MiniLM-L6-v2 or generate_local_embeddings).
+    """
+    return add_chunks_to_vector_db(chunks, embeddings)
+
+
+@mcp.tool()
+def test_query_vector_db(
+    query_embedding: List[float],
+    n_results: int = 5,
+    category_filter: Optional[str] = None,
+) -> List[dict]:
+    """
+    Queries ChromaDB for vector similarity matches.
+    """
+    return query_vector_db(
+        query_embedding=query_embedding,
+        n_results=n_results,
+        category_filter=category_filter if category_filter else None,
+    )
+
+
+@mcp.tool()
+def test_delete_chunks_by_memory_id(memory_id: str) -> dict:
+    """
+    Deletes all vector chunks associated with a memory_id from ChromaDB.
+    """
+    return delete_chunks_by_memory_id(memory_id)
+
+
+@mcp.tool()
+def test_peek_vector_db(limit: int = 10) -> dict:
+    """
+    Returns total chunk count and peeks at stored chunks in ChromaDB.
+    """
+    return peek_vector_db(limit=limit)
 
 
 

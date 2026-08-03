@@ -59,6 +59,7 @@ def chunk_text(
         return [
             {
                 "chunk_id": generate_chunk_id(memory_id, 0),
+                "memory_id": memory_id,
                 "chunk_index": 0,
                 "text": text.strip(),
                 "token_count": total_tokens,
@@ -91,6 +92,7 @@ def chunk_text(
         chunks.append(
             {
                 "chunk_id": generate_chunk_id(memory_id, chunk_index),
+                "memory_id": memory_id,
                 "chunk_index": chunk_index,
                 "text": chunk_str,
                 "token_count": count_tokens(chunk_str, model_name),

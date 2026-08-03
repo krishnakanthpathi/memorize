@@ -79,7 +79,7 @@ def generate_ollama_embeddings(
     logger.info(f"Generated {len(texts)} embeddings via Ollama ({model_name}).")
     return embeddings
 
-_LOCAL_MODEL_CACHE = {}
+LOCAL_MODEL_CACHE = {}
 
 
 def get_local_model(model_name: str = FALLBACK_EMBEDDING_MODEL):
@@ -87,17 +87,17 @@ def get_local_model(model_name: str = FALLBACK_EMBEDDING_MODEL):
     Lazy-loads and caches SentenceTransformer model instances in DATA_DIR/models
     to prevent re-downloading and re-instantiating on every call.
     """
-    if model_name not in _LOCAL_MODEL_CACHE:
+    if model_name not in LOCAL_MODEL_CACHE:
         from sentence_transformers import SentenceTransformer
 
         logger.info(
             f"Initializing local SentenceTransformer '{model_name}' (cache_folder={MODELS_DIR})..."
         )
-        _LOCAL_MODEL_CACHE[model_name] = SentenceTransformer(
+        LOCAL_MODEL_CACHE[model_name] = SentenceTransformer(
             model_name,
             cache_folder=str(MODELS_DIR),
         )
-    return _LOCAL_MODEL_CACHE[model_name]
+    return LOCAL_MODEL_CACHE[model_name]
 
 
 @handle_errors

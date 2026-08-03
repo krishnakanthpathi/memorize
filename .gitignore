@@ -49,6 +49,8 @@ Thumbs.db
 # Vector DB & Local Storage Data (ignore binary vector files, keep folder structure)
 data/chroma_db/*
 !data/chroma_db/.gitkeep
+data/models/*
+!data/models/.gitkeep
 
 # Ignore raw uploaded media binaries from Git tracking if large
 data/media_store/images/*

@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 import os
 from pathlib import Path
 import re
@@ -6,6 +7,7 @@ from typing import Any, Dict, Tuple, Union
 import yaml
 
 from config.constants import MEMORIES_CATEGORIES
+from core.hashing import compute_string_hash
 from core.logger import handle_errors, logger
 
 
@@ -24,17 +26,27 @@ def title_to_filename(title: str) -> str:
 def create_markdown_file(
     memory_id: str,
     title: str,
-    category: str,
-    tags: list[str],
-    content: str,
-    content_hash: str,
-    created_at: str,
-    updated_at: str,
+    category: str = "personal",
+    tags: list[str] = None,
+    content: str = "",
+    content_hash: str = "",
+    created_at: str = "",
+    updated_at: str = "",
 ) -> Path:
     """
     Builds YAML frontmatter + content body and writes a Markdown file to disk.
     Returns the absolute Path of the created file.
     """
+    if tags is None:
+        tags = []
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    if not created_at:
+        created_at = now_iso
+    if not updated_at:
+        updated_at = now_iso
+    if not content_hash:
+        content_hash = compute_string_hash(content)
     category_dir = MEMORIES_CATEGORIES.get(category, MEMORIES_CATEGORIES["personal"])
     category_dir.mkdir(parents=True, exist_ok=True)
 

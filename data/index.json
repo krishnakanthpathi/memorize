@@ -1,6 +1,6 @@
 {
-  "total_memories": 1,
-  "last_updated": "2026-08-02T16:36:35.277268+00:00",
+  "total_memories": 6,
+  "last_updated": "2026-08-03T04:58:03.636688+00:00",
   "last_synced": null,
   "categories": {
     "personal": {
@@ -15,8 +15,12 @@
       "tags": []
     },
     "study": {
-      "count": 0,
-      "tags": []
+      "count": 5,
+      "tags": [
+        "docker",
+        "chroma",
+        "ollama"
+      ]
     },
     "routine": {
       "count": 0,
@@ -60,6 +64,15 @@
     ],
     "usual": [
       "d2dc8d53-41f2-428f-b139-e5f9019ddf92"
+    ],
+    "docker": [
+      "mem_sample_01"
+    ],
+    "chroma": [
+      "mem_sample_01"
+    ],
+    "ollama": [
+      "mem_sample_01"
     ]
   },
   "memories": [
@@ -87,6 +100,86 @@
       "content_hash": "a2842858975000cfb9a0206f690b8a0c99d207e8575863c30999ddf1d1c8134e",
       "created_at": "2026-08-02T17:18:30.936773+05:30",
       "updated_at": "2026-08-02T17:18:30.936773+05:30"
+    },
+    {
+      "id": "mem_sample_01",
+      "title": "Container Setup Notes",
+      "category": "study",
+      "tags": [
+        "docker",
+        "chroma",
+        "ollama"
+      ],
+      "keywords": [],
+      "file_path": "/Users/krishnakanth/Projects/memorize/data/memories/study/container_setup_notes.md",
+      "snippet": "",
+      "content_hash": "53a13a312fa1ec67c4726c890e26bc53388a11918d2a8b7a832b2e4207218d67",
+      "created_at": "2026-08-03T04:49:22.574677+00:00",
+      "updated_at": "2026-08-03T04:49:22.574677+00:00"
+    },
+    {
+      "id": "mem_sample_01",
+      "title": "Container Setup Notes",
+      "category": "study",
+      "tags": [
+        "docker",
+        "chroma",
+        "ollama"
+      ],
+      "keywords": [],
+      "file_path": "/Users/krishnakanth/Projects/memorize/data/memories/study/container_setup_notes.md",
+      "snippet": "",
+      "content_hash": "53a13a312fa1ec67c4726c890e26bc53388a11918d2a8b7a832b2e4207218d67",
+      "created_at": "2026-08-03T04:49:22.574677+00:00",
+      "updated_at": "2026-08-03T04:49:22.574677+00:00"
+    },
+    {
+      "id": "mem_sample_01",
+      "title": "Container Setup Notes",
+      "category": "study",
+      "tags": [
+        "docker",
+        "chroma",
+        "ollama"
+      ],
+      "keywords": [],
+      "file_path": "/Users/krishnakanth/Projects/memorize/data/memories/study/container_setup_notes.md",
+      "snippet": "",
+      "content_hash": "53a13a312fa1ec67c4726c890e26bc53388a11918d2a8b7a832b2e4207218d67",
+      "created_at": "2026-08-03T04:49:22.574677+00:00",
+      "updated_at": "2026-08-03T04:49:22.574677+00:00"
+    },
+    {
+      "id": "mem_sample_01",
+      "title": "Container Setup Notes",
+      "category": "study",
+      "tags": [
+        "docker",
+        "chroma",
+        "ollama"
+      ],
+      "keywords": [],
+      "file_path": "/Users/krishnakanth/Projects/memorize/data/memories/study/container_setup_notes.md",
+      "snippet": "",
+      "content_hash": "53a13a312fa1ec67c4726c890e26bc53388a11918d2a8b7a832b2e4207218d67",
+      "created_at": "2026-08-03T04:49:22.574677+00:00",
+      "updated_at": "2026-08-03T04:49:22.574677+00:00"
+    },
+    {
+      "id": "mem_sample_01",
+      "title": "Container Setup Notes",
+      "category": "study",
+      "tags": [
+        "docker",
+        "chroma",
+        "ollama"
+      ],
+      "keywords": [],
+      "file_path": "/Users/krishnakanth/Projects/memorize/data/memories/study/container_setup_notes.md",
+      "snippet": "",
+      "content_hash": "53a13a312fa1ec67c4726c890e26bc53388a11918d2a8b7a832b2e4207218d67",
+      "created_at": "2026-08-03T04:49:22.574677+00:00",
+      "updated_at": "2026-08-03T04:49:22.574677+00:00"
     }
   ]
 }

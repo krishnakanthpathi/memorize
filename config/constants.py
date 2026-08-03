@@ -41,6 +41,10 @@ EMBEDDING_MODEL_NAME = "titan-embed-text-v2"
 OLLAMA_EMBEDDING_MODEL = "nomic-embed-text"
 OLLAMA_OLLAMA_BASE_URL = "http://100.105.203.102:11434"
 
+# Remote ChromaDB Container Settings
+CHROMA_HOST = "100.105.203.102"
+CHROMA_PORT = 8000
+
 # Hybrid Search Relevance Weights
 WEIGHT_VECTOR_SIMILARITY = 0.50
 WEIGHT_TAG_MATCH = 0.30
@@ -65,3 +69,6 @@ MODEL_CHUNK_CONFIGS = {
     # Gemini / Grok / xAI
     "embedding-001": {"chunk_size": 500, "overlap": 50},
 }
+
+
+CHROMA_CLIENT = None
