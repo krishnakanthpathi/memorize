@@ -33,23 +33,20 @@ def generate_embeddings(
         return []
 
     # 1. Try OpenAI-compatible endpoint
-    try:
-        return generate_openai_embeddings(texts, model_name=model_name)
-    except Exception as e:
-        logger.warning(
-            f"OpenAI embedding generation failed ({e}). Trying Ollama ({OLLAMA_EMBEDDING_MODEL})..."
-        )
+    res = generate_openai_embeddings(texts, model_name=model_name)
+    if isinstance(res, list) and len(res) == len(texts) and isinstance(res[0], list):
+        return res
+    logger.warning(f"OpenAI embedding generation invalid ({res}). Trying Ollama ({OLLAMA_EMBEDDING_MODEL})...")
 
     # 2. Try Ollama endpoint
-    try:
-        return generate_ollama_embeddings(texts, model_name=OLLAMA_EMBEDDING_MODEL)
-    except Exception as e:
-        logger.warning(
-            f"Ollama embedding generation failed ({e}). Falling back to local SentenceTransformer ({FALLBACK_EMBEDDING_MODEL})..."
-        )
+    res = generate_ollama_embeddings(texts, model_name=OLLAMA_EMBEDDING_MODEL)
+    if isinstance(res, list) and len(res) == len(texts) and isinstance(res[0], list):
+        return res
+    logger.warning(f"Ollama embedding generation invalid ({res}). Falling back to local SentenceTransformer ({FALLBACK_EMBEDDING_MODEL})...")
 
     # 3. Fallback to local offline SentenceTransformer model
     return generate_local_embeddings(texts, model_name=FALLBACK_EMBEDDING_MODEL)
+
 
 @handle_errors
 def generate_openai_embeddings(

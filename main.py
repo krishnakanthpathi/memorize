@@ -4,21 +4,14 @@ from typing import List, Optional
 
 from mcp.server.fastmcp import FastMCP
 
-from config.constants import (
-    EMBEDDING_MODEL_NAME,
-    FALLBACK_EMBEDDING_MODEL,
-    OLLAMA_EMBEDDING_MODEL,
-)
-from core.hashing import compute_string_hash
-from core.id_generator import generate_chunk_id, generate_memory_id
 from classification.classifier import classify_memory
+from core.hashing import compute_string_hash
+from core.id_generator import generate_memory_id
 from search.relevance_scorer import search_hybrid_relevance
-
 from storage.index_manager import (
     add_category_to_index,
     add_memory_to_index,
     delete_category_from_index,
-    get_initial_index_structure,
     load_index,
     save_index,
 )
@@ -27,75 +20,51 @@ from storage.markdown_handler import (
     delete_markdown_file,
     read_markdown_file,
 )
+from storage.sync_manager import (
+    _remove_memory_from_index_dict,
+    clear_all_memories as sync_clear_all_memories,
+    get_memory_file_status as sync_get_memory_file_status,
+    start_background_watcher,
+    sync_markdown_files as sync_scan_markdown_files,
+)
 from utils import get_available_categories
 from utils.model_fetcher import fetch_and_bifurcate_models
 from vector.chunker import chunk_text
-from vector.embedder import (
-    generate_local_embeddings,
-    generate_ollama_embeddings,
-    generate_openai_embeddings,
-)
+from vector.embedder import generate_local_embeddings
 from vector.vector_db import (
     add_chunks_to_vector_db,
     delete_chunks_by_memory_id,
-    get_chroma_client,
     peek_vector_db,
-    query_vector_db,
 )
-
 
 # Initialize FastMCP Server
 mcp = FastMCP("Memorize Server")
 
 
-@mcp.tool()
-def ping(message: str = "hello") -> str:
-    """
-    Test tool to verify that the Memorize MCP server is online.
-    """
-    return f"Memorize MCP Server is active! You sent: '{message}'"
-
+# ==========================================
+# 🟢 1. Core End-to-End Memory Pipeline
+# ==========================================
 
 @mcp.tool()
-def test_generate_id() -> dict:
-    """
-    Test tool to generate a new unique Memory ID and Chunk ID.
-    """
-    mem_id = generate_memory_id()
-    chunk_id = generate_chunk_id(mem_id, 0)
-    return {
-        "status": "success",
-        "generated_memory_id": mem_id,
-        "generated_chunk_id": chunk_id,
-    }
-
-
-@mcp.tool()
-def test_hash_string(content: str) -> dict:
-    """
-    Test tool to compute the SHA-256 hash of a given text content.
-    """
-    content_hash = compute_string_hash(content)
-    return {
-        "content": content,
-        "sha256_hash": content_hash,
-    }
-
-
-@mcp.tool()
-def test_create_markdown_file(
-    memory_id: str,
+def store_memory(
     title: str,
     content: str,
     category: str = "personal",
-    tags: list[str] = ["test"],
-    content_hash: str = "",
-    created_at: str = "",
-    updated_at: str = "",
+    tags: List[str] = None,
 ) -> dict:
     """
-    Creates a Markdown file with YAML frontmatter and content body.
+    Full end-to-end memory pipeline:
+    Generates a unique Memory ID, creates Markdown storage file on disk,
+    chunks text, generates vector embeddings, upserts chunks to ChromaDB,
+    and records metadata in data/index.json.
     """
+    if tags is None:
+        tags = []
+
+    memory_id = generate_memory_id()
+    content_hash = compute_string_hash(content)
+
+    # 1. Create Markdown file on disk
     file_path = create_markdown_file(
         memory_id=memory_id,
         title=title,
@@ -103,199 +72,171 @@ def test_create_markdown_file(
         tags=tags,
         content=content,
         content_hash=content_hash,
-        created_at=created_at,
-        updated_at=updated_at,
     )
+
+    # 2. Model-aware text chunking
+    chunks = chunk_text(memory_id, content)
+
+    # 3. Generate embeddings & store in ChromaDB
+    chunk_ids = []
+    if chunks:
+        chunk_texts = [c["content"] for c in chunks]
+        embeddings = generate_local_embeddings(chunk_texts)
+        add_chunks_to_vector_db(chunks, embeddings)
+        chunk_ids = [c["id"] for c in chunks]
+
+    # 4. Save metadata to index.json
+    memory_entry = {
+        "id": memory_id,
+        "title": title,
+        "category": category,
+        "tags": tags,
+        "file_path": str(file_path),
+        "content": content,
+        "content_hash": content_hash,
+        "chunk_ids": chunk_ids,
+    }
+
+    add_memory_to_index(memory_entry)
+
     return {
         "status": "success",
+        "memory_id": memory_id,
+        "title": title,
+        "category": category,
+        "tags": tags,
         "file_path": str(file_path),
-        "exists_on_disk": Path(file_path).exists() if isinstance(file_path, (str, Path)) else False,
+        "chunk_count": len(chunks),
     }
 
 
 @mcp.tool()
-def test_read_markdown_file(file_path: str) -> dict:
+def read_memory(memory_id: str) -> dict:
     """
-    Reads a Markdown file from disk and parses YAML frontmatter + content body.
+    Fetches frontmatter metadata, tags, and full content for a given Memory ID.
     """
-    result = read_markdown_file(file_path)
-    
-    # If read_markdown_file returned an error dict from @handle_errors
-    if isinstance(result, dict) and result.get("status") == "error":
-        return result
+    index_data = load_index()
+    target_mem = None
 
-    frontmatter, content = result
+    for m in index_data.get("memories", []):
+        if m["id"] == memory_id:
+            target_mem = m
+            break
+
+    if not target_mem:
+        return {"status": "error", "message": f"Memory with ID '{memory_id}' not found."}
+
+    file_path = target_mem.get("file_path", "")
+    read_result = read_markdown_file(file_path)
+
+    if isinstance(read_result, dict) and read_result.get("status") == "error":
+        return read_result
+
+    frontmatter, content = read_result
     return {
         "status": "success",
+        "memory_id": memory_id,
+        "title": target_mem.get("title"),
+        "category": target_mem.get("category"),
+        "tags": target_mem.get("tags", []),
         "file_path": file_path,
         "frontmatter": frontmatter,
         "content": content,
+        "created_at": target_mem.get("created_at"),
+        "updated_at": target_mem.get("updated_at"),
     }
 
+
 @mcp.tool()
-def test_delete_markdown_file(file_path: str) -> dict:
+def delete_memory(memory_id: str) -> dict:
     """
-    Deletes a Markdown file from disk if it exists.
+    Deletes a memory across Markdown disk storage, index.json, and ChromaDB vector store.
     """
-    result = delete_markdown_file(file_path)
+    index_data = load_index()
+    target_mem = None
+
+    for m in index_data.get("memories", []):
+        if m["id"] == memory_id:
+            target_mem = m
+            break
+
+    if not target_mem:
+        return {"status": "error", "message": f"Memory with ID '{memory_id}' not found."}
+
+    # 1. Delete Markdown file
+    file_path = target_mem.get("file_path")
+    if file_path:
+        delete_markdown_file(file_path)
+
+    # 2. Delete ChromaDB vector chunks
+    delete_chunks_by_memory_id(memory_id)
+
+    # 3. Remove from index.json
+    _remove_memory_from_index_dict(index_data, memory_id)
+    save_index(index_data)
+
     return {
         "status": "success",
-        "file_path": file_path,
-        "deleted": result,
+        "message": f"Memory '{memory_id}' deleted successfully from disk, index.json, and ChromaDB.",
     }
 
 
 @mcp.tool()
-def test_get_initial_index_structure() -> dict:
+def clear_all_memories() -> dict:
     """
-    Returns a blank index structure.
+    Completely purges all memories from disk, resets data/index.json,
+    and clears ChromaDB vector database store.
     """
-    return get_initial_index_structure()
-
-@mcp.tool()
-def test_load_index() -> dict:
-    """
-    Loads data/index.json. Seeds a fresh index file if missing or empty.
-    """
-    return load_index()
-
-@mcp.tool()
-def test_save_index(index_data: dict) -> dict:
-    """
-    Atomically writes index_data to data/index.json using a temp file.
-    """
-    return save_index(index_data)
-
-@mcp.tool()
-def test_add_memory_to_index(memory_entry: dict) -> dict:
-    """
-    Adds a new memory metadata entry to index.json and updates stats & tag maps.
-    """
-    return add_memory_to_index(memory_entry)
+    return sync_clear_all_memories()
 
 
 @mcp.tool()
-def test_chunk_text(
-    memory_id: str,
-    text: str,
-    model_name: str = EMBEDDING_MODEL_NAME,
-) -> dict:
-    """
-    Chunks text accurately using the exact token limits of the active model.
-    """
-    result = chunk_text(memory_id, text, model_name)
-    return {
-        "status": "success",
-        "chunked_data": result,
-    }
-
-@mcp.tool()
-def test_generate_openai_embeddings(
-    texts: List[str],
-    api_key: str,
-    model_name: str = EMBEDDING_MODEL_NAME,
-) -> dict:
-    """
-    Generates embeddings using OpenAI API. 
-    """
-    result = generate_openai_embeddings(texts, model_name, api_key)
-    return {
-        "status": "success",
-        "embeddings": result,
-    }
-
-@mcp.tool()
-def test_generate_ollama_embeddings(
-    texts: List[str], 
-    model_name: str = OLLAMA_EMBEDDING_MODEL
-) -> dict:
-    """
-    Generates embeddings using Ollama API. 
-    """
-    result = generate_ollama_embeddings(texts, model_name)
-    return {
-        "status": "success",
-        "embeddings": result,
-    }
-
-
-@mcp.tool()
-def test_generate_local_embeddings(
-    texts: List[str],
-    model_name: str = FALLBACK_EMBEDDING_MODEL,
-) -> dict:
-    """
-    Generates embeddings using local SentenceTransformer.
-    """
-    result = generate_local_embeddings(texts, model_name=model_name)
-    return {
-        "status": "success",
-        "embeddings": result,
-    }
-    
-
-
-@mcp.tool()
-def list_available_models(
-    base_url: str = "",
-    api_key: str = "",
-) -> dict:
-    """
-    Fetches all available models from base_url/api_key and bifurcates them into embedding vs generative models.
-    """
-    return fetch_and_bifurcate_models(
-        base_url=base_url if base_url else None,
-        api_key=api_key if api_key else None,
-    )
-
-@mcp.tool()
-def test_get_chroma_client() -> dict:
-    # display the colletion 'memories' list all the content in that collection
-    # get collection memories
-    collection=get_chroma_client().get_or_create_collection(name='memories')
-    data=collection.get()
-    return {"status": "success", "data": data}
-
-@mcp.tool()
-def test_add_chunks_to_vector_db(chunks: List[dict], embeddings: List[List[float]]) -> dict:
-    """
-    Upserts vector chunks and embeddings into ChromaDB.
-
-    Note: The collection expects 384-dimensional embeddings (e.g. from all-MiniLM-L6-v2 or generate_local_embeddings).
-    """
-    return add_chunks_to_vector_db(chunks, embeddings)
-
-
-@mcp.tool()
-def test_query_vector_db(
-    query_embedding: List[float],
-    n_results: int = 5,
+def list_memories(
     category_filter: Optional[str] = None,
-) -> List[dict]:
+    tag_filter: Optional[str] = None,
+) -> dict:
     """
-    Queries ChromaDB for vector similarity matches.
+    Lists stored memories with optional filtering by category or tag.
     """
-    return query_vector_db(
-        query_embedding=query_embedding,
-        n_results=n_results,
-        category_filter=category_filter if category_filter else None,
-    )
+    index_data = load_index()
+    memories = index_data.get("memories", [])
+
+    if category_filter:
+        cat_lower = category_filter.strip().lower()
+        memories = [m for m in memories if m.get("category", "").lower() == cat_lower]
+
+    if tag_filter:
+        tag_lower = tag_filter.strip().lower()
+        memories = [m for m in memories if any(t.lower() == tag_lower for t in m.get("tags", []))]
+
+    return {
+        "status": "success",
+        "total_count": len(memories),
+        "memories": memories,
+    }
 
 
 @mcp.tool()
-def test_delete_chunks_by_memory_id(memory_id: str) -> dict:
+def get_memory_file_status(memory_id_or_path: str) -> dict:
     """
-    Deletes all vector chunks associated with a memory_id from ChromaDB.
+    Checks and returns the exact status of a Markdown file (existence, full text,
+    frontmatter metadata, estimated tokens, content hash, and sync state).
     """
-    return delete_chunks_by_memory_id(memory_id)
+    return sync_get_memory_file_status(memory_id_or_path)
 
 
 @mcp.tool()
-def test_peek_vector_db(limit: int = 10) -> dict:
+def sync_markdown_files() -> dict:
     """
-    Returns total chunk count and peeks at stored chunks in ChromaDB.
+    Scans data/memories/ for Markdown files added, updated, or deleted on disk,
+    automatically chunking, embedding, and updating index.json + ChromaDB.
     """
-    return peek_vector_db(limit=limit)
+    return sync_scan_markdown_files()
+
+
+# ==========================================
+# 🔍 2. Intelligence & Search Engine
+# ==========================================
 
 @mcp.tool()
 def hybrid_search_memories(
@@ -304,8 +245,8 @@ def hybrid_search_memories(
     top_k: int = 5,
 ) -> List[dict]:
     """
-    Performs hybrid relevance search combining Vector Similarity (50%), Tag Match (30%),
-    and Category Match (20%) to return ranked top memories.
+    Performs hybrid weighted relevance search combining Vector Similarity (50%),
+    Tag Match (30%), and Category Match (20%) to return ranked top memories.
     """
     return search_hybrid_relevance(
         query=query,
@@ -322,6 +263,10 @@ def auto_classify_memory(text: str) -> dict:
     """
     return classify_memory(text=text)
 
+
+# ==========================================
+# 📁 3. Category & Model Tools
+# ==========================================
 
 @mcp.tool()
 def get_categories() -> dict:
@@ -347,12 +292,34 @@ def delete_category(category: str) -> dict:
     return delete_category_from_index(category=category)
 
 
+@mcp.tool()
+def peek_vector_db_chunks(limit: int = 10) -> dict:
+    """
+    Inspects stored vector chunks in ChromaDB.
+    """
+    return peek_vector_db(limit=limit)
 
 
+@mcp.tool()
+def list_available_models(
+    base_url: str = "",
+    api_key: str = "",
+) -> dict:
+    """
+    Fetches available models and bifurcates into embedding vs generative models.
+    """
+    return fetch_and_bifurcate_models(
+        base_url=base_url if base_url else None,
+        api_key=api_key if api_key else None,
+    )
 
 
 def main():
     sys.stderr.write("Started Memorize MCP Server\n")
+    # Start background file watcher for Markdown directory
+    start_background_watcher()
+    # Initial scan/sync on launch
+    sync_scan_markdown_files()
     mcp.run(transport="stdio")
 
 

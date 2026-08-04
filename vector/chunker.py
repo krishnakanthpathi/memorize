@@ -73,19 +73,17 @@ def chunk_text(
 
     while start_idx < len(words):
         curr_words = []
-        curr_tokens = 0
         end_idx = start_idx
 
-        # Accumulate words until token count reaches max_tokens
         while end_idx < len(words):
-            next_word = words[end_idx]
-            word_tokens = count_tokens(next_word, model_name)
+            candidate_words = curr_words + [words[end_idx]]
+            candidate_text = " ".join(candidate_words)
+            candidate_tokens = count_tokens(candidate_text, model_name)
 
-            if curr_tokens + word_tokens > max_tokens and curr_words:
+            if candidate_tokens > max_tokens and curr_words:
                 break
 
-            curr_words.append(next_word)
-            curr_tokens += word_tokens
+            curr_words.append(words[end_idx])
             end_idx += 1
 
         chunk_str = " ".join(curr_words)
@@ -122,3 +120,4 @@ def chunk_text(
         f"({total_tokens} tokens) -> {len(chunks)} chunks."
     )
     return chunks
+

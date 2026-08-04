@@ -46,21 +46,10 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Vector DB & Local Storage Data (ignore binary vector files, keep folder structure)
-data/chroma_db/*
-!data/chroma_db/.gitkeep
-data/models/*
-!data/models/.gitkeep
-
-# Ignore raw uploaded media binaries from Git tracking if large
-data/media_store/images/*
-!data/media_store/images/.gitkeep
-data/media_store/videos/*
-!data/media_store/videos/.gitkeep
-data/media_store/audio/*
-!data/media_store/audio/.gitkeep
-data/media_store/documents/*
-!data/media_store/documents/.gitkeep
+# Personal Data & Vector Storage Directory
+# Ignores all personal memory files, index.json, media stores, vector databases, and models
+data/*
+!data/**/.gitkeep
 
 # Temporary / Log files
 *.log
