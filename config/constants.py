@@ -14,15 +14,7 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 MEMORIES_DIR = DATA_DIR / "memories"
 MEMORIES_DIR.mkdir(parents=True, exist_ok=True)
 
-DEFAULT_CATEGORIES = ["personal", "job", "study", "routine", "media"]
-
-MEDIA_STORE_DIR = DATA_DIR / "media_store"
-MEDIA_STORE_SUBDIRS = {
-    "images": MEDIA_STORE_DIR / "images",
-    "videos": MEDIA_STORE_DIR / "videos",
-    "audio": MEDIA_STORE_DIR / "audio",
-    "documents": MEDIA_STORE_DIR / "documents",
-}
+DEFAULT_CATEGORIES = ["personal", "job", "study", "routine"]
 
 # RAG & Embedding Settings
 DEFAULT_CHUNK_SIZE = 500  # tokens
@@ -35,7 +27,7 @@ EMBEDDING_MODEL_NAME = "titan-embed-text-v2"
 
 # Ollama embeddings model
 OLLAMA_EMBEDDING_MODEL = "nomic-embed-text"
-OLLAMA_OLLAMA_BASE_URL = "http://100.105.203.102:11434"
+OLLAMA_BASE_URL = "http://100.105.203.102:11434"
 
 # Remote ChromaDB Container Settings
 CHROMA_HOST = "100.105.203.102"
@@ -71,4 +63,4 @@ CHROMA_CLIENT = None
 LOCAL_MODEL_CACHE = {}
 
 # Ollama Classification Model
-OLLAMA_CLASSIFICATION_MODEL="gpt-oss:120b-cloud"
+OLLAMA_CLASSIFICATION_MODEL = "gpt-oss:120b-cloud"

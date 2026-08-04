@@ -13,6 +13,7 @@ from core.hashing import compute_string_hash
 from core.id_generator import generate_chunk_id, generate_memory_id
 from classification.classifier import classify_memory
 from search.relevance_scorer import search_hybrid_relevance
+
 from storage.index_manager import (
     add_category_to_index,
     add_memory_to_index,
@@ -344,6 +345,10 @@ def delete_category(category: str) -> dict:
     Deletes a category from index.json and removes its directory on disk.
     """
     return delete_category_from_index(category=category)
+
+
+
+
 
 
 def main():

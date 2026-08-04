@@ -1,6 +1,6 @@
 {
-  "total_memories": 7,
-  "last_updated": "2026-08-03T16:29:40.333855+00:00",
+  "total_memories": 9,
+  "last_updated": "2026-08-04T05:02:51.415144+00:00",
   "last_synced": null,
   "categories": {
     "personal": {
@@ -15,7 +15,7 @@
       "tags": []
     },
     "study": {
-      "count": 6,
+      "count": 8,
       "tags": [
         "docker",
         "chroma",
@@ -23,7 +23,14 @@
         "quantum",
         "physics",
         "qubit",
-        "computing"
+        "computing",
+        "transcript",
+        "grades",
+        "computer-science",
+        "btech",
+        "document",
+        "cmm",
+        "upload"
       ]
     },
     "routine": {
@@ -89,6 +96,29 @@
     ],
     "physics": [
       "mem_bbc1b8dbd868"
+    ],
+    "grades": [
+      "mem_aaeb01db969b"
+    ],
+    "btech": [
+      "mem_aaeb01db969b",
+      "mem_3c6bae42bb26"
+    ],
+    "computer-science": [
+      "mem_aaeb01db969b"
+    ],
+    "transcript": [
+      "mem_aaeb01db969b"
+    ],
+    "document": [
+      "mem_aaeb01db969b",
+      "mem_3c6bae42bb26"
+    ],
+    "cmm": [
+      "mem_3c6bae42bb26"
+    ],
+    "upload": [
+      "mem_3c6bae42bb26"
     ]
   },
   "memories": [
@@ -209,6 +239,41 @@
       ],
       "keywords": [],
       "file_path": "/Users/krishnakanth/Projects/memorize/data/memories/study/quantum_computing_fundamentals.md",
+      "snippet": "",
+      "content_hash": "",
+      "created_at": "",
+      "updated_at": ""
+    },
+    {
+      "id": "mem_aaeb01db969b",
+      "title": "Document Memory: cmm btech",
+      "category": "study",
+      "tags": [
+        "transcript",
+        "grades",
+        "computer-science",
+        "btech",
+        "document"
+      ],
+      "keywords": [],
+      "file_path": "/Users/krishnakanth/Projects/memorize/data/memories/study/document_memory_cmm_btech.md",
+      "snippet": "",
+      "content_hash": "",
+      "created_at": "",
+      "updated_at": ""
+    },
+    {
+      "id": "mem_3c6bae42bb26",
+      "title": "Document Memory (OPENAI): cmm btech",
+      "category": "study",
+      "tags": [
+        "btech",
+        "cmm",
+        "document",
+        "upload"
+      ],
+      "keywords": [],
+      "file_path": "/Users/krishnakanth/Projects/memorize/data/memories/study/document_memory_openai_cmm_btech.md",
       "snippet": "",
       "content_hash": "",
       "created_at": "",

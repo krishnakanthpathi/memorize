@@ -5,8 +5,8 @@ import requests
 
 from config.constants import (
     MEMORIES_DIR,
+    OLLAMA_BASE_URL,
     OLLAMA_CLASSIFICATION_MODEL,
-    OLLAMA_OLLAMA_BASE_URL,
 )
 from core.logger import handle_errors, logger, time_execution
 from storage.index_manager import add_category_to_index
@@ -70,7 +70,7 @@ Return ONLY valid JSON matching this exact structure:
 }}
 """
     try:
-        url = f"{OLLAMA_OLLAMA_BASE_URL}/api/generate"
+        url = f"{OLLAMA_BASE_URL}/api/generate"
         payload = {
             "model": OLLAMA_CLASSIFICATION_MODEL,
             "prompt": prompt,
