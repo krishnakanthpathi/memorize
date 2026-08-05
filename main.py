@@ -8,26 +8,29 @@ from classification.classifier import classify_memory
 from core.hashing import compute_string_hash
 from core.id_generator import generate_memory_id
 from search.relevance_scorer import search_hybrid_relevance
-from storage.index_manager import (
-    add_category_to_index,
-    add_memory_to_index,
-    delete_category_from_index,
-    load_index,
-    save_index,
+from storage.db_manager import (
+    delete_memory_from_index,
+    find_memory_by_title_or_slug,
+    get_all_memories,
+    get_memory_by_id,
+    init_db,
+    upsert_memory_index,
 )
 from storage.markdown_handler import (
+    append_to_markdown_file,
     create_markdown_file,
     delete_markdown_file,
+    normalize_title,
     read_markdown_file,
+    title_to_slug,
 )
 from storage.sync_manager import (
-    _remove_memory_from_index_dict,
     clear_all_memories as sync_clear_all_memories,
     get_memory_file_status as sync_get_memory_file_status,
     start_background_watcher,
     sync_markdown_files as sync_scan_markdown_files,
 )
-from utils import get_available_categories
+from utils import get_available_categories, get_category_dir
 from utils.model_fetcher import fetch_and_bifurcate_models
 from vector.chunker import chunk_text
 from vector.embedder import generate_local_embeddings
@@ -46,6 +49,169 @@ mcp = FastMCP("Memorize Server")
 # ==========================================
 
 @mcp.tool()
+def upsert_memory(
+    title: str,
+    content: str = "",
+    action: str = "auto",  # 'auto' | 'insert' | 'update' | 'append' | 'delete'
+    category: str = "personal",
+    tags: List[str] = None,
+    memory_id: Optional[str] = None,
+) -> dict:
+    """
+    Unified memory lifecycle tool to Insert, Update, Append, or Delete memories.
+    Normalizes title strings, prevents filename duplication, and appends to existing files seamlessly.
+    """
+    if tags is None:
+        tags = []
+
+    norm_title = normalize_title(title)
+    cat_clean = category.strip().lower() if category else "personal"
+    action_clean = action.strip().lower()
+
+    # 1. Handle DELETE action
+    if action_clean == "delete":
+        target = None
+        if memory_id:
+            target = get_memory_by_id(memory_id)
+        if not target and norm_title:
+            target = find_memory_by_title_or_slug(norm_title, cat_clean)
+
+        if not target:
+            return {"status": "error", "message": f"Memory not found for deletion."}
+
+        target_id = target["id"]
+        file_path = target.get("file_path")
+        if file_path:
+            delete_markdown_file(file_path)
+        delete_chunks_by_memory_id(target_id)
+        delete_memory_from_index(target_id)
+
+        return {
+            "status": "success",
+            "action": "delete",
+            "memory_id": target_id,
+            "message": f"Memory '{target_id}' successfully deleted.",
+        }
+
+    # 2. Check if target memory already exists
+    existing = None
+    if memory_id:
+        existing = get_memory_by_id(memory_id)
+    if not existing and norm_title:
+        existing = find_memory_by_title_or_slug(norm_title, cat_clean)
+
+    # 3. Process AUTO / INSERT / UPDATE / APPEND
+    if existing:
+        target_id = existing["id"]
+        file_path = Path(existing["file_path"])
+
+        if action_clean in ("append", "auto"):
+            # APPEND to existing memory
+            updated_path, target_id, full_content = append_to_markdown_file(
+                file_path=file_path,
+                additional_content=content,
+                tags=tags,
+            )
+            content_hash = compute_string_hash(full_content)
+            actual_action = "append"
+        else:  # update
+            # OVERWRITE existing memory
+            combined_tags = list(set(existing.get("tags", []) + tags))
+            content_hash = compute_string_hash(content)
+            updated_path = create_markdown_file(
+                memory_id=target_id,
+                title=norm_title,
+                category=cat_clean,
+                tags=combined_tags,
+                content=content,
+                content_hash=content_hash,
+                created_at=existing.get("created_at"),
+                file_path=file_path,
+                overwrite=True,
+            )
+            full_content = content
+            actual_action = "update"
+
+        # Re-chunk and re-embed in ChromaDB
+        delete_chunks_by_memory_id(target_id)
+        chunks = chunk_text(target_id, full_content)
+        chunk_ids = []
+        if chunks:
+            chunk_texts = [c.get("text") or c.get("content", "") for c in chunks]
+            embeddings = generate_local_embeddings(chunk_texts)
+            add_chunks_to_vector_db(chunks, embeddings)
+            chunk_ids = [c.get("chunk_id") or c.get("id", "") for c in chunks]
+
+        memory_entry = {
+            "id": target_id,
+            "title": norm_title,
+            "category": cat_clean,
+            "tags": list(set(existing.get("tags", []) + tags)),
+            "file_path": str(updated_path),
+            "content": full_content,
+            "content_hash": content_hash,
+            "created_at": existing.get("created_at"),
+            "chunk_ids": chunk_ids,
+        }
+        upsert_memory_index(memory_entry)
+
+        return {
+            "status": "success",
+            "action": actual_action,
+            "memory_id": target_id,
+            "title": norm_title,
+            "category": cat_clean,
+            "file_path": str(updated_path),
+            "chunk_count": len(chunks),
+        }
+
+    # 4. Create NEW memory (Insert)
+    new_id = memory_id if memory_id else generate_memory_id()
+    content_hash = compute_string_hash(content)
+
+    new_file_path = create_markdown_file(
+        memory_id=new_id,
+        title=norm_title,
+        category=cat_clean,
+        tags=tags,
+        content=content,
+        content_hash=content_hash,
+        overwrite=False,
+    )
+
+    chunks = chunk_text(new_id, content)
+    chunk_ids = []
+    if chunks:
+        chunk_texts = [c.get("text") or c.get("content", "") for c in chunks]
+        embeddings = generate_local_embeddings(chunk_texts)
+        add_chunks_to_vector_db(chunks, embeddings)
+        chunk_ids = [c.get("chunk_id") or c.get("id", "") for c in chunks]
+
+    memory_entry = {
+        "id": new_id,
+        "title": norm_title,
+        "category": cat_clean,
+        "tags": tags,
+        "file_path": str(new_file_path),
+        "content": content,
+        "content_hash": content_hash,
+        "chunk_ids": chunk_ids,
+    }
+    upsert_memory_index(memory_entry)
+
+    return {
+        "status": "success",
+        "action": "insert",
+        "memory_id": new_id,
+        "title": norm_title,
+        "category": cat_clean,
+        "tags": tags,
+        "file_path": str(new_file_path),
+        "chunk_count": len(chunks),
+    }
+
+
+@mcp.tool()
 def store_memory(
     title: str,
     content: str,
@@ -53,61 +219,15 @@ def store_memory(
     tags: List[str] = None,
 ) -> dict:
     """
-    Full end-to-end memory pipeline:
-    Generates a unique Memory ID, creates Markdown storage file on disk,
-    chunks text, generates vector embeddings, upserts chunks to ChromaDB,
-    and records metadata in data/index.json.
+    Stores memory into system. Automatically updates/appends if topic already exists.
     """
-    if tags is None:
-        tags = []
-
-    memory_id = generate_memory_id()
-    content_hash = compute_string_hash(content)
-
-    # 1. Create Markdown file on disk
-    file_path = create_markdown_file(
-        memory_id=memory_id,
+    return upsert_memory(
         title=title,
+        content=content,
+        action="auto",
         category=category,
         tags=tags,
-        content=content,
-        content_hash=content_hash,
     )
-
-    # 2. Model-aware text chunking
-    chunks = chunk_text(memory_id, content)
-
-    # 3. Generate embeddings & store in ChromaDB
-    chunk_ids = []
-    if chunks:
-        chunk_texts = [c["content"] for c in chunks]
-        embeddings = generate_local_embeddings(chunk_texts)
-        add_chunks_to_vector_db(chunks, embeddings)
-        chunk_ids = [c["id"] for c in chunks]
-
-    # 4. Save metadata to index.json
-    memory_entry = {
-        "id": memory_id,
-        "title": title,
-        "category": category,
-        "tags": tags,
-        "file_path": str(file_path),
-        "content": content,
-        "content_hash": content_hash,
-        "chunk_ids": chunk_ids,
-    }
-
-    add_memory_to_index(memory_entry)
-
-    return {
-        "status": "success",
-        "memory_id": memory_id,
-        "title": title,
-        "category": category,
-        "tags": tags,
-        "file_path": str(file_path),
-        "chunk_count": len(chunks),
-    }
 
 
 @mcp.tool()
@@ -115,13 +235,7 @@ def read_memory(memory_id: str) -> dict:
     """
     Fetches frontmatter metadata, tags, and full content for a given Memory ID.
     """
-    index_data = load_index()
-    target_mem = None
-
-    for m in index_data.get("memories", []):
-        if m["id"] == memory_id:
-            target_mem = m
-            break
+    target_mem = get_memory_by_id(memory_id)
 
     if not target_mem:
         return {"status": "error", "message": f"Memory with ID '{memory_id}' not found."}
@@ -150,41 +264,15 @@ def read_memory(memory_id: str) -> dict:
 @mcp.tool()
 def delete_memory(memory_id: str) -> dict:
     """
-    Deletes a memory across Markdown disk storage, index.json, and ChromaDB vector store.
+    Deletes a memory across Markdown disk storage, SQLite database, and ChromaDB vector store.
     """
-    index_data = load_index()
-    target_mem = None
-
-    for m in index_data.get("memories", []):
-        if m["id"] == memory_id:
-            target_mem = m
-            break
-
-    if not target_mem:
-        return {"status": "error", "message": f"Memory with ID '{memory_id}' not found."}
-
-    # 1. Delete Markdown file
-    file_path = target_mem.get("file_path")
-    if file_path:
-        delete_markdown_file(file_path)
-
-    # 2. Delete ChromaDB vector chunks
-    delete_chunks_by_memory_id(memory_id)
-
-    # 3. Remove from index.json
-    _remove_memory_from_index_dict(index_data, memory_id)
-    save_index(index_data)
-
-    return {
-        "status": "success",
-        "message": f"Memory '{memory_id}' deleted successfully from disk, index.json, and ChromaDB.",
-    }
+    return upsert_memory(title="", memory_id=memory_id, action="delete")
 
 
 @mcp.tool()
 def clear_all_memories() -> dict:
     """
-    Completely purges all memories from disk, resets data/index.json,
+    Completely purges all memories from disk, resets SQLite database,
     and clears ChromaDB vector database store.
     """
     return sync_clear_all_memories()
@@ -196,19 +284,9 @@ def list_memories(
     tag_filter: Optional[str] = None,
 ) -> dict:
     """
-    Lists stored memories with optional filtering by category or tag.
+    Lists stored memories from SQLite with optional filtering by category or tag.
     """
-    index_data = load_index()
-    memories = index_data.get("memories", [])
-
-    if category_filter:
-        cat_lower = category_filter.strip().lower()
-        memories = [m for m in memories if m.get("category", "").lower() == cat_lower]
-
-    if tag_filter:
-        tag_lower = tag_filter.strip().lower()
-        memories = [m for m in memories if any(t.lower() == tag_lower for t in m.get("tags", []))]
-
+    memories = get_all_memories(category_filter=category_filter, tag_filter=tag_filter)
     return {
         "status": "success",
         "total_count": len(memories),
@@ -229,7 +307,7 @@ def get_memory_file_status(memory_id_or_path: str) -> dict:
 def sync_markdown_files() -> dict:
     """
     Scans data/memories/ for Markdown files added, updated, or deleted on disk,
-    automatically chunking, embedding, and updating index.json + ChromaDB.
+    automatically chunking, embedding, and updating SQLite + ChromaDB.
     """
     return sync_scan_markdown_files()
 
@@ -258,8 +336,7 @@ def hybrid_search_memories(
 @mcp.tool()
 def auto_classify_memory(text: str) -> dict:
     """
-    Analyzes raw text, automatically assigns a category (creating new ones dynamically if needed),
-    and extracts relevant tags.
+    Analyzes raw text, automatically assigns a category, and extracts relevant tags.
     """
     return classify_memory(text=text)
 
@@ -271,7 +348,7 @@ def auto_classify_memory(text: str) -> dict:
 @mcp.tool()
 def get_categories() -> dict:
     """
-    Returns all currently available memory categories on disk and in index.json.
+    Returns all currently available memory categories on disk.
     """
     return {"status": "success", "categories": get_available_categories()}
 
@@ -279,17 +356,22 @@ def get_categories() -> dict:
 @mcp.tool()
 def add_category(category: str) -> dict:
     """
-    Dynamically registers a new category in index.json and creates its storage directory.
+    Dynamically creates category storage directory.
     """
-    return add_category_to_index(category=category)
+    cat_dir = get_category_dir(category)
+    return {"status": "success", "category": category, "path": str(cat_dir)}
 
 
 @mcp.tool()
 def delete_category(category: str) -> dict:
     """
-    Deletes a category from index.json and removes its directory on disk.
+    Deletes a category directory on disk and purges category records from SQLite.
     """
-    return delete_category_from_index(category=category)
+    cat_dir = get_category_dir(category)
+    import shutil
+    if cat_dir.exists():
+        shutil.rmtree(cat_dir)
+    return {"status": "success", "category": category}
 
 
 @mcp.tool()
@@ -316,6 +398,7 @@ def list_available_models(
 
 def main():
     sys.stderr.write("Started Memorize MCP Server\n")
+    init_db()
     # Start background file watcher for Markdown directory
     start_background_watcher()
     # Initial scan/sync on launch

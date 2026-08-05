@@ -8,8 +8,7 @@ from config.constants import (
 )
 from core.logger import handle_errors, logger, time_execution
 from search.filter_extractor import extract_keywords_and_snippet
-from storage.index_manager import load_index
-
+from storage.db_manager import get_all_memories, get_memory_by_id
 from vector.embedder import generate_embeddings
 from vector.vector_db import query_vector_db
 
@@ -71,7 +70,7 @@ def search_hybrid_relevance(
     threshold: float = RELEVANCE_SCORE_THRESHOLD,
 ) -> List[Dict[str, Any]]:
     """
-    Performs hybrid relevance search across ChromaDB vector embeddings and index.json metadata.
+    Performs hybrid relevance search across ChromaDB vector embeddings and SQLite metadata.
     Returns ranked memory matches with scores exceeding threshold.
     """
     if not query or not query.strip():
@@ -93,9 +92,9 @@ def search_hybrid_relevance(
         category_filter=None,
     )
 
-    # 4. Load metadata index.json to enrich memories
-    index_data = load_index()
-    memories_map = {m["id"]: m for m in index_data.get("memories", [])}
+    # 4. Load SQLite metadata to enrich memories
+    all_indexed = get_all_memories()
+    memories_map = {m["id"]: m for m in all_indexed}
 
     scored_results = []
     seen_memory_ids = set()
@@ -106,9 +105,9 @@ def search_hybrid_relevance(
             continue
         seen_memory_ids.add(memory_id)
 
-        index_entry = memories_map.get(memory_id, {})
-        memory_tags = item.get("tags", []) or index_entry.get("tags", [])
-        memory_category = item.get("category", "") or index_entry.get("category", "personal")
+        db_entry = memories_map.get(memory_id) or get_memory_by_id(memory_id) or {}
+        memory_tags = item.get("tags", []) or db_entry.get("tags", [])
+        memory_category = item.get("category", "") or db_entry.get("category", "personal")
         vector_sim = item.get("similarity_score", 0.0)
 
         h_score = calculate_hybrid_score(
@@ -122,10 +121,10 @@ def search_hybrid_relevance(
         if h_score >= threshold:
             scored_results.append({
                 "memory_id": memory_id,
-                "title": index_entry.get("title", item.get("chunk_id", "")),
+                "title": db_entry.get("title", item.get("chunk_id", "")),
                 "category": memory_category,
                 "tags": memory_tags,
-                "snippet": index_entry.get("snippet", item.get("text", "")[:150]),
+                "snippet": db_entry.get("snippet", item.get("text", "")[:150]),
                 "text": item.get("text", ""),
                 "vector_similarity": vector_sim,
                 "hybrid_score": h_score,

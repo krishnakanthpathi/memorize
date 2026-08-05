@@ -6,21 +6,23 @@ from config.constants import DEFAULT_CATEGORIES, MEMORIES_DIR
 
 def get_available_categories() -> List[str]:
     """
-    Dynamically scans data/memories/ subdirectories on disk and returns all available categories.
+    Returns strictly the predefined list of allowed memory categories.
+    Prevents dynamic creation of duplicate or rogue category folders.
     """
-    categories = set(DEFAULT_CATEGORIES)
-    if MEMORIES_DIR.exists():
-        for item in MEMORIES_DIR.iterdir():
-            if item.is_dir() and not item.name.startswith("."):
-                categories.add(item.name.lower())
-    return sorted(list(categories))
+    return sorted(list(set(cat.lower() for cat in DEFAULT_CATEGORIES)))
 
 
 def get_category_dir(category: str) -> Path:
     """
-    Returns (and creates if missing) the directory Path for any category.
+    Returns (and creates if missing) the directory Path for a category.
+    Strictly validates category against DEFAULT_CATEGORIES, defaulting to 'personal' if invalid.
     """
     cat_name = category.strip().lower() if category and category.strip() else "personal"
+    allowed = get_available_categories()
+
+    if cat_name not in allowed:
+        cat_name = "personal"
+
     cat_dir = MEMORIES_DIR / cat_name
     cat_dir.mkdir(parents=True, exist_ok=True)
     return cat_dir

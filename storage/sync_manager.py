@@ -5,22 +5,24 @@ import threading
 import time
 from typing import Any, Dict, List, Optional, Union
 
-from config.constants import INDEX_PATH, MEMORIES_DIR
+from config.constants import MEMORIES_DIR
 from core.hashing import compute_string_hash
-from core.id_generator import generate_chunk_id, generate_memory_id
+from core.id_generator import generate_memory_id
 from core.logger import handle_errors, logger
-from storage.index_manager import (
-    add_memory_to_index,
-    get_initial_index_structure,
-    load_index,
-    save_index,
+from storage.db_manager import (
+    clear_all_index_memories,
+    delete_memory_from_index,
+    get_all_memories,
+    get_memory_by_id,
+    init_db,
+    upsert_memory_index,
 )
 from storage.markdown_handler import (
     create_markdown_file,
     delete_markdown_file,
     read_markdown_file,
 )
-from utils import get_available_categories, get_category_dir
+from utils import get_available_categories
 from vector.chunker import chunk_text
 from vector.embedder import generate_local_embeddings
 from vector.vector_db import (
@@ -42,15 +44,15 @@ except ImportError:
 def sync_markdown_files() -> Dict[str, Any]:
     """
     Scans data/memories/ recursively.
-    1. Detects new or updated .md files -> parses YAML frontmatter, auto-chunks, auto-embeds, and updates index.json + ChromaDB.
+    1. Detects new or updated .md files -> parses YAML frontmatter, auto-chunks, auto-embeds, and updates SQLite + ChromaDB.
     2. Assigns missing memory_id to files created directly on disk.
-    3. Detects deleted files -> purges corresponding memory entries from index.json and ChromaDB.
+    3. Detects deleted files -> purges corresponding memory entries from SQLite and ChromaDB.
     """
     if not MEMORIES_DIR.exists():
         MEMORIES_DIR.mkdir(parents=True, exist_ok=True)
 
-    index_data = load_index()
-    existing_memories_by_id = {m["id"]: m for m in index_data.get("memories", [])}
+    init_db()
+    existing_memories = {m["id"]: m for m in get_all_memories()}
 
     updated_count = 0
     added_count = 0
@@ -92,6 +94,7 @@ def sync_markdown_files() -> Dict[str, Any]:
                     category=category,
                     tags=tags,
                     content=content,
+                    file_path=full_path,
                 )
                 # Re-read to get updated YAML block
                 frontmatter, content = read_markdown_file(full_path)
@@ -104,16 +107,14 @@ def sync_markdown_files() -> Dict[str, Any]:
             updated_at = frontmatter.get("updated_at", datetime.now(timezone.utc).isoformat())
 
             # Check if memory already indexed and unchanged
-            existing = existing_memories_by_id.get(memory_id)
-            if existing and existing.get("content_hash") == content_hash:
-                continue  # Content unchanged
+            existing = existing_memories.get(memory_id)
+            if existing and existing.get("content_hash") == content_hash and existing.get("file_path") == str(full_path):
+                continue  # Content & path unchanged
 
             # Content is new or modified -> re-chunk & embed
             delete_chunks_by_memory_id(memory_id)
 
-            # Remove old memory record from index if modifying
             if existing:
-                _remove_memory_from_index_dict(index_data, memory_id)
                 updated_count += 1
             else:
                 added_count += 1
@@ -129,7 +130,6 @@ def sync_markdown_files() -> Dict[str, Any]:
 
             chunk_ids = [c.get("chunk_id") or c.get("id") for c in chunks]
 
-
             memory_entry = {
                 "id": memory_id,
                 "title": title,
@@ -143,64 +143,35 @@ def sync_markdown_files() -> Dict[str, Any]:
                 "chunk_ids": chunk_ids,
             }
 
-            index_data = add_memory_to_index(memory_entry)
-            existing_memories_by_id[memory_id] = memory_entry
+            upsert_memory_index(memory_entry)
+            existing_memories[memory_id] = memory_entry
 
-    # Detect deleted files (present in index.json but missing from disk)
-    all_indexed_memories = list(index_data.get("memories", []))
+    # Detect deleted files (present in SQLite but missing from disk)
+    all_indexed_memories = get_all_memories()
     for mem in all_indexed_memories:
         mem_id = mem["id"]
         file_path_str = mem.get("file_path", "")
         if mem_id not in found_memory_ids and (not file_path_str or not Path(file_path_str).exists()):
             delete_chunks_by_memory_id(mem_id)
-            _remove_memory_from_index_dict(index_data, mem_id)
+            delete_memory_from_index(mem_id)
             deleted_count += 1
 
-    save_index(index_data)
+    total_count = len(get_all_memories())
 
     return {
         "status": "success",
         "added": added_count,
         "updated": updated_count,
         "deleted": deleted_count,
-        "total_memories": index_data.get("total_memories", 0),
+        "total_memories": total_count,
     }
-
-
-def _remove_memory_from_index_dict(index_data: Dict[str, Any], memory_id: str):
-    """Internal helper to strip a memory record and its tag references from index_data."""
-    memories = index_data.get("memories", [])
-    target = None
-    for m in memories:
-        if m["id"] == memory_id:
-            target = m
-            break
-
-    if not target:
-        return
-
-    memories.remove(target)
-    index_data["total_memories"] = len(memories)
-
-    # Decrement category count
-    cat = target.get("category", "").lower()
-    if cat in index_data.get("categories", {}):
-        index_data["categories"][cat]["count"] = max(0, index_data["categories"][cat]["count"] - 1)
-
-    # Clean reverse tag_index
-    tag_index = index_data.get("tag_index", {})
-    for term, id_list in list(tag_index.items()):
-        if memory_id in id_list:
-            id_list.remove(memory_id)
-            if not id_list:
-                del tag_index[term]
 
 
 @handle_errors
 def clear_all_memories() -> Dict[str, Any]:
     """
     Completely purges all memory Markdown files and directories in MEMORIES_DIR,
-    re-initializes standard category folders, resets data/index.json,
+    re-initializes standard category folders, resets SQLite DB,
     and clears ChromaDB vector store collection.
     """
     import shutil
@@ -226,9 +197,8 @@ def clear_all_memories() -> Dict[str, Any]:
         if not gitkeep.exists():
             gitkeep.touch()
 
-    # Reset index.json
-    fresh_index = get_initial_index_structure()
-    save_index(fresh_index)
+    # Reset SQLite database
+    clear_all_index_memories()
 
     # Clear ChromaDB vector database collection
     try:
@@ -243,7 +213,7 @@ def clear_all_memories() -> Dict[str, Any]:
 
     return {
         "status": "success",
-        "message": f"Successfully cleared memories directory, reset index.json, and purged ChromaDB vector store.",
+        "message": f"Successfully cleared memories directory, reset SQLite database, and purged ChromaDB vector store.",
         "deleted_files_count": deleted_files,
     }
 
@@ -254,19 +224,12 @@ def get_memory_file_status(memory_id_or_path: str) -> Dict[str, Any]:
     Finds a Markdown file by Memory ID or filepath and returns its exact status,
     parsed frontmatter, raw text, content hash, token count estimate, and sync status.
     """
-    index_data = load_index()
-    target_mem = None
-
-    for m in index_data.get("memories", []):
-        if m["id"] == memory_id_or_path or m.get("file_path") == memory_id_or_path:
-            target_mem = m
-            break
+    target_mem = get_memory_by_id(memory_id_or_path)
 
     target_path = None
     if target_mem:
         target_path = Path(target_mem["file_path"])
     else:
-        # Check if memory_id_or_path is a path
         path_candidate = Path(memory_id_or_path)
         if path_candidate.exists():
             target_path = path_candidate
@@ -285,7 +248,6 @@ def get_memory_file_status(memory_id_or_path: str) -> Dict[str, Any]:
     with open(target_path, "r", encoding="utf-8") as f:
         raw_text = f.read()
 
-    # Estimate token count (~4 chars per token)
     est_tokens = len(content) // 4
 
     return {
@@ -302,7 +264,6 @@ def get_memory_file_status(memory_id_or_path: str) -> Dict[str, Any]:
         "updated_at": frontmatter.get("updated_at"),
         "content_hash": content_hash,
         "estimated_tokens": est_tokens,
-        "chunk_count": len(target_mem.get("chunk_ids", [])) if target_mem else 0,
         "is_indexed": target_mem is not None and target_mem.get("content_hash") == content_hash,
         "frontmatter": frontmatter,
         "content": content,

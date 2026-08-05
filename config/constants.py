@@ -6,7 +6,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Storage Data Directory
 DATA_DIR = BASE_DIR / "data"
-INDEX_PATH = DATA_DIR / "index.json"
+DB_PATH = DATA_DIR / "memorize.db"
 CHROMA_DIR = DATA_DIR / "chroma_db"
 MODELS_DIR = DATA_DIR / "models"
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
@@ -23,7 +23,9 @@ DEFAULT_CATEGORIES = [
     "integration",
     "job",
     "media",
+    "others",
     "personal",
+    "projects",
 ]
 
 # RAG & Embedding Settings

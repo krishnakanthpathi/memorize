@@ -9,7 +9,6 @@ from config.constants import (
     OLLAMA_CLASSIFICATION_MODEL,
 )
 from core.logger import handle_errors, logger, time_execution
-from storage.index_manager import add_category_to_index
 from utils import get_available_categories, get_category_dir
 
 

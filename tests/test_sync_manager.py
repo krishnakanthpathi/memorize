@@ -3,7 +3,7 @@ from pathlib import Path
 import unittest
 
 from config.constants import MEMORIES_DIR
-from storage.index_manager import load_index
+from storage.db_manager import get_all_memories, get_memory_by_id
 from storage.sync_manager import (
     clear_all_memories,
     get_memory_file_status,
@@ -14,7 +14,6 @@ from utils import get_category_dir
 
 class TestSyncManager(unittest.TestCase):
     def setUp(self):
-        # Clean state before each test
         clear_all_memories()
 
     def tearDown(self):
@@ -24,7 +23,6 @@ class TestSyncManager(unittest.TestCase):
         study_dir = get_category_dir("study")
         test_file = study_dir / "manual_test_note.md"
 
-        # Create a raw markdown file directly on disk without frontmatter ID
         raw_content = "---\ntitle: Manual Note\ntags: [unit_test, sync]\n---\n\nThis is a manual markdown note created directly on disk to test auto-chunking and sync."
         with open(test_file, "w", encoding="utf-8") as f:
             f.write(raw_content)
@@ -34,10 +32,10 @@ class TestSyncManager(unittest.TestCase):
         self.assertEqual(result["status"], "success")
         self.assertGreaterEqual(result["added"], 1)
 
-        # Verify index.json was updated
-        index_data = load_index()
-        self.assertEqual(index_data["total_memories"], 1)
-        mem = index_data["memories"][0]
+        # Verify SQLite DB was updated
+        memories = get_all_memories()
+        self.assertGreaterEqual(len(memories), 1)
+        mem = memories[0]
         self.assertEqual(mem["title"], "Manual Note")
         self.assertIn("unit_test", mem["tags"])
 
@@ -54,12 +52,12 @@ class TestSyncManager(unittest.TestCase):
             f.write("---\ntitle: Clear Test\n---\n\nNote content.")
 
         sync_markdown_files()
-        self.assertEqual(load_index()["total_memories"], 1)
+        self.assertEqual(len(get_all_memories()), 1)
 
         # Clear memories
         clear_result = clear_all_memories()
         self.assertEqual(clear_result["status"], "success")
-        self.assertEqual(load_index()["total_memories"], 0)
+        self.assertEqual(len(get_all_memories()), 0)
 
 
 if __name__ == "__main__":

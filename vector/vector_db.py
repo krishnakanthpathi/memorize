@@ -17,6 +17,9 @@ def get_chroma_client():
     if CHROMA_CLIENT is None:
         if CHROMA_HOST:
             try:
+                import socket
+                sock = socket.create_connection((CHROMA_HOST, CHROMA_PORT), timeout=1.0)
+                sock.close()
                 logger.info(
                     f"Attempting connection to ChromaDB container at {CHROMA_HOST}:{CHROMA_PORT}..."
                 )
@@ -29,7 +32,7 @@ def get_chroma_client():
                 return CHROMA_CLIENT
             except Exception as e:
                 logger.warning(
-                    f"Remote ChromaDB container connection failed ({e}). Falling back to local PersistentClient at {CHROMA_DIR}."
+                    f"Remote ChromaDB container unreachable ({e}). Falling back to local PersistentClient at {CHROMA_DIR}."
                 )
 
         logger.info(f"Initializing persistent local ChromaDB client at {CHROMA_DIR}...")
