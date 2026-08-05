@@ -199,24 +199,32 @@ def _remove_memory_from_index_dict(index_data: Dict[str, Any], memory_id: str):
 @handle_errors
 def clear_all_memories() -> Dict[str, Any]:
     """
-    Completely purges all memory Markdown files, resets data/index.json,
+    Completely purges all memory Markdown files and directories in MEMORIES_DIR,
+    re-initializes standard category folders, resets data/index.json,
     and clears ChromaDB vector store collection.
     """
+    import shutil
+    from config.constants import DEFAULT_CATEGORIES
+
     deleted_files = 0
     if MEMORIES_DIR.exists():
-        for root, _, files in os.walk(MEMORIES_DIR):
-            for file in files:
-                if file.endswith(".md"):
-                    full_path = Path(root) / file
-                    try:
-                        full_path.unlink()
-                        deleted_files += 1
-                    except Exception as e:
-                        logger.error(f"Error removing {full_path}: {e}")
+        for item in MEMORIES_DIR.iterdir():
+            try:
+                if item.is_dir():
+                    shutil.rmtree(item)
+                else:
+                    item.unlink()
+                deleted_files += 1
+            except Exception as e:
+                logger.error(f"Error removing {item}: {e}")
 
-    # Re-initialize category subdirectories
-    for cat in get_available_categories():
-        get_category_dir(cat)
+    # Re-initialize standard category subdirectories with .gitkeep
+    for cat in DEFAULT_CATEGORIES:
+        cat_dir = MEMORIES_DIR / cat
+        cat_dir.mkdir(parents=True, exist_ok=True)
+        gitkeep = cat_dir / ".gitkeep"
+        if not gitkeep.exists():
+            gitkeep.touch()
 
     # Reset index.json
     fresh_index = get_initial_index_structure()
@@ -225,14 +233,17 @@ def clear_all_memories() -> Dict[str, Any]:
     # Clear ChromaDB vector database collection
     try:
         client = get_chroma_client()
-        client.delete_collection(name="memories")
+        try:
+            client.delete_collection(name="memories")
+        except Exception:
+            pass
         client.get_or_create_collection(name="memories")
     except Exception as e:
         logger.warning(f"Error resetting ChromaDB collection: {e}")
 
     return {
         "status": "success",
-        "message": f"Successfully cleared {deleted_files} markdown files, reset index.json, and purged ChromaDB vector store.",
+        "message": f"Successfully cleared memories directory, reset index.json, and purged ChromaDB vector store.",
         "deleted_files_count": deleted_files,
     }
 

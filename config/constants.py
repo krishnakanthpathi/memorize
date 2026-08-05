@@ -14,7 +14,17 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 MEMORIES_DIR = DATA_DIR / "memories"
 MEMORIES_DIR.mkdir(parents=True, exist_ok=True)
 
-DEFAULT_CATEGORIES = ["personal", "job", "study", "routine"]
+DEFAULT_CATEGORIES = [
+    "achievements",
+    "development",
+    "education",
+    "finance",
+    "gaming",
+    "integration",
+    "job",
+    "media",
+    "personal",
+]
 
 # RAG & Embedding Settings
 DEFAULT_CHUNK_SIZE = 500  # tokens
