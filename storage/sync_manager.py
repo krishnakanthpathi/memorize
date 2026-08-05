@@ -275,10 +275,12 @@ def get_memory_file_status(memory_id_or_path: str) -> Dict[str, Any]:
 _watcher_observer: Optional[Any] = None
 
 
-class MarkdownFileEventHandler:
+class MarkdownFileEventHandler(FileSystemEventHandler if HAS_WATCHDOG else object):
     """Handles file system events for .md files in data/memories/."""
 
     def __init__(self, debounce_seconds: float = 1.0):
+        if HAS_WATCHDOG:
+            super().__init__()
         self.debounce_seconds = debounce_seconds
         self._last_sync_time = 0.0
 

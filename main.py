@@ -5,25 +5,17 @@ from typing import List, Optional
 from mcp.server.fastmcp import FastMCP
 
 from classification.classifier import classify_memory
-from core.hashing import compute_string_hash
-from core.id_generator import generate_memory_id
-from search.relevance_scorer import search_hybrid_relevance
+from core.memory_service import execute_upsert_memory
+from search.relevance_scorer import (
+    search_hybrid_relevance,
+    search_vector_similarity,
+)
 from storage.db_manager import (
-    delete_memory_from_index,
-    find_memory_by_title_or_slug,
     get_all_memories,
     get_memory_by_id,
     init_db,
-    upsert_memory_index,
 )
-from storage.markdown_handler import (
-    append_to_markdown_file,
-    create_markdown_file,
-    delete_markdown_file,
-    normalize_title,
-    read_markdown_file,
-    title_to_slug,
-)
+from storage.markdown_handler import read_markdown_file
 from storage.sync_manager import (
     clear_all_memories as sync_clear_all_memories,
     get_memory_file_status as sync_get_memory_file_status,
@@ -32,13 +24,7 @@ from storage.sync_manager import (
 )
 from utils import get_available_categories, get_category_dir
 from utils.model_fetcher import fetch_and_bifurcate_models
-from vector.chunker import chunk_text
-from vector.embedder import generate_local_embeddings
-from vector.vector_db import (
-    add_chunks_to_vector_db,
-    delete_chunks_by_memory_id,
-    peek_vector_db,
-)
+from vector.vector_db import peek_vector_db
 
 # Initialize FastMCP Server
 mcp = FastMCP("Memorize Server")
@@ -61,154 +47,14 @@ def upsert_memory(
     Unified memory lifecycle tool to Insert, Update, Append, or Delete memories.
     Normalizes title strings, prevents filename duplication, and appends to existing files seamlessly.
     """
-    if tags is None:
-        tags = []
-
-    norm_title = normalize_title(title)
-    cat_clean = category.strip().lower() if category else "personal"
-    action_clean = action.strip().lower()
-
-    # 1. Handle DELETE action
-    if action_clean == "delete":
-        target = None
-        if memory_id:
-            target = get_memory_by_id(memory_id)
-        if not target and norm_title:
-            target = find_memory_by_title_or_slug(norm_title, cat_clean)
-
-        if not target:
-            return {"status": "error", "message": f"Memory not found for deletion."}
-
-        target_id = target["id"]
-        file_path = target.get("file_path")
-        if file_path:
-            delete_markdown_file(file_path)
-        delete_chunks_by_memory_id(target_id)
-        delete_memory_from_index(target_id)
-
-        return {
-            "status": "success",
-            "action": "delete",
-            "memory_id": target_id,
-            "message": f"Memory '{target_id}' successfully deleted.",
-        }
-
-    # 2. Check if target memory already exists
-    existing = None
-    if memory_id:
-        existing = get_memory_by_id(memory_id)
-    if not existing and norm_title:
-        existing = find_memory_by_title_or_slug(norm_title, cat_clean)
-
-    # 3. Process AUTO / INSERT / UPDATE / APPEND
-    if existing:
-        target_id = existing["id"]
-        file_path = Path(existing["file_path"])
-
-        if action_clean in ("append", "auto"):
-            # APPEND to existing memory
-            updated_path, target_id, full_content = append_to_markdown_file(
-                file_path=file_path,
-                additional_content=content,
-                tags=tags,
-            )
-            content_hash = compute_string_hash(full_content)
-            actual_action = "append"
-        else:  # update
-            # OVERWRITE existing memory
-            combined_tags = list(set(existing.get("tags", []) + tags))
-            content_hash = compute_string_hash(content)
-            updated_path = create_markdown_file(
-                memory_id=target_id,
-                title=norm_title,
-                category=cat_clean,
-                tags=combined_tags,
-                content=content,
-                content_hash=content_hash,
-                created_at=existing.get("created_at"),
-                file_path=file_path,
-                overwrite=True,
-            )
-            full_content = content
-            actual_action = "update"
-
-        # Re-chunk and re-embed in ChromaDB
-        delete_chunks_by_memory_id(target_id)
-        chunks = chunk_text(target_id, full_content)
-        chunk_ids = []
-        if chunks:
-            chunk_texts = [c.get("text") or c.get("content", "") for c in chunks]
-            embeddings = generate_local_embeddings(chunk_texts)
-            add_chunks_to_vector_db(chunks, embeddings)
-            chunk_ids = [c.get("chunk_id") or c.get("id", "") for c in chunks]
-
-        memory_entry = {
-            "id": target_id,
-            "title": norm_title,
-            "category": cat_clean,
-            "tags": list(set(existing.get("tags", []) + tags)),
-            "file_path": str(updated_path),
-            "content": full_content,
-            "content_hash": content_hash,
-            "created_at": existing.get("created_at"),
-            "chunk_ids": chunk_ids,
-        }
-        upsert_memory_index(memory_entry)
-
-        return {
-            "status": "success",
-            "action": actual_action,
-            "memory_id": target_id,
-            "title": norm_title,
-            "category": cat_clean,
-            "file_path": str(updated_path),
-            "chunk_count": len(chunks),
-        }
-
-    # 4. Create NEW memory (Insert)
-    new_id = memory_id if memory_id else generate_memory_id()
-    content_hash = compute_string_hash(content)
-
-    new_file_path = create_markdown_file(
-        memory_id=new_id,
-        title=norm_title,
-        category=cat_clean,
-        tags=tags,
+    return execute_upsert_memory(
+        title=title,
         content=content,
-        content_hash=content_hash,
-        overwrite=False,
+        action=action,
+        category=category,
+        tags=tags,
+        memory_id=memory_id,
     )
-
-    chunks = chunk_text(new_id, content)
-    chunk_ids = []
-    if chunks:
-        chunk_texts = [c.get("text") or c.get("content", "") for c in chunks]
-        embeddings = generate_local_embeddings(chunk_texts)
-        add_chunks_to_vector_db(chunks, embeddings)
-        chunk_ids = [c.get("chunk_id") or c.get("id", "") for c in chunks]
-
-    memory_entry = {
-        "id": new_id,
-        "title": norm_title,
-        "category": cat_clean,
-        "tags": tags,
-        "file_path": str(new_file_path),
-        "content": content,
-        "content_hash": content_hash,
-        "chunk_ids": chunk_ids,
-    }
-    upsert_memory_index(memory_entry)
-
-    return {
-        "status": "success",
-        "action": "insert",
-        "memory_id": new_id,
-        "title": norm_title,
-        "category": cat_clean,
-        "tags": tags,
-        "file_path": str(new_file_path),
-        "chunk_count": len(chunks),
-    }
 
 
 @mcp.tool()
@@ -226,6 +72,81 @@ def store_memory(
         content=content,
         action="auto",
         category=category,
+        tags=tags,
+    )
+
+
+@mcp.tool()
+def append_memory(
+    title: str,
+    content: str,
+    category: str = "personal",
+    tags: List[str] = None,
+    memory_id: Optional[str] = None,
+) -> dict:
+    """
+    Helper tool for upsert_memory to explicitly append new content to an existing memory.
+    Creates a new memory if no matching title/memory_id is found.
+    """
+    return upsert_memory(
+        title=title,
+        content=content,
+        action="append",
+        category=category,
+        tags=tags,
+        memory_id=memory_id,
+    )
+
+
+@mcp.tool()
+def update_memory(
+    title: str,
+    content: str,
+    category: str = "personal",
+    tags: List[str] = None,
+    memory_id: Optional[str] = None,
+) -> dict:
+    """
+    Helper tool for upsert_memory to explicitly update/overwrite an existing memory's content.
+    """
+    return upsert_memory(
+        title=title,
+        content=content,
+        action="update",
+        category=category,
+        tags=tags,
+        memory_id=memory_id,
+    )
+
+
+@mcp.tool()
+def smart_upsert_memory(
+    title: str,
+    content: str = "",
+    category: Optional[str] = None,
+    tags: List[str] = None,
+    action: str = "auto",
+) -> dict:
+    """
+    Smart helper tool for upsert_memory that automatically classifies category and extracts tags
+    if they are not provided, before saving.
+    """
+    if tags is None:
+        tags = []
+
+    if not category or not tags:
+        full_text = f"{title}\n{content}".strip()
+        classification = classify_memory(full_text)
+        if not category and classification.get("category"):
+            category = classification["category"]
+        if not tags and classification.get("tags"):
+            tags = classification["tags"]
+
+    return upsert_memory(
+        title=title,
+        content=content,
+        action=action,
+        category=category or "personal",
         tags=tags,
     )
 
@@ -330,6 +251,24 @@ def hybrid_search_memories(
         query=query,
         category_filter=category_filter if category_filter else None,
         top_k=top_k,
+    )
+
+
+@mcp.tool()
+def search_memory(
+    query: str,
+    category_filter: Optional[str] = None,
+    top_k: int = 5,
+    min_similarity: float = 0.0,
+) -> List[dict]:
+    """
+    Performs pure similarity search using vector embeddings to find and rank memories based on query similarity.
+    """
+    return search_vector_similarity(
+        query=query,
+        category_filter=category_filter if category_filter else None,
+        top_k=top_k,
+        threshold=min_similarity,
     )
 
 

@@ -136,3 +136,69 @@ def search_hybrid_relevance(
         f"Hybrid search for '{query}' returned {len(scored_results[:top_k])} results (threshold={threshold})."
     )
     return scored_results[:top_k]
+
+
+@handle_errors
+@time_execution
+def search_vector_similarity(
+    query: str,
+    category_filter: Optional[str] = None,
+    top_k: int = 5,
+    threshold: float = 0.0,
+) -> List[Dict[str, Any]]:
+    """
+    Performs pure vector similarity search using embeddings in ChromaDB.
+    Returns ranked memory matches based solely on vector similarity score.
+    """
+    if not query or not query.strip():
+        return []
+
+    # 1. Generate vector embedding for query
+    query_embeddings = generate_embeddings([query])
+    if not query_embeddings:
+        logger.warning(f"Could not generate query embedding for '{query}'")
+        return []
+
+    # 2. Query ChromaDB for vector similarity matches
+    vector_results = query_vector_db(
+        query_embedding=query_embeddings[0],
+        n_results=top_k * 3,
+        category_filter=category_filter if category_filter else None,
+    )
+
+    # 3. Load SQLite metadata to enrich memories
+    all_indexed = get_all_memories()
+    memories_map = {m["id"]: m for m in all_indexed}
+
+    scored_results = []
+    seen_memory_ids = set()
+
+    for item in vector_results:
+        memory_id = item.get("memory_id", "")
+        if not memory_id or memory_id in seen_memory_ids:
+            continue
+        seen_memory_ids.add(memory_id)
+
+        db_entry = memories_map.get(memory_id) or get_memory_by_id(memory_id) or {}
+        memory_tags = item.get("tags", []) or db_entry.get("tags", [])
+        memory_category = item.get("category", "") or db_entry.get("category", "personal")
+        vector_sim = item.get("similarity_score", 0.0)
+
+        if vector_sim >= threshold:
+            scored_results.append({
+                "memory_id": memory_id,
+                "title": db_entry.get("title", item.get("chunk_id", "")),
+                "category": memory_category,
+                "tags": memory_tags,
+                "snippet": db_entry.get("snippet", item.get("text", "")[:150]),
+                "text": item.get("text", ""),
+                "similarity_score": vector_sim,
+            })
+
+    scored_results.sort(key=lambda x: x["similarity_score"], reverse=True)
+
+    logger.info(
+        f"Vector similarity search for '{query}' returned {len(scored_results[:top_k])} results (threshold={threshold})."
+    )
+    return scored_results[:top_k]
+
