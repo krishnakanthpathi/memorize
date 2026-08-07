@@ -24,7 +24,7 @@ def get_db_connection() -> sqlite3.Connection:
 @handle_errors
 def init_db() -> None:
     """
-    Initializes SQLite database schema and indexes if they do not exist.
+    Initializes SQLite database schema, backup tables, and indexes if they do not exist.
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -39,6 +39,7 @@ def init_db() -> None:
                 keywords TEXT NOT NULL, -- JSON array of keywords
                 file_path TEXT NOT NULL UNIQUE,
                 snippet TEXT,
+                content TEXT,
                 content_hash TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
@@ -51,6 +52,41 @@ def init_db() -> None:
         cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_memories_category ON memories(category);"
         )
+
+        # Migration: Ensure 'content' column exists in existing database schemas
+        cursor.execute("PRAGMA table_info(memories);")
+        columns = [col["name"] for col in cursor.fetchall()]
+        if "content" not in columns:
+            cursor.execute("ALTER TABLE memories ADD COLUMN content TEXT;")
+            logger.info("Migrated SQLite schema: Added 'content' column to 'memories' table.")
+
+        # Create backup metadata tables
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS backup_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                memory_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                category TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                backup_path TEXT NOT NULL,
+                content_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS backup_readme (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                readme_text TEXT NOT NULL,
+                total_memories INTEGER NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            """
+        )
+
         conn.commit()
     logger.info(f"SQLite database initialized at {DB_PATH}")
 
@@ -86,18 +122,23 @@ def upsert_memory_index(memory_entry: Dict[str, Any]) -> Dict[str, Any]:
     slug = memory_entry.get("slug")
     if not slug:
         stem = Path(file_path).stem if file_path else title
-        # strip mem_id prefix if present
         if stem.startswith(f"{mem_id}_"):
             stem = stem[len(mem_id) + 1 :]
         slug = stem.lower()
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
+        # Prevent UNIQUE constraint failure if file_path belongs to another memory ID
+        cursor.execute("SELECT id FROM memories WHERE file_path = ? AND id != ?", (file_path, mem_id))
+        if cursor.fetchone():
+            fp_path = Path(file_path)
+            file_path = str(fp_path.parent / f"{fp_path.stem}_{mem_id}{fp_path.suffix}")
+
         cursor.execute(
             """
             INSERT INTO memories (
-                id, title, slug, category, tags, keywords, file_path, snippet, content_hash, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                id, title, slug, category, tags, keywords, file_path, snippet, content, content_hash, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 title=excluded.title,
                 slug=excluded.slug,
@@ -106,6 +147,7 @@ def upsert_memory_index(memory_entry: Dict[str, Any]) -> Dict[str, Any]:
                 keywords=excluded.keywords,
                 file_path=excluded.file_path,
                 snippet=excluded.snippet,
+                content=excluded.content,
                 content_hash=excluded.content_hash,
                 updated_at=excluded.updated_at;
             """,
@@ -118,6 +160,7 @@ def upsert_memory_index(memory_entry: Dict[str, Any]) -> Dict[str, Any]:
                 keywords_json,
                 file_path,
                 snippet,
+                full_content,
                 content_hash,
                 created_at,
                 updated_at,
@@ -240,6 +283,79 @@ def clear_all_index_memories() -> None:
 
 
 @handle_errors
+def clear_all_backup_records_from_db() -> None:
+    """Purges all backup records and readme entries from SQLite."""
+    init_db()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM backup_records;")
+        cursor.execute("DELETE FROM backup_readme;")
+        conn.commit()
+    logger.info("Cleared all backup records and README entries from SQLite DB.")
+
+
+
+@handle_errors
 def get_categories_stats() -> List[str]:
     """Returns list of categories from disk and DB."""
     return get_available_categories()
+
+
+@handle_errors
+def log_backup_record(
+    memory_id: str,
+    title: str,
+    category: str,
+    file_path: str,
+    backup_path: str,
+    content_hash: str,
+) -> bool:
+    """Logs a single memory backup record into SQLite."""
+    init_db()
+    now_iso = datetime.now(timezone.utc).isoformat()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO backup_records (
+                memory_id, title, category, file_path, backup_path, content_hash, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (memory_id, title, category, str(file_path), str(backup_path), content_hash, now_iso),
+        )
+        conn.commit()
+    return True
+
+
+@handle_errors
+def save_backup_readme_to_db(readme_text: str, total_memories: int) -> bool:
+    """Saves the generated backup README.txt snapshot content into SQLite."""
+    init_db()
+    now_iso = datetime.now(timezone.utc).isoformat()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO backup_readme (readme_text, total_memories, created_at)
+            VALUES (?, ?, ?)
+            """,
+            (readme_text, total_memories, now_iso),
+        )
+        conn.commit()
+    return True
+
+
+@handle_errors
+def get_latest_backup_readme_from_db() -> Optional[Dict[str, Any]]:
+    """Retrieves the latest backup README summary from SQLite."""
+    init_db()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM backup_readme ORDER BY created_at DESC LIMIT 1"
+        )
+        row = cursor.fetchone()
+        if row:
+            return dict(row)
+    return None
+

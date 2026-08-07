@@ -157,15 +157,43 @@ def sync_markdown_files() -> Dict[str, Any]:
             upsert_memory_index(memory_entry)
             existing_memories[memory_id] = memory_entry
 
-    # Detect deleted files (present in SQLite but missing from disk)
+    # Auto-rematerialize missing files from SQLite database instead of purging
     all_indexed_memories = get_all_memories()
+    rematerialized_count = 0
     for mem in all_indexed_memories:
         mem_id = mem["id"]
         file_path_str = mem.get("file_path", "")
+        db_content = mem.get("content")
+
         if mem_id not in found_memory_ids and (not file_path_str or not Path(file_path_str).exists()):
-            delete_chunks_by_memory_id(mem_id)
-            delete_memory_from_index(mem_id)
-            deleted_count += 1
+            if db_content:
+                # Re-materialize file on disk from SQLite database content
+                title = mem.get("title", "Untitled Memory")
+                category = mem.get("category", "personal")
+                tags = mem.get("tags", [])
+                target_path = Path(file_path_str) if file_path_str else MEMORIES_DIR / category / f"{mem_id}.md"
+
+                create_markdown_file(
+                    memory_id=mem_id,
+                    title=title,
+                    category=category,
+                    tags=tags,
+                    content=db_content,
+                    created_at=mem.get("created_at", ""),
+                    updated_at=mem.get("updated_at", ""),
+                    file_path=target_path,
+                    overwrite=True,
+                )
+                rematerialized_count += 1
+                found_memory_ids.add(mem_id)
+                logger.info(f"Auto-rematerialized missing memory file from SQLite DB: '{title}' -> {target_path}")
+            else:
+                delete_chunks_by_memory_id(mem_id)
+                delete_memory_from_index(mem_id)
+                deleted_count += 1
+
+    # Keep backup repository & README snapshot updated
+    backup_all_memories()
 
     total_count = len(get_all_memories())
 
@@ -174,8 +202,10 @@ def sync_markdown_files() -> Dict[str, Any]:
         "added": added_count,
         "updated": updated_count,
         "deleted": deleted_count,
+        "rematerialized": rematerialized_count,
         "total_memories": total_count,
     }
+
 
 
 @handle_errors
