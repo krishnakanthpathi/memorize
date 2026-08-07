@@ -9,6 +9,13 @@ from config.constants import MEMORIES_DIR
 from core.hashing import compute_string_hash
 from core.id_generator import generate_memory_id
 from core.logger import handle_errors, logger
+from storage.backup_manager import (
+    backup_all_memories,
+    backup_single_memory_file,
+    clear_all_backups,
+    delete_single_backup_file,
+    restore_memories_from_backup,
+)
 from storage.db_manager import (
     clear_all_index_memories,
     delete_memory_from_index,
@@ -44,12 +51,16 @@ except ImportError:
 def sync_markdown_files() -> Dict[str, Any]:
     """
     Scans data/memories/ recursively.
-    1. Detects new or updated .md files -> parses YAML frontmatter, auto-chunks, auto-embeds, and updates SQLite + ChromaDB.
-    2. Assigns missing memory_id to files created directly on disk.
-    3. Detects deleted files -> purges corresponding memory entries from SQLite and ChromaDB.
+    1. Restores any missing .md files from data/backups/memories/ if necessary.
+    2. Detects new or updated .md files -> parses YAML frontmatter, auto-chunks, auto-embeds, creates backup, and updates SQLite + ChromaDB.
+    3. Assigns missing memory_id to files created directly on disk.
+    4. Detects deleted files -> purges corresponding memory entries from SQLite and ChromaDB.
     """
     if not MEMORIES_DIR.exists():
         MEMORIES_DIR.mkdir(parents=True, exist_ok=True)
+
+    # First, restore any missing memory files from backup store
+    restore_memories_from_backup()
 
     init_db()
     existing_memories = {m["id"]: m for m in get_all_memories()}
@@ -168,11 +179,11 @@ def sync_markdown_files() -> Dict[str, Any]:
 
 
 @handle_errors
-def clear_all_memories() -> Dict[str, Any]:
+def clear_all_memories(clear_backups: bool = True) -> Dict[str, Any]:
     """
     Completely purges all memory Markdown files and directories in MEMORIES_DIR,
     re-initializes standard category folders, resets SQLite DB,
-    and clears ChromaDB vector store collection.
+    clears ChromaDB vector store collection, and purges backups if clear_backups is True.
     """
     import shutil
     from config.constants import DEFAULT_CATEGORIES
@@ -188,6 +199,9 @@ def clear_all_memories() -> Dict[str, Any]:
                 deleted_files += 1
             except Exception as e:
                 logger.error(f"Error removing {item}: {e}")
+
+    if clear_backups:
+        clear_all_backups()
 
     # Re-initialize standard category subdirectories with .gitkeep
     for cat in DEFAULT_CATEGORIES:

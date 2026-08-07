@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Optional
 import chromadb
 
-from config.constants import CHROMA_DIR, CHROMA_HOST, CHROMA_PORT
+from config.constants import CHROMA_DIR, CHROMA_HOST, CHROMA_MODE, CHROMA_PORT
 from core.logger import handle_errors, logger, time_execution
 
 CHROMA_CLIENT = None
@@ -10,12 +10,11 @@ CHROMA_CLIENT = None
 def get_chroma_client():
     """
     Lazy-loads and caches ChromaDB client.
-    Attempts HttpClient connection to remote container host (CHROMA_HOST:CHROMA_PORT) first,
-    falling back to local PersistentClient if remote server is unreachable.
+    Uses local PersistentClient by default, or HttpClient if CHROMA_MODE is set to 'remote'.
     """
     global CHROMA_CLIENT
     if CHROMA_CLIENT is None:
-        if CHROMA_HOST:
+        if CHROMA_MODE == "remote" and CHROMA_HOST:
             try:
                 import socket
                 sock = socket.create_connection((CHROMA_HOST, CHROMA_PORT), timeout=1.0)

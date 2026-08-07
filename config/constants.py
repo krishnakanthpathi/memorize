@@ -1,8 +1,12 @@
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 
 # Base Repository Path
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables from .env file
+load_dotenv(BASE_DIR / ".env")
 
 # Storage Data Directory
 DATA_DIR = BASE_DIR / "data"
@@ -13,6 +17,10 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 MEMORIES_DIR = DATA_DIR / "memories"
 MEMORIES_DIR.mkdir(parents=True, exist_ok=True)
+
+BACKUP_DIR = DATA_DIR / "backups"
+BACKUP_MEMORIES_DIR = BACKUP_DIR / "memories"
+BACKUP_MEMORIES_DIR.mkdir(parents=True, exist_ok=True)
 
 DEFAULT_CATEGORIES = [
     "achievements",
@@ -31,19 +39,24 @@ DEFAULT_CATEGORIES = [
 # RAG & Embedding Settings
 DEFAULT_CHUNK_SIZE = 500  # tokens
 DEFAULT_CHUNK_OVERLAP = 50  # tokens
-FALLBACK_EMBEDDING_MODEL = "all-MiniLM-L6-v2"  # Local HuggingFace model
+FALLBACK_EMBEDDING_MODEL = os.getenv("FALLBACK_EMBEDDING_MODEL", "all-MiniLM-L6-v2")  # Local HuggingFace model
+
+# Embedding Provider Selection: "local" (default), "openai", "ollama", or "auto"
+EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "local").lower()
 
 # OpenAI primary model
-OPENAI_BASE_URL = "https://bedrock-mantle.ap-southeast-2.api.aws/v1"
-EMBEDDING_MODEL_NAME = "titan-embed-text-v2"
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://bedrock-mantle.ap-southeast-2.api.aws/v1")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+EMBEDDING_MODEL_NAME = os.getenv("ACTIVE_EMBEDDING_MODEL", "titan-embed-text-v2")
 
 # Ollama embeddings model
-OLLAMA_EMBEDDING_MODEL = "nomic-embed-text"
-OLLAMA_BASE_URL = "http://100.105.203.102:11434"
+OLLAMA_EMBEDDING_MODEL = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
 # Remote ChromaDB Container Settings
-CHROMA_HOST = "100.105.203.102"
-CHROMA_PORT = 8000
+CHROMA_MODE = os.getenv("CHROMA_MODE", "local").lower()
+CHROMA_HOST = os.getenv("CHROMA_HOST", "localhost")
+CHROMA_PORT = int(os.getenv("CHROMA_PORT", "8000"))
 
 # Hybrid Search Relevance Weights
 WEIGHT_VECTOR_SIMILARITY = 0.50
@@ -74,5 +87,6 @@ MODEL_CHUNK_CONFIGS = {
 CHROMA_CLIENT = None
 LOCAL_MODEL_CACHE = {}
 
-# Ollama Classification Model
-OLLAMA_CLASSIFICATION_MODEL = "gpt-oss:120b-cloud"
+# Ollama Classification Model & Classifier Mode ("rules" fast local default, "llm", or "auto")
+CLASSIFIER_MODE = os.getenv("CLASSIFIER_MODE", "rules").lower()
+OLLAMA_CLASSIFICATION_MODEL = os.getenv("OLLAMA_CLASSIFICATION_MODEL", "gpt-oss:120b-cloud")

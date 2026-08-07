@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Tuple
 import requests
 
 from config.constants import (
+    CLASSIFIER_MODE,
     MEMORIES_DIR,
     OLLAMA_BASE_URL,
     OLLAMA_CLASSIFICATION_MODEL,
@@ -12,17 +13,18 @@ from core.logger import handle_errors, logger, time_execution
 from utils import get_available_categories, get_category_dir
 
 
-# Fallback keyword mapping for fast offline rule classification
+# Enhanced keyword mapping for fast, highly accurate offline rule classification
 RULE_CATEGORY_KEYWORDS = {
-    "achievements": ["award", "certification", "trophy", "milestone", "winner", "hackathon", "degree", "passed"],
-    "development": ["python", "code", "algorithm", "rag", "mcp", "docker", "git", "frontend", "backend", "api", "react", "nextjs", "css", "html", "javascript", "typescript", "bug", "refactor", "coding", "style"],
-    "education": ["course", "lecture", "university", "college", "gpa", "exam", "assignment", "homework", "thesis", "degree", "school"],
-    "finance": ["stock", "investment", "budget", "crypto", "tax", "bank", "money", "savings", "expense", "salary"],
-    "gaming": ["game", "steam", "playstation", "xbox", "fps", "rpg", "valorant", "nintendo", "score", "match", "multiplayer"],
-    "integration": ["mcp", "webhook", "api_key", "pipeline", "service", "plugin", "oauth", "middleware", "connection", "rest_api"],
-    "job": ["resume", "interview", "career", "salary", "boss", "company", "client", "work", "meeting", "deadline", "promotion"],
-    "media": ["transcript", "ocr", "audio", "video", "pdf", "image", "document", "scan", "youtube", "podcast", "movie"],
-    "personal": ["journal", "sleep", "dream", "health", "habit", "mood", "family", "friend", "home", "diary", "woke", "waking", "preference"],
+    "achievements": ["jee", "percentile", "nta score", "score card", "rank", "ranking", "prize", "winner", "award", "certification", "milestone", "top 1%", "top 5%", "top 8%"],
+    "development": ["react", "vue", "tailwind", "shadcn", "frontend", "backend", "typescript", "javascript", "python", "css", "html", "fastapi", "express", "node", "monochrome", "ui", "animation", "animejs", "motion", "framer", "code", "algorithm", "git", "refactor"],
+    "projects": ["cms", "queryport", "discord bot", "nullpointer", "local share", "personal assistant", "project", "app", "application", "mern", "architecture", "headless"],
+    "job": ["resume", "cartrade", "employed", "salary", "full-stack developer", "full stack", "work experience", "career", "settlement", "job", "company", "interview"],
+    "education": ["b.tech", "cgpa", "pragati engineering", "degree", "college", "university", "computer science", "gpa", "school", "exam"],
+    "integration": ["mcp", "mcp server", "tailscale", "wsl", "ubuntu", "ssh", "webhook", "api_key", "pipeline", "oauth", "rest_api"],
+    "media": ["ocr", "audio", "video", "tts", "text-to-speech", "pdf", "image", "document", "scan", "youtube", "podcast"],
+    "finance": ["stock", "investment", "budget", "crypto", "tax", "bank", "money", "savings", "expense"],
+    "gaming": ["game", "steam", "playstation", "xbox", "fps", "rpg", "valorant", "nintendo", "score", "match"],
+    "personal": ["phone", "email", "contact", "journal", "preference", "sleep", "family", "friend", "home", "diary", "woke", "waking"],
 }
 
 
@@ -39,9 +41,9 @@ def rule_based_classify(text: str) -> Tuple[str, List[str]]:
     for cat, keywords in RULE_CATEGORY_KEYWORDS.items():
         score = 0
         for kw in keywords:
-            if kw in words or kw in text_lower:
-                score += 1
-                matched_tags.add(kw)
+            if kw in text_lower:
+                score += 2 if " " in kw else 1
+                matched_tags.add(kw.replace(" ", "_"))
         if score > 0:
             category_scores[cat] = score
 
@@ -109,6 +111,13 @@ def classify_memory(text: str) -> Dict[str, Any]:
     """
     if not text or not text.strip():
         return {"category": "personal", "tags": [], "confidence": 1.0, "is_new_category": False}
+
+    if CLASSIFIER_MODE == "rules":
+        cat, tags = rule_based_classify(text)
+        available_categories = get_available_categories()
+        if cat not in available_categories:
+            cat = "personal"
+        return {"category": cat, "tags": tags, "confidence": 0.90, "method": "rules", "is_new_category": False}
 
     result = classify_text_llm(text)
     cat = result["category"]

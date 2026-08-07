@@ -1,6 +1,6 @@
 from pathlib import Path
 import sys
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from mcp.server.fastmcp import FastMCP
 
@@ -242,7 +242,7 @@ def hybrid_search_memories(
     query: str,
     category_filter: Optional[str] = None,
     top_k: int = 5,
-) -> List[dict]:
+) -> Union[List[dict], dict]:
     """
     Performs hybrid weighted relevance search combining Vector Similarity (50%),
     Tag Match (30%), and Category Match (20%) to return ranked top memories.
@@ -260,7 +260,7 @@ def search_memory(
     category_filter: Optional[str] = None,
     top_k: int = 5,
     min_similarity: float = 0.0,
-) -> List[dict]:
+) -> Union[List[dict], dict]:
     """
     Performs pure similarity search using vector embeddings to find and rank memories based on query similarity.
     """

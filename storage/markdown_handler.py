@@ -8,6 +8,7 @@ import yaml
 
 from core.hashing import compute_string_hash
 from core.logger import handle_errors, logger
+from storage.backup_manager import backup_single_memory_file, delete_single_backup_file
 from utils import get_category_dir
 
 
@@ -152,6 +153,7 @@ def create_markdown_file(
         f.write(full_text)
 
     logger.info(f"Wrote Markdown memory file: {target_path}")
+    backup_single_memory_file(target_path)
     return target_path
 
 
@@ -244,5 +246,6 @@ def delete_markdown_file(file_path: Union[Path, str]) -> bool:
     if path_obj.exists():
         path_obj.unlink()
         logger.info(f"Deleted Markdown memory file: {path_obj}")
+        delete_single_backup_file(path_obj)
         return True
     return False
