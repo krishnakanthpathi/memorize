@@ -1,4 +1,8 @@
-from utils.category_utils import get_available_categories, get_category_dir
+from utils.category_utils import (
+    get_available_categories,
+    get_category_dir,
+    slugify_title,
+)
 from utils.model_fetcher import fetch_and_bifurcate_models, get_available_models
 
 __all__ = [
@@ -6,4 +10,6 @@ __all__ = [
     "get_available_models",
     "get_available_categories",
     "get_category_dir",
+    "slugify_title",
 ]
+

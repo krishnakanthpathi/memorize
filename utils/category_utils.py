@@ -26,3 +26,18 @@ def get_category_dir(category: str) -> Path:
     cat_dir = MEMORIES_DIR / cat_name
     cat_dir.mkdir(parents=True, exist_ok=True)
     return cat_dir
+
+
+def slugify_title(title: str) -> str:
+    """
+    Converts a title string into a clean filename slug.
+    Example: "Krishna Kanth's Contact & ID Details" -> "krishna_kanth_s_contact_id_details"
+    """
+    import re
+    if not title:
+        return "untitled_memory"
+    s = title.lower().strip()
+    s = re.sub(r"[^\w\s-]", "_", s)
+    s = re.sub(r"[\s_-]+", "_", s)
+    return s.strip("_")
+
