@@ -5,10 +5,6 @@ from typing import List, Optional, Union
 from mcp.server.fastmcp import FastMCP
 
 from classification.classifier import classify_memory
-from core.deduplication_service import (
-    detect_duplicate_clusters,
-    merge_duplicate_memories,
-)
 from core.memory_service import execute_upsert_memory
 from search.relevance_scorer import (
     search_hybrid_relevance,
@@ -341,41 +337,8 @@ def list_available_models(
 
 
 # ==========================================
-# 🧹 4. Organization & Deduplication Tools
+# 🧹 4. Organization Tools
 # ==========================================
-
-@mcp.tool()
-def detect_duplicate_memories(
-    category_filter: Optional[str] = None,
-    min_similarity: float = 0.40,
-) -> dict:
-    """
-    Scans stored memories for potential duplicate clusters based on pairwise title and content similarity.
-    """
-    return detect_duplicate_clusters(
-        category_filter=category_filter,
-        min_similarity=min_similarity,
-    )
-
-
-@mcp.tool()
-def merge_duplicate_memories_tool(
-    memory_ids: List[str],
-    target_title: Optional[str] = None,
-    target_category: Optional[str] = None,
-    llm_model: Optional[str] = None,
-) -> dict:
-    """
-    Synthesizes and merges multiple duplicate memory documents into a single consolidated master file using an LLM.
-    Safely purges secondary duplicate files from Markdown disk, SQLite, and ChromaDB.
-    """
-    return merge_duplicate_memories(
-        memory_ids=memory_ids,
-        target_title=target_title,
-        target_category=target_category,
-        llm_model=llm_model,
-    )
-
 
 @mcp.tool()
 def organize_memory_files(auto_fix: bool = True) -> dict:
