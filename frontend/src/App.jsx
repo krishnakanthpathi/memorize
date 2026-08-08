@@ -353,9 +353,28 @@ export default function App() {
             type="text"
             placeholder="Search memories by keyword, text, or vector similarity..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-9 pr-12 py-1.5 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-zinc-600 transition"
+            onChange={(e) => {
+              const val = e.target.value;
+              setSearchQuery(val);
+              if (!val.trim()) {
+                loadData();
+              }
+            }}
+            className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-9 pr-16 py-1.5 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-zinc-600 transition"
           />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery('');
+                loadData();
+              }}
+              className="absolute right-12 top-1/2 -translate-y-1/2 text-[10px] text-zinc-500 hover:text-zinc-300 px-1"
+              title="Clear search"
+            >
+              ✕
+            </button>
+          )}
           <button
             type="submit"
             className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-mono text-zinc-400 bg-zinc-800 border border-zinc-700 px-1.5 py-0.5 rounded hover:text-zinc-200"
