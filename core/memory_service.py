@@ -3,7 +3,10 @@ from typing import Any, Dict, List, Optional
 
 from core.hashing import compute_string_hash
 from core.id_generator import generate_memory_id
+from core.smart_updater import smart_merge_memory_content
 from storage.db_manager import (
+    db_get_version_by_number,
+    db_get_versions,
     delete_memory_from_index,
     find_memory_by_title_or_slug,
     get_memory_by_id,
@@ -14,7 +17,9 @@ from storage.markdown_handler import (
     create_markdown_file,
     delete_markdown_file,
     normalize_title,
+    read_markdown_file,
 )
+from storage.version_manager import create_version_snapshot
 from vector.chunker import chunk_text
 from vector.embedder import generate_local_embeddings
 from vector.vector_db import add_chunks_to_vector_db, delete_chunks_by_memory_id
@@ -76,12 +81,23 @@ def handle_existing_memory(
     tags: List[str],
 ) -> dict:
     """
-    Handles updating or appending to an existing memory file and re-indexing vector chunks.
+    Handles updating or appending to an existing memory file using LLM smart merge,
+    creates version control snapshot prior to update, and re-indexes vector chunks.
     """
     target_id = existing["id"]
     file_path = Path(existing["file_path"])
 
-    if action_clean in ("append", "auto"):
+    # 1. Create a version snapshot before applying modifications
+    create_version_snapshot(target_id)
+
+    existing_content = existing.get("content", "")
+    if not existing_content and file_path.exists():
+        try:
+            _, existing_content = read_markdown_file(file_path)
+        except Exception:
+            existing_content = ""
+
+    if action_clean == "append":
         updated_path, target_id, full_content = append_to_markdown_file(
             file_path=file_path,
             additional_content=content,
@@ -89,22 +105,26 @@ def handle_existing_memory(
         )
         content_hash = compute_string_hash(full_content)
         actual_action = "append"
-    else:  # update
+    else:  # 'update', 'auto', 'smart' -> Smart LLM contextual merge
         combined_tags = list(set(existing.get("tags", []) + tags))
-        content_hash = compute_string_hash(content)
+        full_content = smart_merge_memory_content(
+            existing_content=existing_content,
+            new_input=content,
+            title=norm_title,
+        )
+        content_hash = compute_string_hash(full_content)
         updated_path = create_markdown_file(
             memory_id=target_id,
             title=norm_title,
             category=category,
             tags=combined_tags,
-            content=content,
+            content=full_content,
             content_hash=content_hash,
             created_at=existing.get("created_at"),
             file_path=file_path,
             overwrite=True,
         )
-        full_content = content
-        actual_action = "update"
+        actual_action = "smart_update"
 
     chunks, chunk_ids = reindex_memory_chunks(target_id, full_content)
 
@@ -227,3 +247,85 @@ def execute_upsert_memory(
         tags=tags,
         memory_id=memory_id,
     )
+
+
+def execute_revert_memory(
+    memory_id: str,
+    version_number: Optional[int] = None,
+) -> dict:
+    """
+    Reverts a memory back to a previous version snapshot from version control history.
+    Updates disk Markdown file, SQLite DB index, and ChromaDB vector store embeddings.
+    """
+    existing = get_memory_by_id(memory_id)
+    if not existing:
+        return {"status": "error", "message": f"Memory with ID '{memory_id}' not found."}
+
+    history = db_get_versions(memory_id)
+    if not history:
+        return {
+            "status": "error",
+            "message": f"No version history available for memory '{memory_id}'.",
+        }
+
+    if version_number is None:
+        # Revert to the most recent saved version snapshot
+        target_ver = history[0]
+    else:
+        target_ver = db_get_version_by_number(memory_id, version_number)
+        if not target_ver:
+            avail = [h["version_number"] for h in history]
+            return {
+                "status": "error",
+                "message": f"Version {version_number} not found for memory '{memory_id}'. Available versions: {avail}",
+            }
+
+    # Snapshot current state before reverting so state isn't lost
+    create_version_snapshot(memory_id)
+
+    target_id = existing["id"]
+    file_path = Path(existing["file_path"])
+    restored_title = target_ver["title"]
+    restored_category = target_ver["category"]
+    restored_tags = target_ver["tags"]
+    restored_content = target_ver["content"]
+    content_hash = target_ver.get("content_hash") or compute_string_hash(restored_content)
+
+    updated_path = create_markdown_file(
+        memory_id=target_id,
+        title=restored_title,
+        category=restored_category,
+        tags=restored_tags,
+        content=restored_content,
+        content_hash=content_hash,
+        created_at=existing.get("created_at"),
+        file_path=file_path,
+        overwrite=True,
+    )
+
+    chunks, chunk_ids = reindex_memory_chunks(target_id, restored_content)
+
+    memory_entry = {
+        "id": target_id,
+        "title": restored_title,
+        "category": restored_category,
+        "tags": restored_tags,
+        "file_path": str(updated_path),
+        "content": restored_content,
+        "content_hash": content_hash,
+        "created_at": existing.get("created_at"),
+        "chunk_ids": chunk_ids,
+    }
+    upsert_memory_index(memory_entry)
+
+    return {
+        "status": "success",
+        "action": "revert",
+        "memory_id": target_id,
+        "restored_version": target_ver["version_number"],
+        "title": restored_title,
+        "category": restored_category,
+        "file_path": str(updated_path),
+        "message": f"Memory '{target_id}' successfully reverted to version {target_ver['version_number']}.",
+    }
+

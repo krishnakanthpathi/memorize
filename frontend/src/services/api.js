@@ -82,3 +82,26 @@ export async function purgeAllData() {
   if (!res.ok) throw new Error('Failed to purge data');
   return res.json();
 }
+
+export async function syncMemories() {
+  const res = await fetch(`${API_BASE}/sync`, { method: 'POST' });
+  if (!res.ok) throw new Error('Failed to sync memories');
+  return res.json();
+}
+
+export async function fetchMemoryVersions(memoryId) {
+  const res = await fetch(`${API_BASE}/memories/${memoryId}/versions`);
+  if (!res.ok) throw new Error('Failed to fetch memory versions');
+  return res.json();
+}
+
+export async function revertMemory(memoryId, versionNumber = null) {
+  const res = await fetch(`${API_BASE}/memories/${memoryId}/revert`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ version_number: versionNumber }),
+  });
+  if (!res.ok) throw new Error('Failed to revert memory');
+  return res.json();
+}
+

@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from core.memory_service import execute_upsert_memory, handle_delete_memory
+from core.memory_service import execute_revert_memory, execute_upsert_memory, handle_delete_memory
 from search.relevance_scorer import search_hybrid_relevance as hybrid_search_memories
 from storage.backup_manager import (
     backup_all_memories,
@@ -16,7 +16,13 @@ from storage.db_manager import (
     get_memory_by_id,
 )
 from storage.sync_manager import clear_all_memories, get_memory_file_status, sync_markdown_files
+from storage.version_manager import get_version_history
 from utils.llm_client import generate_llm_response
+
+
+class RevertRequest(BaseModel):
+    version_number: Optional[int] = None
+
 
 app = FastAPI(
     title="Memorize API Service",
@@ -32,6 +38,30 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/api/memories/{memory_id}/versions")
+def get_memory_versions_endpoint(memory_id: str):
+    target = get_memory_by_id(memory_id)
+    if not target:
+        raise HTTPException(status_code=404, detail=f"Memory '{memory_id}' not found.")
+    history = get_version_history(memory_id)
+    return {
+        "status": "success",
+        "memory_id": memory_id,
+        "title": target.get("title"),
+        "total_versions": len(history),
+        "versions": history,
+    }
+
+
+@app.post("/api/memories/{memory_id}/revert")
+def revert_memory_endpoint(memory_id: str, req: Optional[RevertRequest] = None):
+    ver_num = req.version_number if req else None
+    res = execute_revert_memory(memory_id=memory_id, version_number=ver_num)
+    if isinstance(res, dict) and res.get("status") == "error":
+        raise HTTPException(status_code=400, detail=res.get("message", "Error reverting memory."))
+    return res
 
 
 class MemoryCreateRequest(BaseModel):

@@ -5,7 +5,7 @@ from typing import List, Optional, Union
 from mcp.server.fastmcp import FastMCP
 
 from classification.classifier import classify_memory
-from core.memory_service import execute_upsert_memory
+from core.memory_service import execute_revert_memory, execute_upsert_memory
 from search.relevance_scorer import (
     search_hybrid_relevance,
     search_vector_similarity,
@@ -23,6 +23,7 @@ from storage.sync_manager import (
     start_background_watcher,
     sync_markdown_files as sync_scan_markdown_files,
 )
+from storage.version_manager import get_version_history
 from utils import get_available_categories, get_category_dir
 from utils.model_fetcher import fetch_and_bifurcate_models
 from vector.vector_db import peek_vector_db
@@ -189,6 +190,34 @@ def delete_memory(memory_id: str) -> dict:
     Deletes a memory across Markdown disk storage, SQLite database, and ChromaDB vector store.
     """
     return upsert_memory(title="", memory_id=memory_id, action="delete")
+
+
+@mcp.tool()
+def list_memory_versions(memory_id: str) -> dict:
+    """
+    Lists available version control snapshots (up to the last 3 retained versions) for a given memory.
+    """
+    target_mem = get_memory_by_id(memory_id)
+    if not target_mem:
+        return {"status": "error", "message": f"Memory with ID '{memory_id}' not found."}
+
+    history = get_version_history(memory_id)
+    return {
+        "status": "success",
+        "memory_id": memory_id,
+        "title": target_mem.get("title"),
+        "total_versions": len(history),
+        "versions": history,
+    }
+
+
+@mcp.tool()
+def revert_memory(memory_id: str, version_number: Optional[int] = None) -> dict:
+    """
+    Reverts a memory back to a previous version snapshot from version history.
+    If version_number is omitted, restores the most recent snapshot.
+    """
+    return execute_revert_memory(memory_id=memory_id, version_number=version_number)
 
 
 @mcp.tool()

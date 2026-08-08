@@ -32,6 +32,9 @@ import {
   triggerBackup,
   sendChatMessage,
   purgeAllData,
+  syncMemories,
+  fetchMemoryVersions,
+  revertMemory,
 } from './services/api';
 
 function parseGitHubMarkdown(rawText) {
@@ -91,8 +94,23 @@ export default function App() {
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
 
-  // Backup state
+  // Backup & Sync state
   const [readmeText, setReadmeText] = useState('');
+  const [syncing, setSyncing] = useState(false);
+
+  const handleSyncFiles = async () => {
+    setSyncing(true);
+    try {
+      const res = await syncMemories();
+      await loadData();
+      alert(`Files Synced Successfully! Total ${res.total_memories || 0} memories indexed (${res.added || 0} added, ${res.updated || 0} updated).`);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to sync markdown files.');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   // Initial load
   useEffect(() => {
@@ -136,6 +154,32 @@ export default function App() {
     }
   };
 
+  // Version history state
+  const [docVersions, setDocVersions] = useState([]);
+
+  const handleRevertVersion = async (versionNum = null) => {
+    if (!showDetailModal) return;
+    try {
+      const res = await revertMemory(showDetailModal.id, versionNum);
+      alert(`Memory reverted to version ${res.version_number || 'previous'}!`);
+      const detailRes = await fetchMemoryDetail(showDetailModal.id);
+      if (detailRes && detailRes.status === 'success') {
+        const fullContent = detailRes.content || detailRes.raw_file_text;
+        setShowDetailModal((prev) => ({
+          ...prev,
+          content: fullContent,
+        }));
+        setFormContent(fullContent);
+      }
+      const verRes = await fetchMemoryVersions(showDetailModal.id);
+      setDocVersions(verRes.versions || []);
+      loadData();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to revert memory version.');
+    }
+  };
+
   const handleOpenDocument = async (memory, initialMode = 'read') => {
     setIsFullScreen(true);
     setDocMode(initialMode);
@@ -145,6 +189,7 @@ export default function App() {
     setFormTags(Array.isArray(memory.tags) ? memory.tags.join(', ') : '');
     setFormContent(memory.content || memory.snippet || '');
     setShowDetailModal(memory);
+    setDocVersions([]);
 
     try {
       const detailRes = await fetchMemoryDetail(memory.id);
@@ -158,8 +203,10 @@ export default function App() {
         }));
         setFormContent(fullContent);
       }
+      const verRes = await fetchMemoryVersions(memory.id);
+      setDocVersions(verRes.versions || []);
     } catch (err) {
-      console.error('Error fetching untruncated memory detail:', err);
+      console.error('Error fetching untruncated memory detail or versions:', err);
     }
   };
 
@@ -343,6 +390,16 @@ export default function App() {
           </button>
 
           <button
+            onClick={handleSyncFiles}
+            disabled={syncing}
+            className="bg-zinc-900 hover:bg-zinc-850 text-zinc-300 border border-zinc-800 text-xs font-medium px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition disabled:opacity-50"
+            title="Scan and Sync Markdown Files from Disk to Database"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-zinc-400 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Syncing...' : 'Sync Disk Files'}
+          </button>
+
+          <button
             onClick={handleOpenBackup}
             className="bg-zinc-900 hover:bg-zinc-850 text-zinc-300 border border-zinc-800 text-xs font-medium px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition"
             title="View Backups & README"
@@ -396,10 +453,18 @@ export default function App() {
           </div>
 
           {/* System Control Block */}
-          <div className="mt-auto border-t border-zinc-800/80 pt-4 px-2">
-            <div className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 font-semibold mb-2">
+          <div className="mt-auto border-t border-zinc-800/80 pt-4 px-2 flex flex-col gap-1.5">
+            <div className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 font-semibold mb-1">
               System Control
             </div>
+            <button
+              onClick={handleSyncFiles}
+              disabled={syncing}
+              className="w-full text-left px-3 py-2 rounded-lg text-xs font-medium text-zinc-300 hover:bg-zinc-900 border border-zinc-800/80 flex items-center gap-2 transition disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-zinc-400 ${syncing ? 'animate-spin' : ''}`} />
+              {syncing ? 'Syncing...' : 'Sync Disk Files'}
+            </button>
             <button
               onClick={handlePurgingSystem}
               className="w-full text-left px-3 py-2 rounded-lg text-xs font-medium text-red-400 hover:bg-red-950/30 hover:border-red-900/40 border border-transparent flex items-center gap-2 transition"
@@ -723,6 +788,32 @@ export default function App() {
                     ✏️ Edit
                   </button>
                 </div>
+
+                {/* Version Control / Revert Dropdown */}
+                {docVersions.length > 0 && (
+                  <div className="flex items-center gap-1.5 font-mono text-xs bg-black px-2 py-1 rounded-xl border border-neutral-800">
+                    <span className="text-neutral-400 font-semibold text-[11px]">vHistory:</span>
+                    <select
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          if (confirm(`Revert this memory to version ${e.target.value}?`)) {
+                            handleRevertVersion(parseInt(e.target.value));
+                          }
+                          e.target.value = '';
+                        }
+                      }}
+                      defaultValue=""
+                      className="bg-neutral-900 border border-neutral-700 text-neutral-200 rounded px-1.5 py-0.5 text-[11px] font-mono focus:outline-none"
+                    >
+                      <option value="" disabled>Restore version...</option>
+                      {docVersions.map((ver) => (
+                        <option key={ver.version_number} value={ver.version_number}>
+                          v{ver.version_number} ({new Date(ver.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 <div className="flex items-center gap-1">
                   <button

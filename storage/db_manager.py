@@ -4,7 +4,7 @@ from pathlib import Path
 import sqlite3
 from typing import Any, Dict, List, Optional
 
-from config.constants import DATA_DIR, DB_PATH, MEMORIES_DIR
+import config.constants as constants
 from core.logger import handle_errors, logger
 from search.filter_extractor import extract_keywords_and_snippet
 from utils.category_utils import get_available_categories, get_category_dir
@@ -15,8 +15,8 @@ def get_db_connection() -> sqlite3.Connection:
     """
     Creates and returns a SQLite database connection with row factory enabled.
     """
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(DB_PATH), timeout=10.0)
+    constants.DATA_DIR.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(constants.DB_PATH), timeout=10.0)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -87,8 +87,27 @@ def init_db() -> None:
             """
         )
 
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS memory_versions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                memory_id TEXT NOT NULL,
+                version_number INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                category TEXT NOT NULL,
+                tags TEXT NOT NULL,
+                content TEXT NOT NULL,
+                content_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            """
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_memory_versions_id ON memory_versions(memory_id, version_number);"
+        )
+
         conn.commit()
-    logger.info(f"SQLite database initialized at {DB_PATH}")
+    logger.info(f"SQLite database initialized at {constants.DB_PATH}")
 
 
 @handle_errors
@@ -358,4 +377,138 @@ def get_latest_backup_readme_from_db() -> Optional[Dict[str, Any]]:
         if row:
             return dict(row)
     return None
+
+
+@handle_errors
+def db_save_version(
+    memory_id: str,
+    title: str,
+    category: str,
+    tags: List[str],
+    content: str,
+    content_hash: str,
+) -> Dict[str, Any]:
+    """
+    Saves a version snapshot of a memory into SQLite and returns version details.
+    Increments version_number based on highest existing version for this memory.
+    """
+    init_db()
+    now_iso = datetime.now(timezone.utc).isoformat()
+    tags_json = json.dumps(tags if isinstance(tags, list) else [])
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT MAX(version_number) FROM memory_versions WHERE memory_id = ?",
+            (memory_id,),
+        )
+        max_row = cursor.fetchone()
+        current_max = max_row[0] if (max_row and max_row[0] is not None) else 0
+        next_ver = current_max + 1
+
+        cursor.execute(
+            """
+            INSERT INTO memory_versions (
+                memory_id, version_number, title, category, tags, content, content_hash, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                memory_id,
+                next_ver,
+                title,
+                category,
+                tags_json,
+                content,
+                content_hash,
+                now_iso,
+            ),
+        )
+        conn.commit()
+
+    logger.info(f"Saved version {next_ver} for memory '{memory_id}' in SQLite.")
+    return {
+        "memory_id": memory_id,
+        "version_number": next_ver,
+        "title": title,
+        "category": category,
+        "tags": tags,
+        "created_at": now_iso,
+        "content_hash": content_hash,
+    }
+
+
+@handle_errors
+def db_get_versions(memory_id: str) -> List[Dict[str, Any]]:
+    """Retrieves all version snapshots for a given memory ID ordered newest to oldest."""
+    init_db()
+    results = []
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM memory_versions WHERE memory_id = ? ORDER BY version_number DESC",
+            (memory_id,),
+        )
+        rows = cursor.fetchall()
+        for row in rows:
+            res = dict(row)
+            res["tags"] = json.loads(res["tags"]) if res["tags"] else []
+            results.append(res)
+    return results
+
+
+@handle_errors
+def db_get_version_by_number(memory_id: str, version_number: int) -> Optional[Dict[str, Any]]:
+    """Retrieves a specific version record for a memory ID by version number."""
+    init_db()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM memory_versions WHERE memory_id = ? AND version_number = ?",
+            (memory_id, version_number),
+        )
+        row = cursor.fetchone()
+        if row:
+            res = dict(row)
+            res["tags"] = json.loads(res["tags"]) if res["tags"] else []
+            return res
+    return None
+
+
+@handle_errors
+def db_prune_versions(memory_id: str, max_versions: int = 3) -> int:
+    """
+    Keep only the most recent `max_versions` for a given memory_id and delete older ones.
+    Returns the count of pruned records.
+    """
+    init_db()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id FROM memory_versions WHERE memory_id = ? ORDER BY version_number DESC",
+            (memory_id,),
+        )
+        rows = cursor.fetchall()
+        if len(rows) > max_versions:
+            to_delete = [r["id"] for r in rows[max_versions:]]
+            placeholders = ",".join(["?"] * len(to_delete))
+            cursor.execute(
+                f"DELETE FROM memory_versions WHERE id IN ({placeholders})",
+                to_delete,
+            )
+            conn.commit()
+            logger.info(f"Pruned {cursor.rowcount} old version records for memory '{memory_id}'.")
+            return cursor.rowcount
+    return 0
+
+
+@handle_errors
+def clear_all_memory_versions_from_db() -> None:
+    """Purges all memory version records from SQLite."""
+    init_db()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM memory_versions;")
+        conn.commit()
+    logger.info("Cleared all memory versions from SQLite DB.")
+
 
