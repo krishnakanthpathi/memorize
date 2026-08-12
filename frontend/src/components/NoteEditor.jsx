@@ -120,7 +120,16 @@ export default function NoteEditor({
           {/* ✨ Auto-Organize Button */}
           <button
             className="btn btn-mono-primary btn-sm py-1.5 px-3 fs-8 d-flex align-items-center gap-2"
-            onClick={() => onAutoOrganize(content, title)}
+            onClick={async () => {
+              const res = await onAutoOrganize(content, title);
+              if (res && res.status === 'success') {
+                if (res.title) setTitle(res.title);
+                if (res.category) setCategory(res.category);
+                if (res.tags) setTags(res.tags);
+                if (res.summary) setSummary(res.summary);
+                if (res.organized_content) setContent(res.organized_content);
+              }
+            }}
             disabled={isOrganizing || !content.trim()}
             title="Auto-generate title, tags, category, and summary using active LLM"
           >
@@ -140,7 +149,16 @@ export default function NoteEditor({
           {/* ⚡ Smart Merge / Modify Memory Button */}
           <button
             className="btn btn-mono-outline btn-sm py-1.5 px-3 fs-8 d-flex align-items-center gap-2 text-light"
-            onClick={() => onSmartMerge(content, title)}
+            onClick={async () => {
+              const res = await onSmartMerge(content, title);
+              if (res && res.status === 'success') {
+                if (res.title) setTitle(res.title);
+                if (res.category) setCategory(res.category);
+                if (res.tags) setTags(res.tags);
+                if (res.summary) setSummary(res.summary);
+                if (res.organized_content) setContent(res.organized_content);
+              }
+            }}
             disabled={isOrganizing || !content.trim()}
             title="Use active LLM to contextually merge & modify memory with editor content"
           >

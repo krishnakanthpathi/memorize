@@ -139,23 +139,17 @@ export default function App() {
     return Array.from(set);
   }, [notes]);
 
-  // Filter setters with loading spinner triggers
+  // Filter setters
   const handleSetSelectedCategories = (cats) => {
-    setIsLoadingNotes(true);
     setSelectedCategories(cats);
-    setTimeout(() => setIsLoadingNotes(false), 500);
   };
 
   const handleSetSelectedTags = (tgs) => {
-    setIsLoadingNotes(true);
     setSelectedTags(tgs);
-    setTimeout(() => setIsLoadingNotes(false), 500);
   };
 
   const handleSetSearchQuery = (q) => {
-    setIsLoadingNotes(true);
     setSearchQuery(q);
-    setTimeout(() => setIsLoadingNotes(false), 500);
   };
 
   // Multi-Filter Filtering Logic
@@ -244,13 +238,17 @@ export default function App() {
     const res = await saveMemory(updatedData);
     const saved = res.memory || updatedData;
     setNotes((prevNotes) => {
-      const exists = prevNotes.some((n) => n.id === saved.id);
+      const exists = prevNotes.some((n) => n.id === saved.id || n.id === updatedData.id);
       if (exists) {
-        return prevNotes.map((n) => (n.id === saved.id ? { ...n, ...saved } : n));
+        return prevNotes.map((n) => (n.id === saved.id || n.id === updatedData.id ? { ...n, ...saved } : n));
       } else {
         return [saved, ...prevNotes];
       }
     });
+    if (saved.id) {
+      setActiveNoteId(saved.id);
+    }
+    return saved;
   };
 
   const handleDeleteNote = async (noteId) => {
@@ -269,7 +267,7 @@ export default function App() {
     try {
       const res = await apiAutoOrganizeNote(content, currentTitle, activeModel);
       if (res.status === 'success') {
-        await handleSaveNote({
+        const saved = await handleSaveNote({
           id: activeNoteId,
           title: res.title || currentTitle,
           category: res.category || 'personal',
@@ -277,7 +275,9 @@ export default function App() {
           summary: res.summary || '',
           content: res.organized_content || content,
         });
+        return { ...res, savedMemory: saved };
       }
+      return res;
     } catch (err) {
       console.warn('Auto-organize failed:', err);
     } finally {
@@ -290,7 +290,7 @@ export default function App() {
     try {
       const res = await apiAutoOrganizeNote(content, currentTitle, activeModel);
       if (res.status === 'success') {
-        await handleSaveNote({
+        const saved = await handleSaveNote({
           id: activeNoteId,
           title: res.title || currentTitle,
           category: res.category || activeNote?.category || 'personal',
@@ -298,7 +298,9 @@ export default function App() {
           summary: res.summary || '',
           content: res.organized_content || content,
         });
+        return { ...res, savedMemory: saved };
       }
+      return res;
     } catch (err) {
       console.warn('Smart merge failed:', err);
     } finally {
