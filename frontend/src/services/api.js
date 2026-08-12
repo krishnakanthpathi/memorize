@@ -157,6 +157,48 @@ export async function fetchAutoSuggestion(content, title = '', model = '') {
   };
 }
 
+export async function fetchPrompts() {
+  try {
+    const res = await fetch(`${BASE_URL}/api/prompts`);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn('Backend API fetchPrompts failed:', err);
+  }
+  return { status: 'error', prompts: {} };
+}
+
+export async function savePromptsApi(prompts) {
+  try {
+    const res = await fetch(`${BASE_URL}/api/prompts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(prompts),
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn('Backend API savePrompts failed:', err);
+  }
+  return { status: 'error' };
+}
+
+export async function resetPromptsApi() {
+  try {
+    const res = await fetch(`${BASE_URL}/api/prompts/reset`, {
+      method: 'POST',
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn('Backend API resetPrompts failed:', err);
+  }
+  return { status: 'error' };
+}
+
 export async function fetchModels() {
   try {
     const res = await fetch(`${BASE_URL}/api/models`);

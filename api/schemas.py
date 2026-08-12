@@ -42,3 +42,10 @@ class AutoSuggestRequest(BaseModel):
     title: Optional[str] = None
     model: Optional[str] = None
 
+
+class PromptUpdateRequest(BaseModel):
+    auto_suggest: Optional[str] = None
+    auto_organize: Optional[str] = None
+    smart_merge: Optional[str] = None
+    graph_chat: Optional[str] = None
+

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Sparkles, Save, Trash2, History, Tag, Folder, CheckCircle, RefreshCw, ChevronDown, ChevronUp, AlertTriangle, Zap } from 'lucide-react';
-import { fetchAutoSuggestion } from '../services/api';
 
 export default function NoteEditor({
   note,
@@ -22,7 +21,6 @@ export default function NoteEditor({
   const [isSavedAlert, setIsSavedAlert] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [isSuggesting, setIsSuggesting] = useState(false);
 
   // VS Code Copilot Ghost Text State
   const [ghostText, setGhostText] = useState('');
@@ -164,38 +162,6 @@ export default function NoteEditor({
           >
             <Zap size={14} className="me-1 text-white" />
             <span>Smart Merge</span>
-          </button>
-
-          {/* 💡 AI Auto-Suggest Button (Backend LLM Powered) */}
-          <button
-            className="btn btn-mono-outline btn-sm py-1.5 px-3 fs-8 d-flex align-items-center gap-2 text-light"
-            onClick={async () => {
-              setIsSuggesting(true);
-              try {
-                const res = await fetchAutoSuggestion(content, title, activeModel);
-                if (res.suggestion) {
-                  setGhostText(`\n\n### AI Auto-Suggestion (${res.model || activeModel}):\n${res.suggestion}`);
-                }
-              } catch (e) {
-                console.warn('Auto-suggest error:', e);
-              } finally {
-                setIsSuggesting(false);
-              }
-            }}
-            disabled={isSuggesting || !content.trim()}
-            title="Generate AI continuation & key point suggestions using backend LLM"
-          >
-            {isSuggesting ? (
-              <>
-                <span className="spinner-border spinner-border-sm text-warning me-1" role="status" aria-hidden="true"></span>
-                <span>Suggesting...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles size={14} className="me-1 text-warning" />
-                <span>Auto-Suggest</span>
-              </>
-            )}
           </button>
 
           {/* 💾 Save Note */}

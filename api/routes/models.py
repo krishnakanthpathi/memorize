@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
-from api.schemas import AutoOrganizeRequest, AutoSuggestRequest, ModelSelectRequest
+from api.schemas import AutoOrganizeRequest, AutoSuggestRequest, ModelSelectRequest, PromptUpdateRequest
+from config.prompts import load_prompts, reset_prompts_to_defaults, save_prompts
 from core.memory_service import auto_organize_note, generate_auto_suggestions
 from utils.llm_client import get_active_model, set_active_model
 from utils.model_fetcher import fetch_and_bifurcate_models
@@ -79,3 +80,35 @@ def auto_suggest_endpoint(req: AutoSuggestRequest):
     if res.get("status") == "error":
         raise HTTPException(status_code=400, detail=res.get("message", "Auto-suggest failed."))
     return res
+
+
+@router.get("/api/prompts")
+def get_prompts_endpoint():
+    """Returns current system prompt templates."""
+    return {
+        "status": "success",
+        "prompts": load_prompts(),
+    }
+
+
+@router.post("/api/prompts")
+def update_prompts_endpoint(req: PromptUpdateRequest):
+    """Updates custom system prompt templates."""
+    updates = {k: v for k, v in req.dict().items() if v is not None}
+    updated = save_prompts(updates)
+    return {
+        "status": "success",
+        "message": "Prompt configurations successfully updated.",
+        "prompts": updated,
+    }
+
+
+@router.post("/api/prompts/reset")
+def reset_prompts_endpoint():
+    """Resets system prompt templates to factory defaults."""
+    res = reset_prompts_to_defaults()
+    return {
+        "status": "success",
+        "message": "Prompt configurations reset to factory defaults.",
+        "prompts": res,
+    }

@@ -476,6 +476,7 @@ def generate_auto_suggestions(
     """
     Generates intelligent completion & key point auto-suggestions for notes using active LLM model.
     """
+    from config.prompts import get_prompt
     from utils.llm_client import generate_llm_response, get_active_model
 
     if not content or not content.strip():
@@ -485,19 +486,12 @@ def generate_auto_suggestions(
         }
 
     chosen_model = model or get_active_model()
+    prompt_template = get_prompt("auto_suggest")
 
-    prompt = f"""You are an AI Copilot for intelligent note-taking.
-Analyze the user's current note draft and generate 2-4 concise bullet points suggesting logical next sections, key insights, or action items.
-
-Title: {title}
-Current Content:
-"{content}"
-
-FORMAT REQUIREMENTS:
-- Provide clean, direct bullet points or markdown items only.
-- Do NOT repeat the existing content.
-- Keep output concise (max 3-4 bullet points).
-"""
+    try:
+        prompt = prompt_template.format(title=title or "Untitled Note", content=content)
+    except Exception:
+        prompt = f"Title: {title}\nContent:\n{content}"
 
     try:
         suggestion_text = generate_llm_response(
