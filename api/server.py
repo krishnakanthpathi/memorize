@@ -16,7 +16,7 @@ from storage.db_manager import (
     get_categories_stats,
     get_memory_by_id,
 )
-from storage.sync_manager import clear_all_memories, get_memory_file_status
+from storage.sync_manager import audit_storage_integrity, clear_all_memories, get_memory_file_status
 from storage.version_manager import get_version_history
 
 
@@ -165,6 +165,15 @@ def trigger_backup_endpoint():
 def purge_all_memories_endpoint():
     res = clear_all_memories(clear_backups=True)
     return res
+
+
+@app.get("/api/audit")
+def audit_integrity_endpoint(
+    auto_fix: bool = Query(False),
+    recover: bool = Query(False),
+):
+    """Three-way integrity audit across Markdown files, SQLite, and ChromaDB."""
+    return audit_storage_integrity(auto_fix=auto_fix, recover=recover)
 
 
 @app.post("/api/chat")

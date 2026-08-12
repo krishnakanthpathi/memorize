@@ -18,6 +18,7 @@ from storage.db_manager import (
 from storage.markdown_handler import read_markdown_file
 from storage.organization_manager import reorganize_memories
 from storage.sync_manager import (
+    audit_storage_integrity as sync_audit_storage_integrity,
     clear_all_memories as sync_clear_all_memories,
     get_memory_file_status as sync_get_memory_file_status,
 )
@@ -367,6 +368,24 @@ def organize_memory_files(auto_fix: bool = True) -> dict:
     slugifies filenames, cleans empty directories, and refreshes indexes.
     """
     return reorganize_memories(auto_fix=auto_fix)
+
+
+@mcp.tool()
+def audit_storage_integrity(
+    auto_fix: bool = False,
+    recover: bool = False,
+) -> dict:
+    """
+    Performs a three-way integrity audit across Markdown files, SQLite DB,
+    and ChromaDB vector store. Detects orphaned records (ghost entries,
+    unindexed files, stale hashes) and optionally cleans up or recovers data.
+
+    Modes:
+      - Default: Report only (no changes made).
+      - auto_fix=True: Delete ghost entries and re-index unindexed files.
+      - recover=True: Reconstruct missing .md files from SQLite content.
+    """
+    return sync_audit_storage_integrity(auto_fix=auto_fix, recover=recover)
 
 
 
