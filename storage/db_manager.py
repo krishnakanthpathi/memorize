@@ -250,6 +250,26 @@ def find_memory_by_title_or_slug(title: str, category: str = "personal") -> Opti
 
 
 @handle_errors
+def find_memory_by_content_hash(content_hash: str) -> Optional[Dict[str, Any]]:
+    """
+    Finds an existing memory matching the exact content_hash in SQLite database for deduplication.
+    """
+    if not content_hash:
+        return None
+    init_db()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM memories WHERE content_hash = ? LIMIT 1", (content_hash,))
+        row = cursor.fetchone()
+        if row:
+            res = dict(row)
+            res["tags"] = json.loads(res["tags"]) if res["tags"] else []
+            res["keywords"] = json.loads(res["keywords"]) if res["keywords"] else []
+            return res
+    return None
+
+
+@handle_errors
 def get_all_memories(
     category_filter: Optional[str] = None,
     tag_filter: Optional[str] = None,

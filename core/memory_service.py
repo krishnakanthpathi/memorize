@@ -4,10 +4,12 @@ from typing import Any, Dict, List, Optional
 from core.hashing import compute_string_hash
 from core.id_generator import generate_memory_id
 from core.smart_updater import smart_merge_memory_content
+from core.logger import logger
 from storage.db_manager import (
     db_get_version_by_number,
     db_get_versions,
     delete_memory_from_index,
+    find_memory_by_content_hash,
     find_memory_by_title_or_slug,
     get_memory_by_id,
     upsert_memory_index,
@@ -22,14 +24,37 @@ from storage.markdown_handler import (
 from storage.version_manager import create_version_snapshot
 from vector.chunker import chunk_text
 from vector.embedder import generate_embeddings
-from vector.vector_db import add_chunks_to_vector_db, delete_chunks_by_memory_id
+from vector.vector_db import (
+    add_chunks_to_vector_db,
+    delete_chunks_by_memory_id,
+    get_or_create_collection,
+)
 
 
-def reindex_memory_chunks(memory_id: str, content: str) -> tuple[list, list]:
+def reindex_memory_chunks(memory_id: str, content: str, force: bool = False) -> tuple[list, list]:
     """
     Deletes existing vector chunks, generates new chunks + embeddings, and adds them to ChromaDB.
+    If content hash is unchanged and vector chunks exist in ChromaDB, skips redundant embedding generation.
     Returns tuple of (chunks, chunk_ids).
     """
+    if not force:
+        new_hash = compute_string_hash(content)
+        existing = get_memory_by_id(memory_id)
+        if existing and existing.get("content_hash") == new_hash:
+            try:
+                collection = get_or_create_collection("memories")
+                existing_chroma = collection.get(where={"memory_id": memory_id}, include=["documents"])
+                if existing_chroma and existing_chroma.get("ids"):
+                    chunk_ids = existing_chroma["ids"]
+                    chunks = [
+                        {"chunk_id": cid, "memory_id": memory_id, "text": txt}
+                        for cid, txt in zip(chunk_ids, existing_chroma.get("documents", []))
+                    ]
+                    logger.info(f"Skipping redundant re-indexing for '{memory_id}' (content hash {new_hash[:8]}... unchanged).")
+                    return chunks, chunk_ids
+            except Exception as e:
+                logger.warning(f"Error checking existing ChromaDB chunks for '{memory_id}': {e}")
+
     delete_chunks_by_memory_id(memory_id)
     chunks = chunk_text(memory_id, content)
     chunk_ids = []
@@ -229,6 +254,14 @@ def execute_upsert_memory(
         existing = get_memory_by_id(memory_id)
     if not existing and norm_title:
         existing = find_memory_by_title_or_slug(norm_title, cat_clean)
+    if not existing and content and content.strip():
+        content_hash = compute_string_hash(content)
+        existing = find_memory_by_content_hash(content_hash)
+        if existing:
+            logger.info(
+                f"Deduplication: Content hash '{content_hash[:8]}...' matches existing memory "
+                f"'{existing['id']}' ({existing['title']}). Routing to existing memory."
+            )
 
     if existing:
         return handle_existing_memory(

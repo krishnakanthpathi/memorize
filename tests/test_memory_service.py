@@ -70,6 +70,42 @@ class TestMemoryService(unittest.TestCase):
         self.assertEqual(res_delete["action"], "delete")
         self.assertIsNone(get_memory_by_id(mem_id))
 
+    def test_deduplication_by_content_hash(self):
+        """Test that storing identical content under a different title routes to existing memory."""
+        content = "Unique content string for deduplication test."
+        res1 = execute_upsert_memory(
+            title="Original Memory",
+            content=content,
+            category="personal",
+        )
+        self.assertEqual(res1["status"], "success")
+        orig_id = res1["memory_id"]
+
+        # Insert again with a different title but exact same content
+        res2 = execute_upsert_memory(
+            title="Different Title Duplicate",
+            content=content,
+            category="personal",
+        )
+        self.assertEqual(res2["status"], "success")
+        self.assertEqual(res2["memory_id"], orig_id)
+
+    def test_skip_redundant_reindexing(self):
+        """Test that re-indexing identical content returns cached chunks without re-embedding."""
+        content = "Content for testing reindexing skip logic."
+        res = execute_upsert_memory(
+            title="Reindex Skip Test",
+            content=content,
+            category="personal",
+        )
+        mem_id = res["memory_id"]
+
+        # Reindex with exact same content
+        chunks, chunk_ids = reindex_memory_chunks(mem_id, content, force=False)
+        self.assertTrue(len(chunks) > 0)
+        self.assertTrue(len(chunk_ids) > 0)
+
+
 
 if __name__ == "__main__":
     unittest.main()
