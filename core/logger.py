@@ -1,19 +1,64 @@
 import functools
+import json
 import logging
 import sys
 import time
 import traceback
 from typing import Any, Callable
 
-# Configure standard logger to write strictly to stderr
+try:
+    from pythonjsonlogger import jsonlogger
+    HAS_JSON_LOGGER = True
+except ImportError:
+    HAS_JSON_LOGGER = False
+
+# Configure standard logger to write strictly to stderr to preserve stdio JSON-RPC
 logger = logging.getLogger("memorize")
 logger.setLevel(logging.INFO)
 
+
+class CompactTextFormatter(logging.Formatter):
+    """Compact, single-line, subtle ANSI-formatted logger for CLI mode."""
+    def format(self, record: logging.LogRecord) -> str:
+        time_str = self.formatTime(record, "%H:%M:%S")
+        level_str = record.levelname
+        loc = f"{record.filename}:{record.lineno}"
+        msg = record.getMessage()
+        return f"\033[2;36m[{time_str}]\033[0m \033[2;33m[{level_str}]\033[0m \033[2;37m({loc})\033[0m \033[2m{msg}\033[0m"
+
+
+def configure_cli_logging(level: str = "INFO"):
+    """Configures subtle, compact single-line log formatting for CLI mode."""
+    logger.setLevel(getattr(logging, level.upper(), logging.INFO))
+    for handler in list(logger.handlers):
+        logger.removeHandler(handler)
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(CompactTextFormatter())
+    logger.addHandler(handler)
+
+
 if not logger.handlers:
     handler = logging.StreamHandler(sys.stderr)
-    formatter = logging.Formatter(
-        "%(asctime)s [%(levelname)s] %(name)s (%(filename)s:%(lineno)d): %(message)s"
-    )
+    if HAS_JSON_LOGGER:
+        formatter = jsonlogger.JsonFormatter(
+            '%(asctime)s %(levelname)s %(name)s %(filename)s %(lineno)d %(message)s'
+        )
+    else:
+        class CustomJSONFormatter(logging.Formatter):
+            def format(self, record: logging.LogRecord) -> str:
+                log_record = {
+                    "timestamp": self.formatTime(record),
+                    "level": record.levelname,
+                    "logger": record.name,
+                    "file": f"{record.filename}:{record.lineno}",
+                    "message": record.getMessage(),
+                }
+                if record.exc_info:
+                    log_record["traceback"] = self.formatException(record.exc_info)
+                return json.dumps(log_record)
+
+        formatter = CustomJSONFormatter()
+
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 
@@ -21,7 +66,7 @@ if not logger.handlers:
 def handle_errors(func: Callable[..., Any]) -> Callable[..., Any]:
     """
     Decorator that catches any unhandled exceptions in MCP tools or core functions,
-    logs the detailed traceback to sys.stderr, and returns a clean error dictionary.
+    logs detailed traceback to sys.stderr as structured JSON, and returns a clean error dictionary.
     """
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
@@ -32,11 +77,9 @@ def handle_errors(func: Callable[..., Any]) -> Callable[..., Any]:
             error_msg = str(e)
             func_name = func.__name__
 
-            # Log detailed stack trace to stderr for developer debugging
             logger.error(f"Error in '{func_name}': {error_type} - {error_msg}")
             logger.debug(traceback.format_exc())
 
-            # Return structured error object to AI client / caller
             return {
                 "status": "error",
                 "error_type": error_type,
@@ -50,7 +93,7 @@ def handle_errors(func: Callable[..., Any]) -> Callable[..., Any]:
 def time_execution(func: Callable[..., Any]) -> Callable[..., Any]:
     """
     Decorator that calculates and logs the execution duration of a function in milliseconds.
-    If the return value is a dict, it attaches an 'execution_time_ms' key for timing stats.
+    Attaches 'execution_time_ms' if result is a dict.
     """
     @functools.wraps(func)
     def wrapper(*args, **kwargs):

@@ -1,13 +1,14 @@
 from typing import Any, Dict, List, Optional
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 
+from api.schemas import ChatRequest, MemoryCreateRequest, RevertRequest, SearchRequest
 from core.memory_service import execute_revert_memory, execute_upsert_memory, handle_delete_memory
-from search.relevance_scorer import search_hybrid_relevance as hybrid_search_memories
+from core.metrics import metrics_collector
+from graph.workflow import MemorizeGraphRAGAgent
+from retrieval.hybrid_search import HybridSearchCoordinator
 from storage.backup_manager import (
     backup_all_memories,
-    clear_all_backups,
     get_backup_readme,
 )
 from storage.db_manager import (
@@ -17,17 +18,12 @@ from storage.db_manager import (
 )
 from storage.sync_manager import clear_all_memories, get_memory_file_status
 from storage.version_manager import get_version_history
-from utils.llm_client import generate_llm_response
-
-
-class RevertRequest(BaseModel):
-    version_number: Optional[int] = None
 
 
 app = FastAPI(
     title="Memorize API Service",
-    description="REST API Service for Memorize Memory Assistant & Vector Engine",
-    version="1.0.0",
+    description="REST API Service powered by LangChain & LangGraph GraphRAG Engine",
+    version="2.0.0",
 )
 
 # Enable CORS for local web applications
@@ -39,57 +35,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-@app.get("/api/memories/{memory_id}/versions")
-def get_memory_versions_endpoint(memory_id: str):
-    target = get_memory_by_id(memory_id)
-    if not target:
-        raise HTTPException(status_code=404, detail=f"Memory '{memory_id}' not found.")
-    history = get_version_history(memory_id)
-    return {
-        "status": "success",
-        "memory_id": memory_id,
-        "title": target.get("title"),
-        "total_versions": len(history),
-        "versions": history,
-    }
-
-
-@app.post("/api/memories/{memory_id}/revert")
-def revert_memory_endpoint(memory_id: str, req: Optional[RevertRequest] = None):
-    ver_num = req.version_number if req else None
-    res = execute_revert_memory(memory_id=memory_id, version_number=ver_num)
-    if isinstance(res, dict) and res.get("status") == "error":
-        raise HTTPException(status_code=400, detail=res.get("message", "Error reverting memory."))
-    return res
-
-
-class MemoryCreateRequest(BaseModel):
-    title: str
-    content: str
-    category: str = "personal"
-    tags: List[str] = []
-    action: str = "auto"
-    memory_id: Optional[str] = None
-
-
-class SearchRequest(BaseModel):
-    query: str
-    category_filter: Optional[str] = None
-    top_k: int = 5
-
-
-class ChatRequest(BaseModel):
-    message: str
-    model: Optional[str] = None
+# Instantiate global GraphRAG agent
+graph_agent = MemorizeGraphRAGAgent()
 
 
 @app.get("/")
 def read_root():
     return {
-        "service": "Memorize REST API Service",
+        "service": "Memorize LangGraph REST API Service",
         "status": "online",
-        "version": "1.0.0",
+        "version": "2.0.0",
+    }
+
+
+@app.get("/api/metrics")
+def get_metrics_endpoint():
+    """Returns observability latency, token, and node timing statistics."""
+    return {
+        "status": "success",
+        "metrics": metrics_collector.get_summary(),
     }
 
 
@@ -142,9 +106,34 @@ def delete_memory_endpoint(memory_id: str):
     return res
 
 
+@app.get("/api/memories/{memory_id}/versions")
+def get_memory_versions_endpoint(memory_id: str):
+    target = get_memory_by_id(memory_id)
+    if not target:
+        raise HTTPException(status_code=404, detail=f"Memory '{memory_id}' not found.")
+    history = get_version_history(memory_id)
+    return {
+        "status": "success",
+        "memory_id": memory_id,
+        "title": target.get("title"),
+        "total_versions": len(history),
+        "versions": history,
+    }
+
+
+@app.post("/api/memories/{memory_id}/revert")
+def revert_memory_endpoint(memory_id: str, req: Optional[RevertRequest] = None):
+    ver_num = req.version_number if req else None
+    res = execute_revert_memory(memory_id=memory_id, version_number=ver_num)
+    if isinstance(res, dict) and res.get("status") == "error":
+        raise HTTPException(status_code=400, detail=res.get("message", "Error reverting memory."))
+    return res
+
+
 @app.post("/api/search")
 def search_memories_endpoint(req: SearchRequest):
-    results = hybrid_search_memories(
+    coordinator = HybridSearchCoordinator(category_filter=req.category_filter)
+    results = coordinator.search(
         query=req.query,
         category_filter=req.category_filter,
         top_k=req.top_k,
@@ -172,7 +161,6 @@ def trigger_backup_endpoint():
     return res
 
 
-
 @app.delete("/api/purge")
 def purge_all_memories_endpoint():
     res = clear_all_memories(clear_backups=True)
@@ -181,49 +169,27 @@ def purge_all_memories_endpoint():
 
 @app.post("/api/chat")
 def chat_companion_endpoint(req: ChatRequest):
-    # Perform hybrid vector search for context
-    search_results = hybrid_search_memories(query=req.message, top_k=4)
-
-    context_snippets = []
-    for idx, item in enumerate(search_results, start=1):
-        context_snippets.append(
-            f"[{idx}] Title: {item.get('title')}\nCategory: {item.get('category')}\nExcerpt: {item.get('snippet') or item.get('content', '')}"
-        )
-
-    context_str = "\n\n".join(context_snippets) if context_snippets else "No relevant memories found in database."
-
-    system_prompt = (
-        "You are Memorize AI Companion — a helpful, highly knowledgeable personal friend and assistant. "
-        "You have direct access to the user's stored personal, technical, and project memories. "
-        "Use the retrieved memory context below to answer the user's questions accurately and concisely.\n\n"
-        f"RETRIEVED MEMORY CONTEXT:\n{context_str}\n\n"
-        "Guidelines: Be friendly, direct, clear, and professional. Reference memories naturally when applicable."
-    )
-
-    reply = generate_llm_response(
-        prompt=req.message,
-        system_prompt=system_prompt,
-        model=req.model,
-        temperature=0.3,
-    )
+    """
+    Executes LangGraph GraphRAG Agent pipeline for stateful conversation,
+    multi-hop entity linking, memory mutations, and RAG answer synthesis.
+    """
+    result = graph_agent.run(query=req.message, category=req.category)
+    if result.get("status") == "error":
+        raise HTTPException(status_code=500, detail=result.get("message", "Error in GraphRAG agent."))
 
     return {
         "status": "success",
         "message": req.message,
-        "reply": reply,
-        "memories_used": [
-            {
-                "id": m.get("id"),
-                "title": m.get("title"),
-                "category": m.get("category"),
-                "score": m.get("final_score"),
-            }
-            for m in search_results
-        ],
+        "reply": result.get("reply"),
+        "intent": result.get("intent"),
+        "category": result.get("category"),
+        "is_offline_mode": result.get("is_offline_mode", False),
+        "documents_count": result.get("documents_count", 0),
+        "entities": result.get("entities", []),
+        "latency_ms": result.get("latency_ms", 0.0),
     }
 
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("api.server:app", host="0.0.0.0", port=6999, reload=True)
-

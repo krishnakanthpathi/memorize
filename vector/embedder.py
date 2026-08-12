@@ -38,17 +38,24 @@ def generate_embeddings(
 
     active_provider = (provider or EMBEDDING_PROVIDER).lower()
 
+    res = None
     if active_provider == "local":
-        return generate_local_embeddings(texts, model_name=model_name or FALLBACK_EMBEDDING_MODEL)
+        res = generate_local_embeddings(texts, model_name=model_name or FALLBACK_EMBEDDING_MODEL)
     elif active_provider == "openai":
-        return generate_openai_embeddings(texts, model_name=model_name or EMBEDDING_MODEL_NAME)
+        res = generate_openai_embeddings(texts, model_name=model_name or EMBEDDING_MODEL_NAME)
     elif active_provider == "ollama":
-        return generate_ollama_embeddings(texts, model_name=model_name or OLLAMA_EMBEDDING_MODEL)
+        res = generate_ollama_embeddings(texts, model_name=model_name or OLLAMA_EMBEDDING_MODEL)
     elif active_provider == "auto":
-        return generate_auto_fallback_embeddings(texts, model_name=model_name or EMBEDDING_MODEL_NAME)
+        res = generate_auto_fallback_embeddings(texts, model_name=model_name or EMBEDDING_MODEL_NAME)
     else:
         logger.warning(f"Unknown provider '{active_provider}'. Falling back to local embeddings.")
-        return generate_local_embeddings(texts, model_name=model_name or FALLBACK_EMBEDDING_MODEL)
+        res = generate_local_embeddings(texts, model_name=model_name or FALLBACK_EMBEDDING_MODEL)
+
+    if isinstance(res, list) and len(res) == len(texts) and isinstance(res[0], list):
+        return res
+
+    logger.warning(f"Embedding provider '{active_provider}' failed ({res}). Falling back to local SentenceTransformer ({FALLBACK_EMBEDDING_MODEL}).")
+    return generate_local_embeddings(texts, model_name=FALLBACK_EMBEDDING_MODEL)
 
 
 @handle_errors
@@ -101,7 +108,7 @@ def generate_ollama_embeddings(
 
     for text in texts:
         payload = {"model": model_name, "prompt": text}
-        response = requests.post(url, json=payload, timeout=10)
+        response = requests.post(url, json=payload, timeout=30)
         response.raise_for_status()
         data = response.json()
         embeddings.append(data["embedding"])
@@ -155,4 +162,6 @@ def generate_single_embedding(
 ) -> List[float]:
     """Helper to generate a vector embedding for a single text query."""
     embeddings = generate_embeddings(text, provider=provider, model_name=model_name)
-    return embeddings[0] if embeddings else []
+    if isinstance(embeddings, list) and len(embeddings) > 0 and isinstance(embeddings[0], list):
+        return embeddings[0]
+    return []

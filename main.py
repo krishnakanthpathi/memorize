@@ -370,11 +370,39 @@ def organize_memory_files(auto_fix: bool = True) -> dict:
 
 
 
+# ==========================================
+# 🤖 5. LangGraph & Observability Tools
+# ==========================================
+
+@mcp.tool()
+def graph_rag_chat(
+    message: str,
+    category: Optional[str] = None,
+) -> dict:
+    """
+    Executes stateful LangGraph GraphRAG workflow for query intent classification,
+    BM25 + Vector Ensemble retrieval, multi-hop entity extraction, memory mutations, and answer synthesis.
+    """
+    from graph.workflow import MemorizeGraphRAGAgent
+    agent = MemorizeGraphRAGAgent()
+    return agent.run(query=message, category=category)
+
+
+@mcp.tool()
+def get_performance_metrics() -> dict:
+    """
+    Returns system latency, graph node execution timings, token consumption, and retrieval hit metrics.
+    """
+    from core.metrics import metrics_collector
+    return metrics_collector.get_summary()
+
+
 def main():
-    sys.stderr.write("Started Memorize MCP Server\n")
+    sys.stderr.write("Started Memorize MCP Server (LangGraph GraphRAG Engine)\n")
     init_db()
     mcp.run(transport="stdio")
 
 
 if __name__ == "__main__":
     main()
+
