@@ -56,8 +56,10 @@ def rule_based_classify(text: str) -> Tuple[str, List[str]]:
 
 def classify_text_llm(text: str) -> Dict[str, Any]:
     """
-    Sends zero-shot prompt to Ollama endpoint to classify text strictly into available predefined categories.
+    Sends zero-shot prompt using managed LLM client to classify text strictly into available predefined categories.
     """
+    from utils.llm_client import generate_llm_response
+
     available_categories = get_available_categories()
     prompt = f"""You are an expert AI memory classifier. Analyze the following text and determine the single best category and 3-5 concise tags.
 
@@ -77,22 +79,26 @@ Return ONLY valid JSON matching this exact structure:
 }}
 """
     try:
-        url = f"{OLLAMA_BASE_URL}/api/generate"
-        payload = {
-            "model": OLLAMA_CLASSIFICATION_MODEL,
-            "prompt": prompt,
-            "stream": False,
-            "format": "json"
-        }
-        response = requests.post(url, json=payload, timeout=8)
-        if response.status_code == 200:
-            result_json = json.loads(response.json().get("response", "{}"))
-            cat = str(result_json.get("category", "personal")).strip().lower()
-            if cat not in available_categories:
-                cat = "personal"
-            tags = [str(t).strip().lower() for t in result_json.get("tags", [])]
-            conf = float(result_json.get("confidence", 0.8))
-            return {"category": cat, "tags": tags, "confidence": conf, "method": "llm"}
+        raw_response = generate_llm_response(
+            prompt=prompt,
+            system_prompt="You are a JSON formatting classifier assistant. Output valid JSON only.",
+            temperature=0.1,
+        )
+        # Parse JSON from response (handling code block formatting if present)
+        clean_resp = raw_response.strip()
+        if clean_resp.startswith("```"):
+            clean_resp = clean_resp.split("```")[1]
+            if clean_resp.startswith("json"):
+                clean_resp = clean_resp[4:]
+        clean_resp = clean_resp.strip()
+        
+        result_json = json.loads(clean_resp)
+        cat = str(result_json.get("category", "personal")).strip().lower()
+        if cat not in available_categories:
+            cat = "personal"
+        tags = [str(t).strip().lower() for t in result_json.get("tags", [])]
+        conf = float(result_json.get("confidence", 0.8))
+        return {"category": cat, "tags": tags, "confidence": conf, "method": "llm"}
     except Exception as e:
         logger.warning(f"LLM classification failed ({e}), falling back to rule-based classifier.")
 

@@ -1,0 +1,66 @@
+from fastapi import APIRouter, HTTPException
+
+from api.schemas import AutoOrganizeRequest, ModelSelectRequest
+from core.memory_service import auto_organize_note
+from utils.llm_client import get_active_model, set_active_model
+from utils.model_fetcher import fetch_and_bifurcate_models
+
+router = APIRouter(tags=["Models & Generation"])
+
+
+@router.get("/api/models")
+def get_available_models_endpoint():
+    """Fetches available LLM models bifurcated into embedding and generative models."""
+    try:
+        data = fetch_and_bifurcate_models()
+        return {
+            "status": "success",
+            "active_model": get_active_model(),
+            "data": data,
+        }
+    except Exception as e:
+        return {
+            "status": "warning",
+            "active_model": get_active_model(),
+            "message": str(e),
+            "data": {
+                "generative_models": [{"id": get_active_model(), "status": "active"}],
+                "embedding_models": [],
+            },
+        }
+
+
+@router.get("/api/models/active")
+def get_active_model_endpoint():
+    """Returns currently active LLM model."""
+    return {
+        "status": "success",
+        "active_model": get_active_model(),
+    }
+
+
+@router.post("/api/models/active")
+def set_active_model_endpoint(req: ModelSelectRequest):
+    """Sets the active LLM model."""
+    new_model = set_active_model(req.model)
+    return {
+        "status": "success",
+        "active_model": new_model,
+        "message": f"Active model updated to '{new_model}'.",
+    }
+
+
+@router.post("/api/auto-organize")
+def auto_organize_note_endpoint(req: AutoOrganizeRequest):
+    """
+    Analyzes raw note content and uses active LLM to generate title, category,
+    tags, summary, and clean markdown content.
+    """
+    res = auto_organize_note(
+        content=req.content,
+        title=req.title,
+        model=req.model,
+    )
+    if res.get("status") == "error":
+        raise HTTPException(status_code=400, detail=res.get("message", "Auto-organize failed."))
+    return res

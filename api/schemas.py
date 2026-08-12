@@ -25,3 +25,14 @@ class ChatRequest(BaseModel):
     message: str
     category: Optional[str] = None
     model: Optional[str] = None
+
+
+class AutoOrganizeRequest(BaseModel):
+    content: str
+    title: Optional[str] = None
+    model: Optional[str] = None
+
+
+class ModelSelectRequest(BaseModel):
+    model: str
+

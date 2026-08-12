@@ -362,3 +362,109 @@ def execute_revert_memory(
         "message": f"Memory '{target_id}' successfully reverted to version {target_ver['version_number']}.",
     }
 
+
+def auto_organize_note(
+    content: str,
+    title: Optional[str] = None,
+    model: Optional[str] = None,
+) -> dict:
+    """
+    Uses the managed LLM client to analyze raw note content and return:
+    - title: auto-generated concise title (if missing or provided as default)
+    - category: selected category from system categories
+    - tags: list of extracted keywords/tags
+    - summary: short summary of the note
+    - organized_content: clean, nicely structured markdown note
+    """
+    import json
+    from classification.classifier import classify_memory
+    from utils import get_available_categories
+    from utils.llm_client import generate_llm_response
+
+    if not content or not content.strip():
+        return {
+            "status": "error",
+            "message": "Content cannot be empty.",
+        }
+
+    available_categories = get_available_categories()
+    
+    # Run classification first to get accurate baseline category & tags
+    class_res = classify_memory(content)
+    fallback_cat = class_res.get("category", "personal")
+    fallback_tags = class_res.get("tags", [])
+
+    prompt = f"""You are an intelligent note organizer and memory manager assistant.
+Analyze the following raw note content and refine it into a structured, clean note.
+
+Input Content:
+"{content}"
+
+User Provided Title (if any): "{title or ''}"
+
+Available System Categories: {available_categories}
+
+INSTRUCTIONS:
+1. Title: If the user provided a meaningful title, refine it or keep it. If not, generate a short, descriptive 3-6 word title.
+2. Category: Select the best fitting category strictly from Available System Categories.
+3. Tags: Provide 3-5 concise, relevant tags (lowercase, single-word or snake_case).
+4. Summary: Provide a 1-2 sentence executive summary of the note.
+5. Organized Content: Clean up formatting, fix typos, organize with bullet points or markdown headings where appropriate, while retaining all factual details.
+
+Return ONLY a valid JSON object matching this structure:
+{{
+  "title": "Clean Descriptive Title",
+  "category": "one_of_allowed_categories",
+  "tags": ["tag1", "tag2"],
+  "summary": "1-2 sentence summary of note",
+  "organized_content": "Full markdown cleaned text"
+}}
+"""
+
+    try:
+        raw_res = generate_llm_response(
+            prompt=prompt,
+            system_prompt="You are a JSON formatting note organizing assistant. Output valid JSON only.",
+            model=model,
+            temperature=0.2,
+        )
+        clean_resp = raw_res.strip()
+        if clean_resp.startswith("```"):
+            clean_resp = clean_resp.split("```")[1]
+            if clean_resp.startswith("json"):
+                clean_resp = clean_resp[4:]
+        clean_resp = clean_resp.strip()
+
+        data = json.loads(clean_resp)
+        cat = str(data.get("category", fallback_cat)).strip().lower()
+        if cat not in available_categories:
+            cat = fallback_cat
+
+        gen_title = str(data.get("title") or title or "Untitled Note").strip()
+        tags = [str(t).strip().lower() for t in data.get("tags", fallback_tags)]
+        summary = str(data.get("summary", "")).strip()
+        org_content = str(data.get("organized_content") or content).strip()
+
+        return {
+            "status": "success",
+            "title": gen_title,
+            "category": cat,
+            "tags": tags,
+            "summary": summary,
+            "organized_content": org_content,
+        }
+    except Exception as e:
+        logger.warning(f"LLM auto-organize failed ({e}). Returning baseline classification.")
+        first_line = content.strip().split("\n")[0][:40]
+        gen_title = title if (title and title.strip()) else (first_line or "Untitled Note")
+        return {
+            "status": "success",
+            "title": gen_title,
+            "category": fallback_cat,
+            "tags": fallback_tags,
+            "summary": first_line,
+            "organized_content": content,
+            "note": "Baseline organize applied (LLM unavailable).",
+        }
+
+
