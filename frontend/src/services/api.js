@@ -138,6 +138,25 @@ export async function autoOrganizeNote(content, title = '', model = '') {
   return simulateAutoOrganizeNote(content, title, model);
 }
 
+export async function fetchAutoSuggestion(content, title = '', model = '') {
+  try {
+    const res = await fetch(`${BASE_URL}/api/suggest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, title, model }),
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn('Backend API fetchAutoSuggestion failed:', err);
+  }
+  return {
+    status: 'success',
+    suggestion: `\n\n- Key Insight: Active memory context review.\n- Action: Verify implementation and cross-link entities.`,
+  };
+}
+
 export async function fetchModels() {
   try {
     const res = await fetch(`${BASE_URL}/api/models`);

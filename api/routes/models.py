@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
-from api.schemas import AutoOrganizeRequest, ModelSelectRequest
-from core.memory_service import auto_organize_note
+from api.schemas import AutoOrganizeRequest, AutoSuggestRequest, ModelSelectRequest
+from core.memory_service import auto_organize_note, generate_auto_suggestions
 from utils.llm_client import get_active_model, set_active_model
 from utils.model_fetcher import fetch_and_bifurcate_models
 
@@ -63,4 +63,19 @@ def auto_organize_note_endpoint(req: AutoOrganizeRequest):
     )
     if res.get("status") == "error":
         raise HTTPException(status_code=400, detail=res.get("message", "Auto-organize failed."))
+    return res
+
+
+@router.post("/api/suggest")
+def auto_suggest_endpoint(req: AutoSuggestRequest):
+    """
+    Generates AI writing continuation & key point suggestions using the active LLM model.
+    """
+    res = generate_auto_suggestions(
+        content=req.content,
+        title=req.title or "",
+        model=req.model,
+    )
+    if res.get("status") == "error":
+        raise HTTPException(status_code=400, detail=res.get("message", "Auto-suggest failed."))
     return res

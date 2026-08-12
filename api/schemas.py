@@ -36,3 +36,9 @@ class AutoOrganizeRequest(BaseModel):
 class ModelSelectRequest(BaseModel):
     model: str
 
+
+class AutoSuggestRequest(BaseModel):
+    content: str
+    title: Optional[str] = None
+    model: Optional[str] = None
+

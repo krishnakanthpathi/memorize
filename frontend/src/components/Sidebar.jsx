@@ -38,8 +38,8 @@ export default function Sidebar({
   return (
     <aside className="d-flex flex-column h-100 bg-mono-surface border-end border-mono p-3 overflow-auto">
       
-      {/* Search Bar */}
-      <div className="mb-3">
+      {/* Search Bar with Auto-Suggestions */}
+      <div className="mb-3 position-relative">
         <div className="input-group input-group-sm">
           <span className="input-group-text bg-dark border-mono text-secondary px-2-5">
             <Search size={14} />
@@ -47,7 +47,7 @@ export default function Sidebar({
           <input
             type="text"
             className="form-control form-control-mono"
-            placeholder="Search notes..."
+            placeholder="Search notes or tags..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -60,6 +60,56 @@ export default function Sidebar({
             </button>
           )}
         </div>
+
+        {/* Auto-Suggestion Dropdown */}
+        {searchQuery.trim().length > 0 && (
+          <div className="position-absolute start-0 end-0 top-100 mt-1 bg-mono-surface border border-mono rounded shadow-lg p-2 z-3 font-mono fs-8">
+            <small className="text-uppercase text-secondary fs-8 opacity-75 d-block mb-1.5 px-1">
+              Search Auto-Suggestions
+            </small>
+            <div className="d-flex flex-column gap-1">
+              {allTags
+                .filter((t) => t.toLowerCase().includes(searchQuery.toLowerCase()) && t.toLowerCase() !== searchQuery.toLowerCase())
+                .slice(0, 3)
+                .map((t) => (
+                  <button
+                    key={`sug_tag_${t}`}
+                    className="btn btn-sm btn-mono-outline text-start py-1 px-2 font-mono fs-8 text-light d-flex align-items-center justify-content-between"
+                    onClick={() => setSearchQuery(t)}
+                  >
+                    <span>Tag: #{t}</span>
+                    <small className="text-secondary fs-8">Filter</small>
+                  </button>
+                ))}
+              {categories
+                .filter((c) => c.id !== 'all' && c.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                .slice(0, 2)
+                .map((c) => (
+                  <button
+                    key={`sug_cat_${c.id}`}
+                    className="btn btn-sm btn-mono-outline text-start py-1 px-2 font-mono fs-8 text-light d-flex align-items-center justify-content-between"
+                    onClick={() => setSearchQuery(c.name)}
+                  >
+                    <span>Category: {c.name}</span>
+                    <small className="text-secondary fs-8">Category</small>
+                  </button>
+                ))}
+              {['pruning', 'graphrag', 'sqlite', 'chromadb', 'sync', 'vector', 'models', 'architecture']
+                .filter((k) => k.includes(searchQuery.toLowerCase()) && k !== searchQuery.toLowerCase())
+                .slice(0, 3)
+                .map((k) => (
+                  <button
+                    key={`sug_key_${k}`}
+                    className="btn btn-sm btn-mono-outline text-start py-1 px-2 font-mono fs-8 text-light d-flex align-items-center justify-content-between"
+                    onClick={() => setSearchQuery(k)}
+                  >
+                    <span>Keyword: {k}</span>
+                    <small className="text-secondary fs-8">Keyword</small>
+                  </button>
+                ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Category Multi-Select Navigation */}
