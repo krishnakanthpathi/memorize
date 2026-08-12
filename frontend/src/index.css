@@ -1,0 +1,274 @@
+/* Bootstrap Monochrome Theme Overrides */
+@import 'bootstrap/dist/css/bootstrap.min.css';
+
+:root {
+  --mono-bg-dark: #09090b;
+  --mono-surface-dark: #121215;
+  --mono-surface-hover: #1c1c21;
+  --mono-border: #27272a;
+  --mono-border-muted: #1e1e24;
+  --mono-text-primary: #f4f4f5;
+  --mono-text-secondary: #a1a1aa;
+  --mono-accent: #ffffff;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: var(--mono-bg-dark) !important;
+  color: var(--mono-text-primary) !important;
+  min-height: 100vh;
+  margin: 0;
+  overflow-x: hidden;
+}
+
+code, pre, .font-mono {
+  font-family: 'JetBrains Mono', monospace !important;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--mono-bg-dark);
+}
+::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}
+
+/* REMOVE BOOTSTRAP BLUE HIGHLIGHTS & OUTLINES */
+*:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.btn:focus, .btn:active, .btn-primary:active, .btn-primary:focus {
+  box-shadow: none !important;
+  border-color: #52525b !important;
+}
+
+/* DROPDOWN MENU & SELECT PADDING & STYLING */
+.dropdown-menu {
+  background-color: var(--mono-surface-dark) !important;
+  border: 1px solid var(--mono-border) !important;
+  padding: 0.5rem !important;
+  border-radius: 8px !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5) !important;
+}
+
+.dropdown-item {
+  padding: 0.45rem 0.85rem !important;
+  margin-bottom: 0.15rem !important;
+  border-radius: 4px !important;
+  font-size: 0.85rem !important;
+  color: var(--mono-text-primary) !important;
+  transition: all 0.15s ease-in-out;
+}
+
+.dropdown-item:hover, .dropdown-item:focus {
+  background-color: #27272a !important;
+  color: #ffffff !important;
+}
+
+.dropdown-item.active, .dropdown-item:active {
+  background-color: #f4f4f5 !important;
+  color: #09090b !important;
+  font-weight: 600;
+}
+
+/* Form Select Controls & Native Dropdown Options - Prevents Arrow Overlap */
+.form-select-mono {
+  background-color: #121215 !important;
+  border: 1px solid var(--mono-border) !important;
+  color: var(--mono-text-primary) !important;
+  font-size: 0.85rem;
+  padding-left: 0.5rem !important;
+  padding-right: 2.2rem !important; /* Generous right space so arrow NEVER covers text */
+  background-position: right 0.5rem center !important;
+  background-size: 14px 10px !important;
+  border-radius: 6px !important;
+}
+
+.form-select-mono:focus {
+  background-color: #16161a !important;
+  border-color: #71717a !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+select option {
+  background-color: #121215 !important;
+  color: #f4f4f5 !important;
+  padding: 0.5rem 0.85rem !important;
+}
+
+.form-control-mono {
+  background-color: #121215 !important;
+  border: 1px solid var(--mono-border) !important;
+  color: var(--mono-text-primary) !important;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.75rem !important;
+}
+
+.form-control-mono:focus {
+  background-color: #16161a !important;
+  border-color: #71717a !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+/* Monochrome Utility Classes */
+.bg-mono-surface {
+  background-color: var(--mono-surface-dark) !important;
+}
+
+.border-mono {
+  border-color: var(--mono-border) !important;
+}
+
+.border-mono-muted {
+  border-color: var(--mono-border-muted) !important;
+}
+
+.btn-mono-primary {
+  background-color: #f4f4f5;
+  color: #09090b;
+  border: 1px solid #f4f4f5;
+  font-weight: 500;
+  transition: all 0.15s ease-in-out;
+}
+.btn-mono-primary:hover, .btn-mono-primary:focus {
+  background-color: #ffffff;
+  color: #000000;
+  border-color: #ffffff;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.15);
+}
+
+.btn-mono-outline {
+  background-color: transparent;
+  color: var(--mono-text-primary);
+  border: 1px solid var(--mono-border);
+  transition: all 0.15s ease-in-out;
+}
+.btn-mono-outline:hover {
+  background-color: var(--mono-surface-hover);
+  color: #ffffff;
+  border-color: #52525b;
+}
+
+.btn-mono-active {
+  background-color: #27272a !important;
+  color: #ffffff !important;
+  border-color: #52525b !important;
+}
+
+/* Minimal Notes Card Styling */
+.card-mono {
+  background-color: var(--mono-surface-dark);
+  border: 1px solid var(--mono-border);
+  border-radius: 6px;
+  transition: all 0.15s ease-in-out;
+}
+.card-mono:hover {
+  border-color: #52525b;
+  background-color: #17171c;
+}
+
+.card-mono-active {
+  border-color: #f4f4f5 !important;
+  background-color: #1c1c22 !important;
+}
+
+/* Brain Icon Styling */
+.brain-icon-btn {
+  background: transparent;
+  border: 1px solid var(--mono-border);
+  border-radius: 8px;
+  padding: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #f4f4f5;
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+}
+.brain-icon-btn:hover {
+  border-color: #71717a;
+  background-color: #1c1c21;
+}
+.brain-icon-btn.filled svg {
+  fill: currentColor;
+}
+.brain-icon-btn.hollow svg {
+  fill: none;
+}
+
+/* Minimal Badge Pills */
+.badge-mono {
+  background-color: #18181b;
+  color: #a1a1aa;
+  border: 1px solid #27272a;
+  font-weight: 400;
+  font-size: 0.75rem;
+}
+.badge-mono-active {
+  background-color: #f4f4f5;
+  color: #09090b;
+  border-color: #ffffff;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+/* Drag Resizer Handles for Resizable Sidebars */
+.resizer-handle {
+  width: 5px;
+  cursor: col-resize;
+  background-color: var(--mono-border);
+  transition: background-color 0.15s ease-in-out;
+  user-select: none;
+  z-index: 2;
+  flex-shrink: 0;
+}
+
+.resizer-handle:hover, .resizer-handle.resizing {
+  background-color: #f4f4f5 !important;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.4);
+}
+
+/* Custom Spacing Utility Helpers for Precision Layout */
+.p-2-5, .p-2\.5 { padding: 0.65rem !important; }
+.p-3-5, .p-3\.5 { padding: 0.85rem !important; }
+.px-2-5, .px-2\.5 { padding-left: 0.65rem !important; padding-right: 0.65rem !important; }
+.px-3-5, .px-3\.5 { padding-left: 0.85rem !important; padding-right: 0.85rem !important; }
+.py-1-5, .py-1\.5 { padding-top: 0.35rem !important; padding-bottom: 0.35rem !important; }
+.py-2-5, .py-2\.5 { padding-top: 0.65rem !important; padding-bottom: 0.65rem !important; }
+.py-0-5, .py-0\.5 { padding-top: 0.15rem !important; padding-bottom: 0.15rem !important; }
+.mb-1-5, .mb-1\.5 { margin-bottom: 0.35rem !important; }
+.mb-2-5, .mb-2\.5 { margin-bottom: 0.65rem !important; }
+.pb-2-5, .pb-2\.5 { padding-bottom: 0.65rem !important; }
+.gap-1-5, .gap-1\.5 { gap: 0.4rem !important; }
+.gap-2-5, .gap-2\.5 { gap: 0.65rem !important; }
+
+.fs-8 { font-size: 0.78rem !important; }
+.fs-7 { font-size: 0.88rem !important; }
+
+/* Rotational Animation Keyframe */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spin {
+  animation: spin 0.85s linear infinite;
+  display: inline-block;
+}
+
+/* Collapsible Transitions */
+.sidebar-collapsible {
+  transition: width 0.2s ease-in-out;
+}
