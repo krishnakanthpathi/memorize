@@ -141,7 +141,7 @@ def generate_backup_readme() -> str:
     lines.extend([
         "--------------------------------------------------------------------------------",
         "RECOVERY INSTRUCTIONS:",
-        "1. To restore memory files automatically: run sync_markdown_files() or restore_memories_from_backup().",
+        "1. To restore memory files automatically: run restore_memories_from_backup().",
         "2. If SQLite database is lost, restoring memory files will auto-index all frontmatter & content.",
         "3. SQLite backup copy is maintained at data/backups/memorize_backup.db.",
         "================================================================================",

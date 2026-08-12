@@ -8,7 +8,7 @@ from classification.classifier import classify_memory
 from config.constants import MEMORIES_DIR
 from core.logger import handle_errors, logger
 from storage.markdown_handler import create_markdown_file, read_markdown_file
-from storage.sync_manager import sync_markdown_files
+from storage.db_manager import get_memory_by_id, upsert_memory_index
 from utils import get_available_categories, get_category_dir, slugify_title
 
 
@@ -91,6 +91,13 @@ def reorganize_memories(auto_fix: bool = True, reclassify: bool = True) -> Dict[
                         file_path=target_path,
                         overwrite=True,
                     )
+                    if memory_id:
+                        mem_entry = get_memory_by_id(memory_id)
+                        if mem_entry:
+                            mem_entry["category"] = category
+                            mem_entry["file_path"] = str(target_path)
+                            upsert_memory_index(mem_entry)
+
                     if full_path.parent != target_cat_dir:
                         files_moved.append({"from": str(full_path), "to": str(target_path)})
                         moved = True
@@ -102,8 +109,7 @@ def reorganize_memories(auto_fix: bool = True, reclassify: bool = True) -> Dict[
         if item.is_dir() and not any(item.iterdir()):
             shutil.rmtree(item)
 
-    # Force re-sync with SQLite and ChromaDB
-    sync_markdown_files()
+
 
     return {
         "status": "success",

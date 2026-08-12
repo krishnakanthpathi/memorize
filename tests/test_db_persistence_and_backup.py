@@ -8,6 +8,7 @@ from storage.backup_manager import (
     clear_all_backups,
     generate_backup_readme,
     get_backup_readme,
+    restore_memories_from_backup,
 )
 from storage.db_manager import (
     clear_all_index_memories,
@@ -17,7 +18,7 @@ from storage.db_manager import (
     upsert_memory_index,
 )
 from storage.markdown_handler import create_markdown_file
-from storage.sync_manager import clear_all_memories, sync_markdown_files
+from storage.sync_manager import clear_all_memories
 
 
 def test_full_content_storage_in_sqlite():
@@ -44,14 +45,14 @@ def test_full_content_storage_in_sqlite():
     assert fetched["content"] == test_content
 
 
-def test_auto_rematerialization_from_sqlite():
+def test_backup_and_restore_memories():
     clear_all_memories(clear_backups=True)
 
-    test_id = "mem_test_rematerialize_456"
+    test_id = "mem_test_restore_456"
     test_title = "Vanished Memory File Recovery Test"
-    test_content = "# Auto Rematerialize\nThis file was deleted on disk but lives in SQLite."
+    test_content = "# Auto Rematerialize\nThis file was backed up."
 
-    # Create file and sync to SQLite DB
+    # Create file
     created_path = create_markdown_file(
         memory_id=test_id,
         title=test_title,
@@ -59,20 +60,16 @@ def test_auto_rematerialization_from_sqlite():
         tags=["rematerialize"],
         content=test_content,
     )
-    sync_markdown_files()
-
-    # Clear backup directory to ensure recovery comes strictly from SQLite DB
-    clear_all_backups()
+    backup_all_memories()
 
     # Simulate accidental disk file deletion ("vanished file")
     assert created_path.exists()
     created_path.unlink()
     assert not created_path.exists()
 
-    # Trigger sync — system should auto-rematerialize file on disk from SQLite!
-    sync_res = sync_markdown_files()
-    assert sync_res["status"] == "success"
-    assert sync_res["rematerialized"] >= 1
+    # Restore from backup
+    res = restore_memories_from_backup()
+    assert res["status"] == "success"
     assert created_path.exists()
 
     # Verify content restored on disk matches
@@ -84,26 +81,43 @@ def test_auto_rematerialization_from_sqlite():
     clear_all_memories(clear_backups=True)
 
 
-
 def test_backup_and_readme_generation():
     clear_all_memories(clear_backups=True)
 
     # Create sample memories
-    create_markdown_file(
+    p1 = create_markdown_file(
         memory_id="mem_bkp_1",
         title="Backup Test Achievement",
         category="achievements",
         tags=["award"],
         content="Won first place hackathon.",
     )
-    create_markdown_file(
+    upsert_memory_index({
+        "id": "mem_bkp_1",
+        "title": "Backup Test Achievement",
+        "category": "achievements",
+        "tags": ["award"],
+        "file_path": str(p1),
+        "content": "Won first place hackathon.",
+        "content_hash": "hash1",
+    })
+
+    p2 = create_markdown_file(
         memory_id="mem_bkp_2",
         title="Backup Test Dev Project",
         category="development",
         tags=["python"],
         content="Built high-performance async queue system.",
     )
-    sync_markdown_files()
+    upsert_memory_index({
+        "id": "mem_bkp_2",
+        "title": "Backup Test Dev Project",
+        "category": "development",
+        "tags": ["python"],
+        "file_path": str(p2),
+        "content": "Built high-performance async queue system.",
+        "content_hash": "hash2",
+    })
 
     backup_res = backup_all_memories()
     assert backup_res["status"] == "success"
@@ -117,3 +131,4 @@ def test_backup_and_readme_generation():
     assert "Category: [DEVELOPMENT]" in readme_text
 
     clear_all_memories(clear_backups=True)
+

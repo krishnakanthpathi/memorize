@@ -83,12 +83,6 @@ export async function purgeAllData() {
   return res.json();
 }
 
-export async function syncMemories() {
-  const res = await fetch(`${API_BASE}/sync`, { method: 'POST' });
-  if (!res.ok) throw new Error('Failed to sync memories');
-  return res.json();
-}
-
 export async function fetchMemoryVersions(memoryId) {
   const res = await fetch(`${API_BASE}/memories/${memoryId}/versions`);
   if (!res.ok) throw new Error('Failed to fetch memory versions');

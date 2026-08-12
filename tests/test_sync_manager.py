@@ -4,8 +4,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from storage.db_manager import get_all_memories, init_db
-from storage.sync_manager import sync_markdown_files
+from storage.db_manager import init_db
+from storage.sync_manager import clear_all_memories, get_memory_file_status
 
 
 class TestSyncManager(unittest.TestCase):
@@ -20,18 +20,13 @@ class TestSyncManager(unittest.TestCase):
         self.patcher.stop()
         self.tmp_dir.cleanup()
 
-    def test_manual_markdown_file_sync(self):
-        study_dir = self.test_memories_dir / "personal"
-        study_dir.mkdir(parents=True, exist_ok=True)
-        test_file = study_dir / "manual_test_note.md"
-
-        raw_content = "---\ntitle: Manual Note\ntags: [unit_test, sync]\n---\n\nThis is a manual markdown note created directly on disk to test auto-chunking and sync."
-        with open(test_file, "w", encoding="utf-8") as f:
-            f.write(raw_content)
-
-        # Run sync
-        result = sync_markdown_files()
+    def test_clear_all_memories(self):
+        result = clear_all_memories(clear_backups=False)
         self.assertEqual(result["status"], "success")
+
+    def test_get_memory_file_status_nonexistent(self):
+        result = get_memory_file_status("nonexistent_id")
+        self.assertEqual(result["status"], "error")
 
 
 if __name__ == "__main__":

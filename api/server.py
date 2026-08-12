@@ -15,7 +15,7 @@ from storage.db_manager import (
     get_categories_stats,
     get_memory_by_id,
 )
-from storage.sync_manager import clear_all_memories, get_memory_file_status, sync_markdown_files
+from storage.sync_manager import clear_all_memories, get_memory_file_status
 from storage.version_manager import get_version_history
 from utils.llm_client import generate_llm_response
 
@@ -171,11 +171,6 @@ def trigger_backup_endpoint():
     res = backup_all_memories()
     return res
 
-
-@app.post("/api/sync")
-def sync_memories_endpoint():
-    res = sync_markdown_files()
-    return res
 
 
 @app.delete("/api/purge")

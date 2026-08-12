@@ -20,8 +20,6 @@ from storage.organization_manager import reorganize_memories
 from storage.sync_manager import (
     clear_all_memories as sync_clear_all_memories,
     get_memory_file_status as sync_get_memory_file_status,
-    start_background_watcher,
-    sync_markdown_files as sync_scan_markdown_files,
 )
 from storage.version_manager import get_version_history
 from utils import get_available_categories, get_category_dir
@@ -254,13 +252,6 @@ def get_memory_file_status(memory_id_or_path: str) -> dict:
     return sync_get_memory_file_status(memory_id_or_path)
 
 
-@mcp.tool()
-def sync_markdown_files() -> dict:
-    """
-    Scans data/memories/ for Markdown files added, updated, or deleted on disk,
-    automatically chunking, embedding, and updating SQLite + ChromaDB.
-    """
-    return sync_scan_markdown_files()
 
 
 # ==========================================
@@ -382,10 +373,6 @@ def organize_memory_files(auto_fix: bool = True) -> dict:
 def main():
     sys.stderr.write("Started Memorize MCP Server\n")
     init_db()
-    # Start background file watcher for Markdown directory
-    start_background_watcher()
-    # Initial scan/sync on launch
-    sync_scan_markdown_files()
     mcp.run(transport="stdio")
 
 

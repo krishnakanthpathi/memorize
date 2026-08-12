@@ -32,7 +32,6 @@ import {
   triggerBackup,
   sendChatMessage,
   purgeAllData,
-  syncMemories,
   fetchMemoryVersions,
   revertMemory,
 } from './services/api';
@@ -94,23 +93,8 @@ export default function App() {
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
 
-  // Backup & Sync state
+  // Backup state
   const [readmeText, setReadmeText] = useState('');
-  const [syncing, setSyncing] = useState(false);
-
-  const handleSyncFiles = async () => {
-    setSyncing(true);
-    try {
-      const res = await syncMemories();
-      await loadData();
-      alert(`Files Synced Successfully! Total ${res.total_memories || 0} memories indexed (${res.added || 0} added, ${res.updated || 0} updated).`);
-    } catch (err) {
-      console.error(err);
-      alert('Failed to sync markdown files.');
-    } finally {
-      setSyncing(false);
-    }
-  };
 
   // Initial load
   useEffect(() => {
@@ -409,16 +393,6 @@ export default function App() {
           </button>
 
           <button
-            onClick={handleSyncFiles}
-            disabled={syncing}
-            className="bg-zinc-900 hover:bg-zinc-850 text-zinc-300 border border-zinc-800 text-xs font-medium px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition disabled:opacity-50"
-            title="Scan and Sync Markdown Files from Disk to Database"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 text-zinc-400 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Syncing...' : 'Sync Disk Files'}
-          </button>
-
-          <button
             onClick={handleOpenBackup}
             className="bg-zinc-900 hover:bg-zinc-850 text-zinc-300 border border-zinc-800 text-xs font-medium px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition"
             title="View Backups & README"
@@ -476,14 +450,6 @@ export default function App() {
             <div className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 font-semibold mb-1">
               System Control
             </div>
-            <button
-              onClick={handleSyncFiles}
-              disabled={syncing}
-              className="w-full text-left px-3 py-2 rounded-lg text-xs font-medium text-zinc-300 hover:bg-zinc-900 border border-zinc-800/80 flex items-center gap-2 transition disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 text-zinc-400 ${syncing ? 'animate-spin' : ''}`} />
-              {syncing ? 'Syncing...' : 'Sync Disk Files'}
-            </button>
             <button
               onClick={handlePurgingSystem}
               className="w-full text-left px-3 py-2 rounded-lg text-xs font-medium text-red-400 hover:bg-red-950/30 hover:border-red-900/40 border border-transparent flex items-center gap-2 transition"
