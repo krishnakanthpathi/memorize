@@ -21,61 +21,7 @@ export const initialModels = {
   ],
 };
 
-export const initialNotes = [
-  {
-    id: 'mem_01h8x9a2k1',
-    title: 'Neural Network Pruning & Compression',
-    category: 'technology',
-    tags: ['ai', 'neural_networks', 'optimization', 'deep_learning'],
-    summary: 'Techniques for structured and unstructured weight pruning in transformer models to reduce memory footprint.',
-    content: `# Neural Network Pruning & Compression\n\nPruning involves eliminating non-essential weights in deep neural networks to lower memory usage and speed up inference latency without significant accuracy drop.\n\n### Key Methods:\n1. **Magnitude Pruning**: Zeroing out weights below a specified absolute threshold.\n2. **Structured Pruning**: Removing entire channels or filter blocks for direct GPU speedups.\n3. **Quantization Aware Training (QAT)**: Simulating INT8 precision during training.`,
-    updated_at: '2026-08-12T19:20:00Z',
-    content_hash: 'a1b2c3d4e5f6',
-    versions: [
-      { version_number: 1, created_at: '2026-08-10T14:00:00Z', summary: 'Initial draft on pruning methods.' },
-      { version_number: 2, created_at: '2026-08-12T19:20:00Z', summary: 'Added Quantization Aware Training section.' },
-    ]
-  },
-  {
-    id: 'mem_02j9y0b3m2',
-    title: 'GraphRAG Companion & Workflow Architecture',
-    category: 'architecture',
-    tags: ['graphrag', 'langgraph', 'vector_db', 'fastapi'],
-    summary: 'Multi-hop entity linking pipeline integrating ChromaDB hybrid retrieval with LangGraph workflows.',
-    content: `# GraphRAG Companion Architecture\n\nThe Memorize GraphRAG workflow connects unstructured Markdown memories with structured graph entity extraction.\n\n### Core Execution Pipeline:\n- **Intent Classification**: Evaluates user query (Search vs Mutate vs Summarize).\n- **Hybrid Search**: Combines keyword search with dense ChromaDB vectors.\n- **Entity Linking**: Extracts relationships between notes dynamically.\n- **LLM Synthesis**: Uses selected active LLM model to construct answer with citations.`,
-    updated_at: '2026-08-11T16:45:00Z',
-    content_hash: 'f6e5d4c3b2a1',
-    versions: [
-      { version_number: 1, created_at: '2026-08-11T16:45:00Z', summary: 'Architectural overview.' },
-    ]
-  },
-  {
-    id: 'mem_03k0z1c4n3',
-    title: 'Three-Way Storage Synchronization System',
-    category: 'research',
-    tags: ['sqlite', 'chromadb', 'markdown', 'sync'],
-    summary: 'Audit mechanism enforcing zero drift across local Markdown files, SQLite indexes, and vector stores.',
-    content: `# Three-Way Storage Synchronization\n\nTo ensure total memory integrity, Memorize maintains high-speed consistency across three layers:\n1. **Markdown Files on Disk**: Human-readable source of truth.\n2. **SQLite Index**: Relational index for fast category, tag, and date queries.\n3. **ChromaDB Vector Store**: Dense embedding chunks for semantic vector lookup.`,
-    updated_at: '2026-08-09T11:10:00Z',
-    content_hash: '9876543210ab',
-    versions: [
-      { version_number: 1, created_at: '2026-08-09T11:10:00Z', summary: 'Storage specification.' },
-    ]
-  },
-  {
-    id: 'mem_04l1a2d5o4',
-    title: 'Weekly Standup Notes & Ideas',
-    category: 'personal',
-    tags: ['notes', 'standup', 'planning'],
-    summary: 'Internal team action items: UI skeleton buildout, LLM client provider updates, and testing guide.',
-    content: `# Weekly Standup Notes\n\n- [x] Complete backend 3-way audit API.\n- [ ] Design sleek monochrome Apple/Google Notes UI skeleton.\n- [ ] Integrate Lucide brain icon with hollow/filled toggle.\n- [ ] Connect LLM auto-organize endpoint.`,
-    updated_at: '2026-08-08T09:30:00Z',
-    content_hash: '112233445566',
-    versions: [
-      { version_number: 1, created_at: '2026-08-08T09:30:00Z', summary: 'Standup list.' },
-    ]
-  }
-];
+export const initialNotes = [];
 
 export const mockAuditData = {
   status: 'healthy',

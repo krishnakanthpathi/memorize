@@ -1,5 +1,5 @@
 import React from 'react';
-import { Brain, Plus, MessageSquare, Sliders, FileText, PanelLeftClose, PanelLeft, ListFilter } from 'lucide-react';
+import { Brain, Plus, MessageSquare, Sliders, FileText, PanelLeftClose, PanelLeft, ListFilter, Cpu, ChevronDown } from 'lucide-react';
 
 export default function Header({
   activeView,
@@ -12,6 +12,9 @@ export default function Header({
   setIsSidebarOpen,
   isNotesListOpen,
   setIsNotesListOpen,
+  activeModel,
+  modelsData,
+  onSelectModel,
 }) {
   return (
     <header className="border-bottom border-mono bg-mono-surface px-3 py-2">
@@ -85,9 +88,46 @@ export default function Header({
           </button>
         </div>
 
-        {/* Right Section: Actions */}
+        {/* Right Section: Model Selector & Actions */}
         <div className="d-flex align-items-center gap-2">
           
+          {/* Dynamic LLM Model Selector Dropdown */}
+          <div className="dropdown">
+            <button
+              className="btn btn-mono-outline btn-sm font-mono fs-8 text-light dropdown-toggle d-flex align-items-center gap-1.5 py-1 px-2.5"
+              type="button"
+              data-bs-toggle="dropdown"
+              aria-expanded="false"
+              title="Select Active Backend LLM Model"
+            >
+              <Cpu size={14} className="text-secondary flex-shrink-0" />
+              <span className="fw-semibold text-truncate" style={{ maxWidth: '140px' }}>
+                {activeModel}
+              </span>
+            </button>
+            <ul className="dropdown-menu dropdown-menu-end bg-mono-surface border-mono shadow-lg p-1" style={{ minWidth: '220px' }}>
+              <li className="dropdown-header font-mono fs-8 text-uppercase text-secondary px-2 py-1">
+                Discovered Ollama & API Models
+              </li>
+              {modelsData?.generative_models?.map((m) => (
+                <li key={m.id}>
+                  <button
+                    type="button"
+                    className={`dropdown-item btn-sm font-mono fs-8 rounded py-1 px-2 d-flex align-items-center justify-content-between ${
+                      m.id === activeModel ? 'active bg-mono-dark text-white fw-bold' : 'text-light'
+                    }`}
+                    onClick={() => onSelectModel(m.id)}
+                  >
+                    <span className="text-truncate">{m.name || m.id}</span>
+                    <span className="badge bg-mono-dark text-secondary border border-mono-muted fs-8 ms-2">
+                      {(m.provider || 'ollama').toUpperCase()}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+
           {/* New Note Action */}
           <button
             className="btn btn-mono-primary btn-sm d-flex align-items-center gap-1"

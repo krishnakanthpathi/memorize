@@ -9,12 +9,24 @@ import VersionHistoryModal from './components/VersionHistoryModal';
 import { Plus } from 'lucide-react';
 
 import {
+  fetchMemories,
+  saveMemory,
+  deleteMemory,
+  autoOrganizeNote as apiAutoOrganizeNote,
+  fetchModels,
+  setActiveModelApi,
+  fetchMetrics,
+  fetchAudit,
+  triggerBackup as apiTriggerBackup,
+  revertMemoryVersion,
+} from './services/api';
+
+import {
   initialNotes,
   initialCategories,
   initialModels,
   mockAuditData,
   mockMetrics,
-  simulateAutoOrganizeNote,
   simulateSmartMergeNote,
 } from './mockData';
 
@@ -170,129 +182,143 @@ export default function App() {
     return notes.find((n) => n.id === activeNoteId) || null;
   }, [notes, activeNoteId]);
 
+  // Dynamic Backend Data States
+  const [modelsData, setModelsData] = useState(initialModels);
+  const [metricsData, setMetricsData] = useState(mockMetrics);
+  const [auditData, setAuditData] = useState(mockAuditData);
+
+  // Load initial memory list, available models, metrics, and audit from FastAPI backend
+  useEffect(() => {
+    let isMounted = true;
+    async function loadBackendData() {
+      setIsLoadingNotes(true);
+      try {
+        const memRes = await fetchMemories();
+        if (isMounted && memRes.status === 'success' && memRes.memories?.length > 0) {
+          setNotes(memRes.memories);
+          setActiveNoteId(memRes.memories[0]?.id || null);
+        }
+        const modelRes = await fetchModels();
+        if (isMounted && modelRes.data) {
+          setModelsData(modelRes.data);
+          if (modelRes.active_model) setActiveModel(modelRes.active_model);
+        }
+        const metricRes = await fetchMetrics();
+        if (isMounted && metricRes.metrics) {
+          setMetricsData(metricRes.metrics);
+        }
+        const auditRes = await fetchAudit();
+        if (isMounted && auditRes) {
+          setAuditData(auditRes);
+        }
+      } catch (e) {
+        console.warn('Backend load error:', e);
+      } finally {
+        if (isMounted) setIsLoadingNotes(false);
+      }
+    }
+    loadBackendData();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   // Handlers
-  const handleConfirmNewNote = () => {
+  const handleConfirmNewNote = async () => {
     const newNote = {
-      id: `mem_${Date.now().toString(36)}`,
       title: 'Untitled Note',
       category: selectedCategories.length > 0 ? selectedCategories[0] : 'personal',
       tags: selectedTags.length > 0 ? [...selectedTags] : ['draft'],
       summary: 'New memory draft created.',
       content: '# New Note\n\nType your thoughts here and click Auto-Organize or Smart Merge...',
-      updated_at: new Date().toISOString(),
-      versions: [
-        {
-          version_number: 1,
-          created_at: new Date().toISOString(),
-          summary: 'Draft created.',
-        },
-      ],
     };
-    setNotes([newNote, ...notes]);
-    setActiveNoteId(newNote.id);
+    const res = await saveMemory(newNote);
+    if (res.memory) {
+      setNotes((prev) => [res.memory, ...prev]);
+      setActiveNoteId(res.memory.id);
+    }
     setActiveView('notes');
   };
 
-  const handleSaveNote = (updatedData) => {
+  const handleSaveNote = async (updatedData) => {
+    const res = await saveMemory(updatedData);
+    const saved = res.memory || updatedData;
     setNotes((prevNotes) => {
-      const exists = prevNotes.some((n) => n.id === updatedData.id);
+      const exists = prevNotes.some((n) => n.id === saved.id);
       if (exists) {
-        return prevNotes.map((n) => {
-          if (n.id === updatedData.id) {
-            const newVersionNum = (n.versions?.length || 0) + 1;
-            const newVersions = [
-              {
-                version_number: newVersionNum,
-                created_at: new Date().toISOString(),
-                summary: updatedData.summary || `Updated version ${newVersionNum}`,
-              },
-              ...(n.versions || []),
-            ];
-            return {
-              ...n,
-              ...updatedData,
-              updated_at: new Date().toISOString(),
-              versions: newVersions,
-            };
-          }
-          return n;
-        });
+        return prevNotes.map((n) => (n.id === saved.id ? { ...n, ...saved } : n));
       } else {
-        const newNote = {
-          ...updatedData,
-          id: updatedData.id || `mem_${Date.now().toString(36)}`,
-          updated_at: new Date().toISOString(),
-          versions: [
-            {
-              version_number: 1,
-              created_at: new Date().toISOString(),
-              summary: 'Initial version.',
-            },
-          ],
-        };
-        return [newNote, ...prevNotes];
+        return [saved, ...prevNotes];
       }
     });
   };
 
-  const handleDeleteNote = (noteId) => {
-    const remaining = notes.filter((n) => n.id !== noteId);
-    setNotes(remaining);
-    if (activeNoteId === noteId) {
-      setActiveNoteId(remaining[0]?.id || null);
+  const handleDeleteNote = async (noteId) => {
+    await deleteMemory(noteId);
+    setNotes((prevNotes) => {
+      const remaining = prevNotes.filter((n) => n.id !== noteId);
+      if (activeNoteId === noteId) {
+        setActiveNoteId(remaining[0]?.id || null);
+      }
+      return remaining;
+    });
+  };
+
+  const handleAutoOrganize = async (content, currentTitle) => {
+    setIsOrganizing(true);
+    try {
+      const res = await apiAutoOrganizeNote(content, currentTitle, activeModel);
+      if (res.status === 'success') {
+        await handleSaveNote({
+          id: activeNoteId,
+          title: res.title || currentTitle,
+          category: res.category || 'personal',
+          tags: res.tags || [],
+          summary: res.summary || '',
+          content: res.organized_content || content,
+        });
+      }
+    } catch (err) {
+      console.warn('Auto-organize failed:', err);
+    } finally {
+      setIsOrganizing(false);
     }
   };
 
-  const handleAutoOrganize = (content, currentTitle) => {
+  const handleSmartMerge = async (content, currentTitle) => {
     setIsOrganizing(true);
-    setTimeout(() => {
-      const res = simulateAutoOrganizeNote(content, currentTitle, activeModel);
+    try {
+      const res = await apiAutoOrganizeNote(content, currentTitle, activeModel);
       if (res.status === 'success') {
-        handleSaveNote({
+        await handleSaveNote({
           id: activeNoteId,
-          title: res.title,
-          category: res.category,
-          tags: res.tags,
-          summary: res.summary,
-          content: res.organized_content,
+          title: res.title || currentTitle,
+          category: res.category || activeNote?.category || 'personal',
+          tags: res.tags || activeNote?.tags || [],
+          summary: res.summary || '',
+          content: res.organized_content || content,
         });
       }
+    } catch (err) {
+      console.warn('Smart merge failed:', err);
+    } finally {
       setIsOrganizing(false);
-    }, 1600);
+    }
   };
 
-  const handleSmartMerge = (content, currentTitle) => {
-    setIsOrganizing(true);
-    setTimeout(() => {
-      const res = simulateSmartMergeNote(content, activeNote, activeModel);
-      if (res.status === 'success') {
-        handleSaveNote({
-          id: activeNoteId,
-          title: res.title,
-          category: res.category,
-          tags: res.tags,
-          summary: res.summary,
-          content: res.organized_content,
-        });
-      }
-      setIsOrganizing(false);
-    }, 1600);
-  };
-
-  const handleRevertVersion = (versionNumber) => {
+  const handleRevertVersion = async (versionNumber) => {
     if (!activeNote) return;
-    const ver = activeNote.versions?.find((v) => v.version_number === versionNumber);
-    if (ver) {
-      handleSaveNote({
-        id: activeNote.id,
-        title: activeNote.title,
-        category: activeNote.category,
-        tags: activeNote.tags,
-        summary: `Reverted to version ${versionNumber}: ${ver.summary}`,
-        content: activeNote.content,
-      });
+    await revertMemoryVersion(activeNote.id, versionNumber);
+    const refreshed = await fetchMemories();
+    if (refreshed.memories) {
+      setNotes(refreshed.memories);
     }
     setIsVersionsOpen(false);
+  };
+
+  const handleSelectModel = async (newModel) => {
+    setActiveModel(newModel);
+    await setActiveModelApi(newModel);
   };
 
   return (
@@ -310,6 +336,9 @@ export default function App() {
         setIsSidebarOpen={setIsSidebarOpen}
         isNotesListOpen={isNotesListOpen}
         setIsNotesListOpen={setIsNotesListOpen}
+        activeModel={activeModel}
+        modelsData={modelsData}
+        onSelectModel={handleSelectModel}
       />
 
       {/* Main Body Workspace */}
@@ -384,13 +413,13 @@ export default function App() {
         ) : (
           /* Admin Dashboard View */
           <AdminDashboard
-            modelsData={initialModels}
+            modelsData={modelsData}
             activeModel={activeModel}
             setActiveModel={setActiveModel}
             activeEngine={activeEngine}
             setActiveEngine={setActiveEngine}
-            auditData={mockAuditData}
-            metrics={mockMetrics}
+            auditData={auditData}
+            metrics={metricsData}
             onTriggerBackup={() => {}}
           />
         )}

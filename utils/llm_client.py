@@ -1,7 +1,11 @@
 import json
 import os
 from typing import Optional
+from dotenv import load_dotenv
 import requests
+
+# Ensure environment variables are loaded
+load_dotenv()
 
 from config.constants import (
     OLLAMA_BASE_URL,
@@ -11,7 +15,7 @@ from config.constants import (
 )
 from core.logger import logger
 
-_ACTIVE_MODEL: str = os.getenv("DEFAULT_LLM_MODEL", "gpt-4o-mini")
+_ACTIVE_MODEL: str = os.getenv("DEFAULT_LLM_MODEL", os.getenv("OLLAMA_MODEL", "gpt-oss:120b-cloud"))
 
 
 

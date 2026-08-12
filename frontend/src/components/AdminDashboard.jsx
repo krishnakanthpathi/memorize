@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Sliders, Activity, ShieldCheck, Cpu, Package, RefreshCw, CheckCircle2, Settings } from 'lucide-react';
+import { fetchAudit, triggerBackup, setActiveModelApi } from '../services/api';
 
 export default function AdminDashboard({
   modelsData,
@@ -16,27 +17,40 @@ export default function AdminDashboard({
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [backupMsg, setBackupMsg] = useState('');
 
-  const handleAuditClick = () => {
+  React.useEffect(() => {
+    if (auditData) setAuditResult(auditData);
+  }, [auditData]);
+
+  const handleAuditClick = async () => {
     setIsAuditing(true);
-    setTimeout(() => {
+    try {
+      const res = await fetchAudit(true, false);
+      setAuditResult(res);
+    } catch (err) {
+      console.warn('Audit error:', err);
+    } finally {
       setIsAuditing(false);
-      setAuditResult({
-        ...auditData,
-        timestamp: new Date().toISOString(),
-        message: '3-way audit completed: Markdown files, SQLite, and ChromaDB chunks are 100% in sync.'
-      });
-    }, 1800);
+    }
   };
 
-  const handleBackupClick = () => {
+  const handleBackupClick = async () => {
     setIsBackingUp(true);
     setBackupMsg('');
-    setTimeout(() => {
-      setIsBackingUp(false);
-      onTriggerBackup();
-      setBackupMsg('Backup snapshot created successfully!');
+    try {
+      const res = await triggerBackup();
+      if (onTriggerBackup) onTriggerBackup();
+      setBackupMsg(res.message || 'Backup snapshot created successfully!');
       setTimeout(() => setBackupMsg(''), 4000);
-    }, 1600);
+    } catch (err) {
+      console.warn('Backup error:', err);
+    } finally {
+      setIsBackingUp(false);
+    }
+  };
+
+  const handleModelSelect = async (newModel) => {
+    setActiveModel(newModel);
+    await setActiveModelApi(newModel);
   };
 
   return (
@@ -70,22 +84,37 @@ export default function AdminDashboard({
               </span>
             </div>
 
-            {/* Active Model Selector Dropdown */}
+            {/* Active Model Selector Dropdown & Custom Input */}
             <div className="mb-3">
               <label className="form-label font-mono fs-8 text-secondary">
-                Select Active LLM Model:
+                Select Active LLM Model (Discovered Ollama & API Models):
               </label>
               <select
-                className="form-select form-select-mono"
+                className="form-select form-select-mono mb-2"
                 value={activeModel}
-                onChange={(e) => setActiveModel(e.target.value)}
+                onChange={(e) => handleModelSelect(e.target.value)}
               >
                 {modelsData?.generative_models?.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.name} [{m.provider.toUpperCase()}]
+                    {m.name || m.id} [{(m.provider || 'ollama').toUpperCase()}]
                   </option>
                 ))}
+                {!modelsData?.generative_models?.some((m) => m.id === activeModel) && (
+                  <option value={activeModel}>{activeModel} [CUSTOM / OLLAMA]</option>
+                )}
               </select>
+              <div className="input-group input-group-sm mt-1">
+                <span className="input-group-text bg-mono-dark border-mono text-secondary font-mono fs-8">
+                  Custom Ollama Model:
+                </span>
+                <input
+                  type="text"
+                  className="form-control form-control-mono font-mono fs-8 text-white bg-mono-dark"
+                  placeholder="e.g. llama3:8b, mistral, gpt-oss:120b-cloud..."
+                  value={activeModel}
+                  onChange={(e) => handleModelSelect(e.target.value)}
+                />
+              </div>
             </div>
 
             {/* Engine Type (LangChain / LangGraph) */}

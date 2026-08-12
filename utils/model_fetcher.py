@@ -71,6 +71,33 @@ def classify_model(model_id: str) -> str:
     return "other"
 
 
+def get_ollama_models(ollama_base_url: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    Fetches available local models from Ollama API (/api/tags).
+    """
+    url = (ollama_base_url or os.getenv("OLLAMA_BASE_URL") or "http://localhost:11434").rstrip("/")
+    try:
+        response = requests.get(f"{url}/api/tags", timeout=4)
+        if response.status_code == 200:
+            models_list = response.json().get("models", [])
+            res = []
+            for item in models_list:
+                m_id = item.get("name", "") if isinstance(item, dict) else str(item)
+                if m_id:
+                    res.append({
+                        "id": m_id,
+                        "name": m_id,
+                        "provider": "ollama",
+                        "object": "model",
+                        "owned_by": "ollama",
+                        "status": "available",
+                    })
+            return res
+    except Exception as e:
+        logger.warning(f"Failed to fetch Ollama models from {url}: {e}")
+    return []
+
+
 def get_available_models(
     base_url: Optional[str] = None, api_key: Optional[str] = None
 ) -> List[Dict[str, Any]]:
@@ -90,7 +117,7 @@ def get_available_models(
         headers["Authorization"] = f"Bearer {key}"
 
     try:
-        response = requests.get(models_endpoint, headers=headers, timeout=15)
+        response = requests.get(models_endpoint, headers=headers, timeout=10)
         response.raise_for_status()
         data = response.json()
 
@@ -102,33 +129,50 @@ def get_available_models(
             logger.warning(f"Unexpected response structure from {models_endpoint}")
             return []
     except Exception as e:
-        logger.error(f"Failed to fetch models from {models_endpoint}: {e}")
-        raise RuntimeError(f"Could not fetch models from '{models_endpoint}': {e}") from e
+        logger.warning(f"Failed to fetch OpenAI/Bedrock models from {models_endpoint}: {e}")
+        return []
 
 
 def fetch_and_bifurcate_models(
     base_url: Optional[str] = None, api_key: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Fetches available models from the specified base URL and API key,
+    Fetches available models from both OpenAI-compatible API and local Ollama endpoint,
     and bifurcates them into embedding models and generative models.
-
-    :param base_url: OpenAI-compatible API base URL (e.g. https://bedrock-mantle.ap-southeast-2.api.aws/v1)
-    :param api_key: API authorization key
-    :return: Dictionary containing 'embedding_models', 'generative_models', 'other_models', and 'total_count'.
     """
-    raw_models = get_available_models(base_url=base_url, api_key=api_key)
+    raw_openai_models = get_available_models(base_url=base_url, api_key=api_key)
+    raw_ollama_models = get_ollama_models()
+
+    raw_models = raw_openai_models + raw_ollama_models
+
+    # Fallback to standard defaults if no external endpoints returned models
+    if not raw_models:
+        raw_models = [
+            {"id": "gpt-4o-mini", "provider": "openai", "status": "active"},
+            {"id": "gpt-4o", "provider": "openai", "status": "available"},
+            {"id": "nomic-embed-text", "provider": "ollama", "status": "available"},
+            {"id": "text-embedding-3-small", "provider": "openai", "status": "available"},
+        ]
 
     embedding_models: List[Dict[str, Any]] = []
     generative_models: List[Dict[str, Any]] = []
     other_models: List[Dict[str, Any]] = []
 
+    seen_ids = set()
+
     for item in raw_models:
         model_id = item.get("id", "") if isinstance(item, dict) else str(item)
+        if not model_id or model_id in seen_ids:
+            continue
+        seen_ids.add(model_id)
+
         category = classify_model(model_id)
+        provider = item.get("provider") if isinstance(item, dict) else ("ollama" if "ollama" in model_id or "cloud" in model_id else "openai")
 
         model_info = {
             "id": model_id,
+            "name": model_id,
+            "provider": provider or "openai",
             "object": item.get("object", "model") if isinstance(item, dict) else "model",
             "owned_by": item.get("owned_by", "") if isinstance(item, dict) else "",
             "status": item.get("status", "available") if isinstance(item, dict) else "available",
@@ -143,7 +187,7 @@ def fetch_and_bifurcate_models(
 
     return {
         "base_url": base_url or os.getenv("OPENAI_BASE_URL") or OPENAI_BASE_URL,
-        "total_count": len(raw_models),
+        "total_count": len(seen_ids),
         "embedding_models": embedding_models,
         "generative_models": generative_models,
         "other_models": other_models,

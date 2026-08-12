@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { MessageSquare, X, Send, Bot, User, Sparkles } from 'lucide-react';
-import { simulateGraphChat } from '../mockData';
+import { sendGraphChat } from '../services/api';
 
 export default function GraphChatDrawer({ isOpen, onClose, activeModel }) {
   const [messages, setMessages] = useState([
@@ -14,7 +14,7 @@ export default function GraphChatDrawer({ isOpen, onClose, activeModel }) {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
 
-  const handleSend = (e) => {
+  const handleSend = async (e) => {
     e.preventDefault();
     if (!input.trim()) return;
 
@@ -24,20 +24,23 @@ export default function GraphChatDrawer({ isOpen, onClose, activeModel }) {
     setInput('');
     setIsTyping(true);
 
-    setTimeout(() => {
-      const chatRes = simulateGraphChat(userQuery);
+    try {
+      const chatRes = await sendGraphChat(userQuery, null, activeModel);
       setMessages((prev) => [
         ...prev,
         {
           id: Date.now() + 1,
           sender: 'assistant',
-          text: chatRes.reply,
-          entities: chatRes.entities,
-          latency: chatRes.latency_ms,
+          text: chatRes.reply || 'No response synthesized.',
+          entities: chatRes.entities || [],
+          latency: chatRes.latency_ms || 0,
         },
       ]);
+    } catch (err) {
+      console.warn('Graph chat error:', err);
+    } finally {
       setIsTyping(false);
-    }, 1800);
+    }
   };
 
   if (!isOpen) return null;

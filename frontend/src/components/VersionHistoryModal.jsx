@@ -1,8 +1,32 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, History, RotateCcw, Clock } from 'lucide-react';
+import { fetchMemoryVersions } from '../services/api';
 
 export default function VersionHistoryModal({ isOpen, onClose, note, onRevert }) {
+  const [liveVersions, setLiveVersions] = useState(note?.versions || []);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && note?.id) {
+      let isMounted = true;
+      setIsLoading(true);
+      fetchMemoryVersions(note.id).then((res) => {
+        if (isMounted && res.status === 'success' && res.versions) {
+          setLiveVersions(res.versions);
+        } else if (isMounted) {
+          setLiveVersions(note.versions || []);
+        }
+        if (isMounted) setIsLoading(false);
+      });
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [isOpen, note?.id]);
+
   if (!isOpen || !note) return null;
+
+  const versionsToDisplay = liveVersions.length > 0 ? liveVersions : (note.versions || []);
 
   return (
     <div
@@ -35,7 +59,7 @@ export default function VersionHistoryModal({ isOpen, onClose, note, onRevert })
             </p>
 
             <div className="d-flex flex-column gap-2">
-              {note.versions?.map((ver) => (
+              {versionsToDisplay.map((ver) => (
                 <div
                   key={ver.version_number}
                   className="p-3 bg-mono-dark border border-mono-muted rounded d-flex align-items-center justify-content-between gap-3"
