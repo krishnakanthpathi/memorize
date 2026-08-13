@@ -371,6 +371,12 @@ def organize_memory_files(auto_fix: bool = True) -> dict:
 
 
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "cli":
+        sys.argv.pop(1)
+        import cli
+        cli.main()
+        return
+
     sys.stderr.write("Started Memorize MCP Server\n")
     init_db()
     mcp.run(transport="stdio")
@@ -378,3 +384,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -217,3 +217,41 @@ def peek_vector_db(
         "returned_count": len(chunks),
         "chunks": chunks,
     }
+
+
+@handle_errors
+def get_all_chunks(collection_name: str = "memories") -> List[Dict[str, Any]]:
+    """
+    Retrieves all stored chunk IDs and metadata from ChromaDB.
+    """
+    collection = get_or_create_collection(collection_name)
+    data = collection.get(include=["metadatas"])
+    chunks = []
+    if data and data.get("ids"):
+        for chunk_id, meta in zip(data["ids"], data["metadatas"]):
+            meta_dict = meta if isinstance(meta, dict) else {}
+            chunks.append({
+                "chunk_id": chunk_id,
+                "memory_id": meta_dict.get("memory_id", ""),
+                "category": meta_dict.get("category", ""),
+                "chunk_index": meta_dict.get("chunk_index", 0),
+            })
+    return chunks
+
+
+@handle_errors
+def delete_chunks_by_ids(
+    chunk_ids: List[str],
+    collection_name: str = "memories",
+) -> Dict[str, Any]:
+    """
+    Deletes vector chunks by a list of chunk IDs from ChromaDB.
+    """
+    if not chunk_ids:
+        return {"status": "success", "deleted_count": 0}
+
+    collection = get_or_create_collection(collection_name)
+    collection.delete(ids=chunk_ids)
+    logger.info(f"Deleted {len(chunk_ids)} chunk IDs from ChromaDB collection '{collection_name}'.")
+    return {"status": "success", "deleted_count": len(chunk_ids), "chunk_ids": chunk_ids}
+

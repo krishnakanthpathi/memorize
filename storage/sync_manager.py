@@ -1,17 +1,273 @@
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from config.constants import MEMORIES_DIR
 from core.hashing import compute_string_hash
+from core.id_generator import generate_memory_id
 from core.logger import handle_errors, logger
 from storage.backup_manager import clear_all_backups
 from storage.db_manager import (
     clear_all_index_memories,
+    delete_memory_from_index,
+    get_all_memories,
     get_memory_by_id,
 )
 from storage.markdown_handler import read_markdown_file
-from vector.vector_db import get_chroma_client
+from vector.vector_db import (
+    delete_chunks_by_ids,
+    get_all_chunks,
+    get_chroma_client,
+)
+
+
+@handle_errors
+def find_orphan_files() -> List[Dict[str, Any]]:
+    """
+    Finds Markdown files on disk in MEMORIES_DIR that are not tracked in the SQLite database index.
+    """
+    db_memories = get_all_memories()
+    indexed_paths = set()
+    for mem in db_memories:
+        if mem.get("file_path"):
+            try:
+                indexed_paths.add(Path(mem["file_path"]).resolve())
+            except Exception:
+                pass
+
+    orphan_files = []
+    if MEMORIES_DIR.exists():
+        for path in MEMORIES_DIR.rglob("*.md"):
+            if path.name.startswith(".") or path.name == ".gitkeep":
+                continue
+            resolved_path = path.resolve()
+            if resolved_path not in indexed_paths:
+                stat = path.stat()
+                orphan_files.append({
+                    "file_path": str(path),
+                    "file_name": path.name,
+                    "category": path.parent.name if path.parent != MEMORIES_DIR else "personal",
+                    "file_size_bytes": stat.st_size,
+                    "last_modified": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
+                })
+
+    return orphan_files
+
+
+@handle_errors
+def find_orphan_indexes() -> List[Dict[str, Any]]:
+    """
+    Finds SQLite database records whose corresponding Markdown file does not exist on disk.
+    """
+    db_memories = get_all_memories()
+    orphan_indexes = []
+    for mem in db_memories:
+        file_path_str = mem.get("file_path", "")
+        if not file_path_str or not Path(file_path_str).exists():
+            orphan_indexes.append({
+                "memory_id": mem.get("id"),
+                "title": mem.get("title"),
+                "category": mem.get("category"),
+                "file_path": file_path_str,
+                "created_at": mem.get("created_at"),
+            })
+    return orphan_indexes
+
+
+@handle_errors
+def find_orphan_chunks() -> List[Dict[str, Any]]:
+    """
+    Finds ChromaDB vector chunk embeddings whose memory_id is not found in SQLite or on disk.
+    """
+    db_memories = get_all_memories()
+    valid_memory_ids = {mem.get("id") for mem in db_memories if mem.get("id")}
+    all_chunks = get_all_chunks()
+
+    orphan_chunks = []
+    for chunk in all_chunks:
+        mem_id = chunk.get("memory_id")
+        if not mem_id or mem_id not in valid_memory_ids:
+            orphan_chunks.append({
+                "chunk_id": chunk.get("chunk_id"),
+                "memory_id": mem_id,
+                "category": chunk.get("category"),
+            })
+    return orphan_chunks
+
+
+@handle_errors
+def delete_orphan_files() -> Dict[str, Any]:
+    """
+    Deletes orphan Markdown files from disk.
+    """
+    orphans = find_orphan_files()
+    deleted_paths = []
+    failed_paths = []
+
+    for orphan in orphans:
+        path = Path(orphan["file_path"])
+        try:
+            if path.exists():
+                path.unlink()
+                deleted_paths.append(str(path))
+        except Exception as e:
+            logger.error(f"Failed to delete orphan file {path}: {e}")
+            failed_paths.append(str(path))
+
+    return {
+        "status": "success",
+        "deleted_count": len(deleted_paths),
+        "deleted_files": deleted_paths,
+        "failed_files": failed_paths,
+    }
+
+
+@handle_errors
+def delete_orphan_indexes() -> Dict[str, Any]:
+    """
+    Deletes orphan records from the SQLite database index.
+    """
+    orphans = find_orphan_indexes()
+    deleted_ids = []
+
+    for orphan in orphans:
+        mem_id = orphan.get("memory_id")
+        if mem_id:
+            if delete_memory_from_index(mem_id):
+                deleted_ids.append(mem_id)
+
+    return {
+        "status": "success",
+        "deleted_count": len(deleted_ids),
+        "deleted_memory_ids": deleted_ids,
+    }
+
+
+@handle_errors
+def delete_orphan_chunks() -> Dict[str, Any]:
+    """
+    Deletes orphan vector chunk embeddings from ChromaDB.
+    """
+    orphans = find_orphan_chunks()
+    chunk_ids = [orphan["chunk_id"] for orphan in orphans if orphan.get("chunk_id")]
+
+    if not chunk_ids:
+        return {"status": "success", "deleted_count": 0, "deleted_chunk_ids": []}
+
+    res = delete_chunks_by_ids(chunk_ids)
+    return {
+        "status": "success",
+        "deleted_count": res.get("deleted_count", 0),
+        "deleted_chunk_ids": chunk_ids,
+    }
+
+
+@handle_errors
+def recover_orphaned_documents() -> Dict[str, Any]:
+    """
+    Scans unindexed Markdown files on disk, generates new IDs for documents missing IDs,
+    indexes them in the SQLite database, and creates vector embeddings in ChromaDB.
+    """
+    from core.memory_service import execute_upsert_memory
+
+    orphans = find_orphan_files()
+    recovered_count = 0
+    recovered_details = []
+
+    for orphan in orphans:
+        file_path = Path(orphan["file_path"])
+        if not file_path.exists():
+            continue
+
+        frontmatter, content = read_markdown_file(file_path)
+        mem_id = frontmatter.get("id") or generate_memory_id()
+        title = frontmatter.get("title") or file_path.stem.replace("_", " ").title()
+        category = frontmatter.get("category") or orphan.get("category") or "personal"
+        tags = frontmatter.get("tags") or []
+
+        res = execute_upsert_memory(
+            title=title,
+            content=content,
+            action="update" if frontmatter.get("id") else "insert",
+            category=category,
+            tags=tags,
+            memory_id=mem_id,
+        )
+
+        if isinstance(res, dict) and res.get("status") == "success":
+            recovered_count += 1
+            recovered_details.append({
+                "memory_id": mem_id,
+                "title": title,
+                "file_path": str(file_path),
+            })
+
+    return {
+        "status": "success",
+        "recovered_count": recovered_count,
+        "recovered_documents": recovered_details,
+    }
+
+
+@handle_errors
+def audit_storage_integrity(auto_fix: bool = False) -> Dict[str, Any]:
+    """
+    Performs a full storage integrity audit across disk storage, SQLite database, and ChromaDB vector store.
+    Optionally reconciles/auto-fixes orphan records and indexes out-of-sync files.
+    """
+    orphan_files = find_orphan_files()
+    orphan_indexes = find_orphan_indexes()
+    orphan_chunks = find_orphan_chunks()
+
+    # Detect content hash mismatches between disk and SQLite DB
+    db_memories = get_all_memories()
+    hash_mismatches = []
+    for mem in db_memories:
+        fp_str = mem.get("file_path")
+        if fp_str and Path(fp_str).exists():
+            _, content = read_markdown_file(Path(fp_str))
+            disk_hash = compute_string_hash(content)
+            db_hash = mem.get("content_hash")
+            if disk_hash != db_hash:
+                hash_mismatches.append({
+                    "memory_id": mem.get("id"),
+                    "title": mem.get("title"),
+                    "file_path": fp_str,
+                    "disk_hash": disk_hash,
+                    "db_hash": db_hash,
+                })
+
+    auto_fix_results = None
+    if auto_fix:
+        deleted_idx = delete_orphan_indexes()
+        deleted_chk = delete_orphan_chunks()
+        recovered_docs = recover_orphaned_documents()
+        auto_fix_results = {
+            "deleted_orphan_indexes": deleted_idx.get("deleted_count", 0),
+            "deleted_orphan_chunks": deleted_chk.get("deleted_count", 0),
+            "recovered_documents": recovered_docs.get("recovered_count", 0),
+        }
+
+    is_healthy = not (orphan_files or orphan_indexes or orphan_chunks or hash_mismatches)
+
+    return {
+        "status": "success",
+        "is_healthy": is_healthy,
+        "summary": {
+            "orphan_files_count": len(orphan_files),
+            "orphan_indexes_count": len(orphan_indexes),
+            "orphan_chunks_count": len(orphan_chunks),
+            "hash_mismatches_count": len(hash_mismatches),
+        },
+        "details": {
+            "orphan_files": orphan_files,
+            "orphan_indexes": orphan_indexes,
+            "orphan_chunks": orphan_chunks,
+            "hash_mismatches": hash_mismatches,
+        },
+        "auto_fix_applied": auto_fix,
+        "auto_fix_results": auto_fix_results,
+    }
 
 
 @handle_errors
@@ -63,7 +319,7 @@ def clear_all_memories(clear_backups: bool = True) -> Dict[str, Any]:
 
     return {
         "status": "success",
-        "message": f"Successfully cleared memories directory, reset SQLite database, and purged ChromaDB vector store.",
+        "message": "Successfully cleared memories directory, reset SQLite database, and purged ChromaDB vector store.",
         "deleted_files_count": deleted_files,
     }
 
@@ -119,4 +375,5 @@ def get_memory_file_status(memory_id_or_path: str) -> Dict[str, Any]:
         "content": content,
         "raw_file_text": raw_text,
     }
+
 

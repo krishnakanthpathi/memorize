@@ -18,6 +18,16 @@ if not logger.handlers:
     logger.addHandler(handler)
 
 
+def configure_cli_logging(level=logging.WARNING):
+    """
+    Configures logging verbosity for CLI interactive / execution modes.
+    """
+    logger.setLevel(level)
+    for h in logger.handlers:
+        h.setLevel(level)
+
+
+
 def handle_errors(func: Callable[..., Any]) -> Callable[..., Any]:
     """
     Decorator that catches any unhandled exceptions in MCP tools or core functions,
