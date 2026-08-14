@@ -15,13 +15,16 @@ export default defineConfig({
     },
   },
   server: {
+    host: '0.0.0.0',
     port: parseInt(process.env.VITE_PORT || process.env.FRONTEND_PORT || '6666', 10),
     proxy: {
       '/api': {
-        target: process.env.VITE_API_URL || 'http://localhost:7777',
+        target: process.env.VITE_API_URL || 'http://127.0.0.1:7777',
         changeOrigin: true,
+        secure: false,
       },
     },
   },
 });
+
 
