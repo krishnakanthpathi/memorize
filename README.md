@@ -20,7 +20,7 @@ memorize/
 ├── ⚙️ api/                    # FastAPI REST Service (port 7777)
 │   ├── server.py             # App factory & CORS setup
 │   └── routes/               # Modular API endpoints (/memories, /search, /chat, /settings, etc.)
-├── 💻 frontend/               # React 19 + TypeScript + Vite Web App (port 6666)
+├── 💻 frontend/               # React 19 + TypeScript + Vite Web App (port 8888)
 ├── 🧠 core/                   # Memory services & LLM pipeline
 ├── 🔍 search/                 # Hybrid relevance ranking & BM25
 ├── 🗄️ storage/                # SQLite DB manager, versioning, markdown handler
@@ -63,7 +63,7 @@ cd frontend
 npm install
 npm run dev
 ```
-Open your browser at: `http://localhost:6666`
+Open your browser at: `http://localhost:8888`
 
 ### 4. Run the Universal FastMCP Server (Claude Desktop / Gemini / Cursor / Antigravity)
 ```bash
@@ -103,11 +103,12 @@ If you are running Ollama or an open-weights model on a separate GPU server or c
    ```
 
 ### 3. Expose the Web App for Remote Access
-Tunnel the frontend web application (port `6666`):
+Tunnel the frontend web application (port `8888`):
 ```bash
-ngrok http 6666
+ngrok http 8888
 ```
 Open the generated HTTPS URL on any mobile device or external browser.
+
 
 
 ---

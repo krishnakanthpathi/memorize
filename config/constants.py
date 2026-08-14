@@ -12,7 +12,7 @@ load_dotenv(BASE_DIR / ".env")
 PORT = int(os.getenv("PORT", os.getenv("API_PORT", "7777")))
 API_PORT = PORT
 MCP_PORT = int(os.getenv("MCP_PORT", str(PORT)))
-FRONTEND_PORT = int(os.getenv("FRONTEND_PORT", os.getenv("VITE_PORT", "6666")))
+FRONTEND_PORT = int(os.getenv("FRONTEND_PORT", os.getenv("VITE_PORT", "8888")))
 
 # Storage Data Directory
 
