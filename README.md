@@ -78,14 +78,15 @@ python3 -m mcp.service
 
 You can expose Memorize securely to external LLMs, cloud agents, remote machines, or mobile browsers using **ngrok**.
 
-### 1. Expose the REST API to External LLMs & Webhooks
-Tunnel the local FastAPI REST server (port `6999`) to a secure public HTTPS endpoint:
+### 1. Expose the REST API / MCP Server to External LLMs & Webhooks
+Tunnel the local FastAPI REST and Universal MCP server (port `7777`) to a secure public HTTPS endpoint:
 ```bash
-ngrok http 6999
+ngrok http 7777
 ```
 - **Forwarding URL**: `https://<your-subdomain>.ngrok-free.app`
+- **MCP Endpoint**: `https://<your-subdomain>.ngrok-free.app/sse`
 - **Interactive Swagger Docs**: `https://<your-subdomain>.ngrok-free.app/docs`
-- External LLMs (e.g. OpenAI GPT actions, LangChain, custom cloud agents) can now query memories via `POST /api/search` and store data via `POST /api/memories`.
+- External LLMs (e.g. Google Gemini, Claude, OpenAI GPT actions) can now query memories via MCP or REST endpoints.
 
 ### 2. Connect to Remote Ollama GPU Servers via ngrok
 If you are running Ollama or an open-weights model on a separate GPU server or cloud instance:
@@ -99,11 +100,12 @@ If you are running Ollama or an open-weights model on a separate GPU server or c
    ```
 
 ### 3. Expose the Web App for Remote Access
-Tunnel the frontend web application (port `3000`):
+Tunnel the frontend web application (port `6666`):
 ```bash
-ngrok http 3000
+ngrok http 6666
 ```
 Open the generated HTTPS URL on any mobile device or external browser.
+
 
 ---
 

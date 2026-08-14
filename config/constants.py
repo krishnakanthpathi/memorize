@@ -8,7 +8,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Load environment variables from .env file
 load_dotenv(BASE_DIR / ".env")
 
+# Server Ports
+PORT = int(os.getenv("PORT", os.getenv("API_PORT", "7777")))
+API_PORT = PORT
+MCP_PORT = int(os.getenv("MCP_PORT", str(PORT)))
+FRONTEND_PORT = int(os.getenv("FRONTEND_PORT", os.getenv("VITE_PORT", "6666")))
+
 # Storage Data Directory
+
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "memorize.db"
 CHROMA_DIR = DATA_DIR / "chroma_db"
