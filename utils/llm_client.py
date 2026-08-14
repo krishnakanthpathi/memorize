@@ -121,7 +121,7 @@ def execute_tool_call(tool_name: str, params: dict) -> dict:
     from storage.sync_manager import get_memory_file_status
 
     tool_clean = tool_name.strip().lower()
-    if tool_clean in ("create_memory", "store_memory", "upsert_memory"):
+    if tool_clean in ("store", "create_memory", "store_memory", "upsert_memory"):
         res = execute_upsert_memory(
             title=params.get("title", "Untitled Note"),
             content=params.get("content", ""),
@@ -130,24 +130,41 @@ def execute_tool_call(tool_name: str, params: dict) -> dict:
             action="auto",
         )
         return {"tool": tool_clean, "status": "success", "result": res}
-    elif tool_clean in ("search_memories", "search"):
+    elif tool_clean in ("update", "update_memory", "append_memory"):
+        res = execute_upsert_memory(
+            title=params.get("title", "Untitled Note"),
+            content=params.get("content", ""),
+            category=params.get("category", "personal"),
+            tags=params.get("tags", []),
+            action="append" if params.get("append") else "update",
+            memory_id=params.get("memory_id"),
+        )
+        return {"tool": tool_clean, "status": "success", "result": res}
+    elif tool_clean in ("hybrid_fetch", "search_memories", "search", "search_memory"):
         results = search_hybrid_relevance(
             query=params.get("query", ""),
-            category_filter=params.get("category"),
+            category_filter=params.get("category") or params.get("category_filter"),
             top_k=params.get("top_k", 4),
         )
         return {"tool": tool_clean, "status": "success", "result": results}
-    elif tool_clean in ("read_memory", "get_memory", "read"):
+    elif tool_clean in ("fetch", "read_memory", "get_memory", "read"):
         mem_id = params.get("memory_id") or params.get("id") or params.get("title", "")
-        res = get_memory_file_status(mem_id)
-        return {"tool": tool_clean, "status": "success" if res.get("status") != "error" else "error", "result": res}
-    elif tool_clean in ("delete_memory", "delete"):
+        if mem_id:
+            res = get_memory_file_status(mem_id)
+            return {"tool": tool_clean, "status": "success" if res.get("status") != "error" else "error", "result": res}
+        else:
+            cat = params.get("category") or params.get("category_filter")
+            tag = params.get("tag") or params.get("tag_filter")
+            mems = get_all_memories(category_filter=cat, tag_filter=tag)
+            return {"tool": tool_clean, "status": "success", "result": mems}
+    elif tool_clean in ("delete", "delete_memory"):
         mem_id = params.get("memory_id") or params.get("id", "")
-        res = handle_delete_memory(norm_title="", category="", memory_id=mem_id)
+        title = params.get("title", "")
+        res = handle_delete_memory(norm_title=title, category=params.get("category", "personal"), memory_id=mem_id or None)
         return {"tool": tool_clean, "status": "success" if res.get("status") == "success" else "error", "result": res}
     elif tool_clean in ("list_memories", "list"):
-        cat = params.get("category")
-        tag = params.get("tag")
+        cat = params.get("category") or params.get("category_filter")
+        tag = params.get("tag") or params.get("tag_filter")
         mems = get_all_memories(category_filter=cat, tag_filter=tag)
         return {"tool": tool_clean, "status": "success", "result": mems}
     elif tool_clean in ("clear_all_memories", "clear_all", "reset_memories", "purge_all", "delete_all"):
@@ -156,6 +173,7 @@ def execute_tool_call(tool_name: str, params: dict) -> dict:
         return {"tool": "clear_all_memories", "status": "success", "result": res}
     else:
         return {"tool": tool_clean, "status": "error", "message": f"Unknown tool: {tool_name}"}
+
 
 
 def parse_and_execute_tool(raw_response: str) -> tuple[Optional[dict], str]:

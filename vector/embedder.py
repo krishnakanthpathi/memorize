@@ -31,6 +31,9 @@ from config.constants import (
 from core.logger import handle_errors, logger, time_execution
 
 
+from config.settings import get_setting
+
+
 @handle_errors
 @time_execution
 def generate_embeddings(
@@ -40,7 +43,7 @@ def generate_embeddings(
 ) -> List[List[float]]:
     """
     Unified entry point for generating vector embeddings.
-    Dispatches to the provider configured in .env (EMBEDDING_PROVIDER="local" | "openai" | "ollama" | "auto").
+    Dispatches to provider configured dynamically in settings or .env.
     Defaults to fast offline local embeddings ('local') to ensure instant performance.
     """
     if isinstance(texts, str):
@@ -49,19 +52,22 @@ def generate_embeddings(
     if not texts:
         return []
 
-    active_provider = (provider or EMBEDDING_PROVIDER).lower()
+    active_provider = (provider or get_setting("embedding_provider", EMBEDDING_PROVIDER)).lower()
+    active_model = model_name or get_setting("embedding_model", EMBEDDING_MODEL_NAME)
+    fallback_model = get_setting("fallback_model", FALLBACK_EMBEDDING_MODEL)
 
     if active_provider == "local":
-        return generate_local_embeddings(texts, model_name=model_name or FALLBACK_EMBEDDING_MODEL)
+        return generate_local_embeddings(texts, model_name=active_model or fallback_model)
     elif active_provider == "openai":
-        return generate_openai_embeddings(texts, model_name=model_name or EMBEDDING_MODEL_NAME)
+        return generate_openai_embeddings(texts, model_name=active_model)
     elif active_provider == "ollama":
-        return generate_ollama_embeddings(texts, model_name=model_name or OLLAMA_EMBEDDING_MODEL)
+        return generate_ollama_embeddings(texts, model_name=active_model)
     elif active_provider == "auto":
-        return generate_auto_fallback_embeddings(texts, model_name=model_name or EMBEDDING_MODEL_NAME)
+        return generate_auto_fallback_embeddings(texts, model_name=active_model)
     else:
         logger.warning(f"Unknown provider '{active_provider}'. Falling back to local embeddings.")
-        return generate_local_embeddings(texts, model_name=model_name or FALLBACK_EMBEDDING_MODEL)
+        return generate_local_embeddings(texts, model_name=fallback_model)
+
 
 
 @handle_errors

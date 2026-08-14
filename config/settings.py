@@ -3,14 +3,22 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from config.constants import (
+    ACTIVE_EMBEDDING_MODEL,
     DATA_DIR,
+    FALLBACK_EMBEDDING_MODEL,
     OLLAMA_BASE_URL,
     OLLAMA_CLASSIFICATION_MODEL,
+    USE_LLM,
 )
 
 SETTINGS_FILE = DATA_DIR / "settings.json"
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
+    "use_llm": USE_LLM,
+    "embedding_model": ACTIVE_EMBEDDING_MODEL,
+    "classification_model": OLLAMA_CLASSIFICATION_MODEL or "gpt-oss:120b-cloud",
+    "fallback_model": FALLBACK_EMBEDDING_MODEL,
+    "embedding_provider": "local",
     "llm_provider": "ollama",
     "ollama_base_url": OLLAMA_BASE_URL,
     "ollama_model": OLLAMA_CLASSIFICATION_MODEL or "gpt-oss:120b-cloud",
@@ -19,6 +27,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "tool_execution": True,
     "temperature": 0.3,
 }
+
 
 _SETTINGS: Dict[str, Any] = {}
 
@@ -78,8 +87,10 @@ def set_setting(key: str, value: Any, filepath: Path = SETTINGS_FILE) -> bool:
             value = float(value)
         except ValueError:
             pass
-    elif key in ("auto_context", "tool_execution") and isinstance(value, str):
+    elif key in ("auto_context", "tool_execution", "use_llm") and isinstance(value, str):
         value = value.lower() in ("true", "1", "yes", "on")
+    elif key in ("auto_context", "tool_execution", "use_llm") and not isinstance(value, bool):
+        value = bool(value)
 
     _SETTINGS[key] = value
     return save_settings(filepath)

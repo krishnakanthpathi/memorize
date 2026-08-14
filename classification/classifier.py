@@ -24,8 +24,10 @@ RULE_CATEGORY_KEYWORDS = {
     "media": ["ocr", "audio", "video", "tts", "text-to-speech", "pdf", "image", "document", "scan", "youtube", "podcast"],
     "finance": ["stock", "investment", "budget", "crypto", "tax", "bank", "money", "savings", "expense"],
     "gaming": ["game", "steam", "playstation", "xbox", "fps", "rpg", "valorant", "nintendo", "score", "match"],
-    "personal": ["phone", "email", "contact", "journal", "preference", "sleep", "family", "friend", "home", "diary", "woke", "waking"],
+    "personal": ["phone", "email", "contact", "journal", "preference", "sleep", "family", "friend", "home", "diary", "woke", "waking", "habit", "food", "lifestyle"],
+    "others": ["misc", "miscellaneous", "note", "temporary", "random", "other", "general"],
 }
+
 
 
 def rule_based_classify(text: str) -> Tuple[str, List[str]]:
@@ -54,6 +56,9 @@ def rule_based_classify(text: str) -> Tuple[str, List[str]]:
     return "personal", list(words)[:5]
 
 
+from config.settings import get_setting
+
+
 def classify_text_llm(text: str) -> Dict[str, Any]:
     """
     Sends zero-shot prompt to Ollama endpoint to classify text strictly into available predefined categories.
@@ -76,10 +81,12 @@ Return ONLY valid JSON matching this exact structure:
   "confidence": 0.95
 }}
 """
+    model_name = str(get_setting("classification_model", OLLAMA_CLASSIFICATION_MODEL))
+    base_url = str(get_setting("ollama_base_url", OLLAMA_BASE_URL))
     try:
-        url = f"{OLLAMA_BASE_URL}/api/generate"
+        url = f"{base_url}/api/generate"
         payload = {
-            "model": OLLAMA_CLASSIFICATION_MODEL,
+            "model": model_name,
             "prompt": prompt,
             "stream": False,
             "format": "json"
@@ -108,11 +115,13 @@ def classify_memory(text: str) -> Dict[str, Any]:
     """
     Primary auto-classification entry point.
     Determines category and extracts tags using predefined categories only.
+    Honors use_llm setting (offline rules when use_llm is False).
     """
     if not text or not text.strip():
         return {"category": "personal", "tags": [], "confidence": 1.0, "is_new_category": False}
 
-    if CLASSIFIER_MODE == "rules":
+    use_llm = bool(get_setting("use_llm", False))
+    if not use_llm or CLASSIFIER_MODE == "rules":
         cat, tags = rule_based_classify(text)
         available_categories = get_available_categories()
         if cat not in available_categories:
@@ -128,3 +137,4 @@ def classify_memory(text: str) -> Dict[str, Any]:
 
     result["is_new_category"] = False
     return result
+

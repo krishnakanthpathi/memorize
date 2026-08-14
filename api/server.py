@@ -7,6 +7,7 @@ from api.routes import (
     memories_router,
     models_router,
     search_router,
+    settings_router,
     system_router,
 )
 
@@ -32,6 +33,8 @@ app.include_router(search_router)
 app.include_router(chat_router)
 app.include_router(system_router)
 app.include_router(models_router)
+app.include_router(settings_router)
+
 
 
 @app.get("/")

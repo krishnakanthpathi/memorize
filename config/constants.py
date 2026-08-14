@@ -39,10 +39,15 @@ DEFAULT_CATEGORIES = [
 # RAG & Embedding Settings
 DEFAULT_CHUNK_SIZE = 500  # tokens
 DEFAULT_CHUNK_OVERLAP = 50  # tokens
-FALLBACK_EMBEDDING_MODEL = os.getenv("FALLBACK_EMBEDDING_MODEL", "all-MiniLM-L6-v2")  # Local HuggingFace model
-
-# Embedding Provider Selection: "local" (default), "openai", "ollama", or "auto"
+# Embedding Configuration
 EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "local").lower()
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", os.getenv("ACTIVE_EMBEDDING_MODEL", os.getenv("OLLAMA_EMBEDDING_MODEL", "all-MiniLM-L6-v2")))
+FALLBACK_EMBEDDING_MODEL = os.getenv("FALLBACK_EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+
+# Backward-compatible aliases
+ACTIVE_EMBEDDING_MODEL = EMBEDDING_MODEL
+OLLAMA_EMBEDDING_MODEL = EMBEDDING_MODEL
+EMBEDDING_MODEL_NAME = EMBEDDING_MODEL
 
 # LLM Generation & Chat Engine Configuration
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama").lower()
@@ -50,14 +55,11 @@ LLM_MODEL = os.getenv("LLM_MODEL", os.getenv("DEFAULT_LLM_MODEL", "gpt-oss:120b-
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", os.getenv("OLLAMA_CLASSIFICATION_MODEL", "gpt-oss:120b-cloud"))
 
-# OpenAI primary model & endpoints
+# Provider endpoints
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://bedrock-mantle.ap-southeast-2.api.aws/v1")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-EMBEDDING_MODEL_NAME = os.getenv("ACTIVE_EMBEDDING_MODEL", "titan-embed-text-v2")
-
-# Ollama embeddings & model
-OLLAMA_EMBEDDING_MODEL = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+
 
 # Remote ChromaDB Container Settings
 CHROMA_MODE = os.getenv("CHROMA_MODE", "local").lower()
@@ -95,6 +97,9 @@ MODEL_CHUNK_CONFIGS = {
 
 CHROMA_CLIENT = None
 LOCAL_MODEL_CACHE = {}
+
+# LLM Integration Toggle (True: AI smart merge & classification, False: offline rule-based)
+USE_LLM = os.getenv("USE_LLM", "false").lower() in ("true", "1", "yes")
 
 # Ollama Classification Model & Classifier Mode ("rules" fast local default, "llm", or "auto")
 CLASSIFIER_MODE = os.getenv("CLASSIFIER_MODE", "rules").lower()

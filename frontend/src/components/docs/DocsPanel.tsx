@@ -18,7 +18,9 @@ import {
   Keyboard,
   ExternalLink,
   Database,
+  Folder,
 } from 'lucide-react';
+
 import { useNotesStore } from '@/store/useNotesStore';
 import { cn } from '@/lib/utils';
 
@@ -286,20 +288,17 @@ def memorize(title: str, content: str):
               <div>
                 <h1 className="text-2xl font-bold tracking-tight mb-2">Model Context Protocol (MCP) Server</h1>
                 <p className="text-sm text-muted-foreground">
-                  Memorize registers 20+ specialized MCP tools allowing any MCP-compliant agent (e.g. Claude Desktop, Antigravity) to query and modify memory items.
+                  Memorize registers 5 lean core MCP tools allowing any MCP-compliant agent (e.g. Claude Desktop, Google Gemini, Cursor, Antigravity) to store, update, delete, fetch, and search knowledge memories.
                 </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {[
-                  { name: 'upsert_memory', desc: 'Creates or updates a memory with semantic chunking & categorization.' },
-                  { name: 'smart_upsert_memory', desc: 'Uses LLM to intelligently merge new knowledge into an existing note.' },
-                  { name: 'search_memory', desc: 'Hybrid semantic + BM25 search across memories.' },
-                  { name: 'read_memory', desc: 'Fetches complete markdown content & metadata for a note.' },
-                  { name: 'delete_memory', desc: 'Soft-deletes or permanently purges a memory.' },
-                  { name: 'list_memory_versions', desc: 'Inspects revision history and content diffs.' },
-                  { name: 'revert_memory', desc: 'Rolls back a note to any previous historical snapshot.' },
-                  { name: 'list_available_models', desc: 'Discovers active local Ollama and remote LLMs.' },
+                  { name: 'store', desc: 'Stores a memory into the system. If no category is given, auto-categorizes using the 11-category taxonomy.' },
+                  { name: 'update', desc: 'Updates an existing memory. Overwrites, merges, or appends new information cleanly.' },
+                  { name: 'delete', desc: 'Deletes a memory across disk markdown storage, SQLite DB index, and ChromaDB vector store.' },
+                  { name: 'fetch', desc: 'Fetches full memory metadata and markdown content by ID/title, or lists stored memories.' },
+                  { name: 'hybrid_fetch', desc: 'Performs 50/30/20 weighted hybrid RAG search combining vector similarity, tag matches, and categories.' },
                 ].map((tool) => (
                   <div key={tool.name} className="p-3.5 rounded-xl border border-border bg-surface-hover/40 space-y-1">
                     <span className="font-mono font-bold text-xs text-foreground block">
@@ -309,8 +308,38 @@ def memorize(title: str, content: str):
                   </div>
                 ))}
               </div>
+
+              {/* Predefined Categories Taxonomy */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center gap-2">
+                  <Folder className="w-4 h-4 text-foreground" />
+                  <h3 className="text-sm font-bold text-foreground">Standard Categories Taxonomy for AI Auto-Assignment</h3>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  {[
+                    { cat: 'personal', desc: 'Habits, daily routine, diary, health, sleep, preferences, contacts, bio.' },
+                    { cat: 'development', desc: 'Code snippets, languages (Python, TS, Rust), frameworks, algorithms, CSS, git.' },
+                    { cat: 'projects', desc: 'App builds, side projects, product specs, feature roadmaps, blueprints.' },
+                    { cat: 'job', desc: 'Career history, resume, employment, interviews, company projects, salary.' },
+                    { cat: 'education', desc: 'College/university courses, study notes, degrees, exam prep, academic papers.' },
+                    { cat: 'finance', desc: 'Budget, expenses, stock portfolio, investments, crypto, banking, tax.' },
+                    { cat: 'gaming', desc: 'Video games, gameplay strategies, achievements, platforms (Steam, PS5).' },
+                    { cat: 'achievements', desc: 'Competitive exam ranks (JEE, SAT), awards, hackathon prizes, milestones.' },
+                    { cat: 'integration', desc: 'MCP servers, APIs, webhooks, SSH, WSL, cloud pipelines, OAuth setup.' },
+                    { cat: 'media', desc: 'Books, movies, podcasts, reading lists, YouTube channels, OCR scans.' },
+                    { cat: 'others', desc: 'Miscellaneous reference material and temporary unclassified notes.' },
+                  ].map((c) => (
+                    <div key={c.cat} className="p-2.5 rounded-lg border border-border bg-surface-list space-y-0.5">
+                      <span className="font-mono font-bold text-xs text-foreground block">📂 {c.cat}</span>
+                      <span className="text-[10px] text-muted-foreground block leading-tight">{c.desc}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
+
+
 
           {/* SECTION 5: KEYBOARD SHORTCUTS */}
           {activeSection === 'shortcuts' && (

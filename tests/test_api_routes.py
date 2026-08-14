@@ -36,6 +36,21 @@ class TestAPIRoutes(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("categories", response.json())
 
+    def test_settings_endpoints(self):
+        get_resp = client.get("/api/settings")
+        self.assertEqual(get_resp.status_code, 200)
+        self.assertIn("settings", get_resp.json())
+
+        post_resp = client.post("/api/settings", json={"use_llm": True, "embedding_model": "bge-m3"})
+        self.assertEqual(post_resp.status_code, 200)
+        self.assertEqual(post_resp.json()["settings"]["use_llm"], True)
+        self.assertEqual(post_resp.json()["settings"]["embedding_model"], "bge-m3")
+
+        # Reset settings
+        reset_resp = client.post("/api/settings/reset")
+        self.assertEqual(reset_resp.status_code, 200)
+
 
 if __name__ == "__main__":
     unittest.main()
+

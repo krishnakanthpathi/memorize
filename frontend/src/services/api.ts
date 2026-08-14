@@ -276,4 +276,25 @@ export const api = {
       total_count: data.total_count || (data.all_models ? data.all_models.length : 0),
     };
   },
+
+  // Configuration & Settings
+  async getSettings(): Promise<Record<string, any>> {
+    const res = await fetch(`${API_BASE}/settings`);
+    if (!res.ok) throw new Error(`Fetch settings failed: ${res.statusText}`);
+    const data = await res.json();
+    return data.settings || {};
+  },
+
+  async updateSettings(settings: Record<string, any>): Promise<Record<string, any>> {
+    const res = await fetch(`${API_BASE}/settings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(settings),
+    });
+    if (!res.ok) throw new Error(`Update settings failed: ${res.statusText}`);
+    const data = await res.json();
+    return data.settings || {};
+  },
 };
+
+

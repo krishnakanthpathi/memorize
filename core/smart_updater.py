@@ -2,6 +2,7 @@ import re
 from typing import Optional
 
 from config.prompts import SMART_MERGE_SYSTEM_PROMPT
+from config.settings import get_setting
 from core.logger import handle_errors, logger
 from utils.llm_client import generate_llm_response
 
@@ -15,7 +16,8 @@ def smart_merge_memory_content(
     title: str = "Memory",
 ) -> str:
     """
-    Intelligently merges new information or edit prompts into existing memory content using LLM.
+    Intelligently merges new information or edit prompts into existing memory content using LLM
+    if use_llm is enabled; otherwise performs fast clean deterministic append/merge.
     Provides robust fallback to section appending if LLM generation fails.
     """
     if not existing_content.strip():
@@ -23,6 +25,12 @@ def smart_merge_memory_content(
 
     if not new_input.strip():
         return existing_content.strip()
+
+    # If LLM is disabled via settings or mcp/config.py, perform fast deterministic merge
+    if not get_setting("use_llm", False):
+        if new_input.strip() in existing_content:
+            return existing_content.strip()
+        return f"{existing_content.strip()}\n\n{new_input.strip()}"
 
     prompt = (
         f"Title: {title}\n\n"
@@ -32,6 +40,7 @@ def smart_merge_memory_content(
         f"{new_input.strip()}\n\n"
         f"Generate the updated Markdown body integrating all changes cleanly:"
     )
+
 
     try:
         merged_output = generate_llm_response(

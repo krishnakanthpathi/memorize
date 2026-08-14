@@ -55,6 +55,13 @@ export const SettingsPanel: React.FC = () => {
   const [testLoading, setTestLoading] = useState(false);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
 
+  // MCP & Model Settings
+  const [useLlm, setUseLlm] = useState<boolean>(false);
+  const [embeddingModel, setEmbeddingModel] = useState<string>('all-MiniLM-L6-v2');
+  const [classificationModel, setClassificationModel] = useState<string>('gpt-oss:120b-cloud');
+  const [fallbackModel, setFallbackModel] = useState<string>('all-MiniLM-L6-v2');
+  const [embeddingProvider, setEmbeddingProvider] = useState<string>('local');
+
   // Storage audit & repair state
   const [auditData, setAuditData] = useState<AuditSummary | null>(null);
   const [auditLoading, setAuditLoading] = useState(false);
@@ -66,6 +73,21 @@ export const SettingsPanel: React.FC = () => {
 
   // Shortcuts customization presets
   const [shortcutPreset, setShortcutPreset] = useState<'standard' | 'vim' | 'compact'>('standard');
+
+  const loadBackendSettings = async () => {
+    try {
+      const s = await api.getSettings();
+      if (s) {
+        if (typeof s.use_llm === 'boolean') setUseLlm(s.use_llm);
+        if (s.embedding_model) setEmbeddingModel(s.embedding_model);
+        if (s.classification_model) setClassificationModel(s.classification_model);
+        if (s.fallback_model) setFallbackModel(s.fallback_model);
+        if (s.embedding_provider) setEmbeddingProvider(s.embedding_provider);
+      }
+    } catch (err) {
+      console.error('Failed to load settings from backend:', err);
+    }
+  };
 
   const loadAllModels = async () => {
     setLoadingModels(true);
@@ -107,6 +129,7 @@ export const SettingsPanel: React.FC = () => {
   };
 
   useEffect(() => {
+    loadBackendSettings();
     loadAllModels();
     loadAudit();
   }, []);
@@ -123,15 +146,40 @@ export const SettingsPanel: React.FC = () => {
     return () => window.removeEventListener('keydown', handleEsc);
   }, [setActiveView]);
 
-  const handleSaveSettings = () => {
+  const handleToggleLlm = async () => {
+    const nextVal = !useLlm;
+    setUseLlm(nextVal);
+    try {
+      await api.updateSettings({ use_llm: nextVal });
+    } catch (err) {
+      console.error('Failed to update LLM setting:', err);
+    }
+  };
+
+  const handleSaveSettings = async () => {
     localStorage.setItem('memorize_theme', theme);
     localStorage.setItem('memorize_code_theme', codeTheme);
     localStorage.setItem('memorize_app_icon', appIcon);
     localStorage.setItem('memorize_selected_model', selectedModel);
     localStorage.setItem('memorize_selected_provider', selectedProvider);
-    setSaveStatus('Configuration Saved Successfully!');
+
+    try {
+      await api.updateSettings({
+        use_llm: useLlm,
+        embedding_model: embeddingModel,
+        classification_model: classificationModel,
+        fallback_model: fallbackModel,
+        embedding_provider: embeddingProvider,
+        llm_provider: selectedProvider,
+        ollama_model: selectedModel,
+      });
+      setSaveStatus('Configuration & MCP Settings Saved Successfully!');
+    } catch (err: any) {
+      setSaveStatus(`Saved locally (backend sync: ${err.message})`);
+    }
     setTimeout(() => setSaveStatus(null), 3000);
   };
+
 
   const handleTestChat = async () => {
     setTestLoading(true);
@@ -407,13 +455,13 @@ export const SettingsPanel: React.FC = () => {
           </div>
         </section>
 
-        {/* Section 3: UNIFIED MERGED LLM ENGINE CONFIGURATION */}
+        {/* Section 3: MCP & UNIFIED MODEL CONFIGURATION */}
         <section className="space-y-4">
           <div className="flex items-center justify-between border-b border-border/60 pb-2">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-foreground" />
               <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                Unified LLM Engine & Discovered Models
+                MCP Model Parameters & LLM Engine Control
               </h3>
             </div>
             <button
@@ -424,10 +472,127 @@ export const SettingsPanel: React.FC = () => {
             </button>
           </div>
 
+          {/* Master LLM Toggle Switch Card */}
+          <div className="p-4 rounded-xl border border-border bg-surface-hover/60 flex items-center justify-between gap-4">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-xs text-foreground">
+                  LLM AI Augmentation Mode
+                </span>
+                <span className={cn(
+                  "px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase",
+                  useLlm ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-muted text-muted-foreground border border-border"
+                )}>
+                  {useLlm ? "Enabled" : "Offline / Disabled"}
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {useLlm
+                  ? "LLM is active for smart context merging, auto-classification, and AI chat."
+                  : "LLM is disabled. Fast deterministic mode: rule-based classification, direct memory storage, zero latency."}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleToggleLlm}
+              className={cn(
+                "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                useLlm ? "bg-foreground" : "bg-border"
+              )}
+            >
+              <span
+                className={cn(
+                  "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-background shadow-lg ring-0 transition duration-200 ease-in-out",
+                  useLlm ? "translate-x-5" : "translate-x-0"
+                )}
+              />
+            </button>
+          </div>
+
+          {/* MCP Model Parameters: Embedding, Classification, Fallback */}
+          <div className="p-4 rounded-xl bg-surface-hover/40 border border-border space-y-4">
+            <div className="flex items-center gap-2 pb-2 border-b border-border/40">
+              <Sliders className="w-3.5 h-3.5 text-muted-foreground" />
+              <span className="text-xs font-semibold text-foreground">MCP Model Parameters</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Active Embedding Model */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-mono font-medium text-muted-foreground uppercase">
+                  Embedding Model
+                </label>
+                <input
+                  type="text"
+                  value={embeddingModel}
+                  onChange={(e) => setEmbeddingModel(e.target.value)}
+                  placeholder="all-MiniLM-L6-v2"
+                  className="w-full bg-surface-list border border-border rounded-lg px-2.5 py-1.5 text-xs font-mono text-foreground focus:ring-1 focus:ring-ring outline-none"
+                />
+                <span className="text-[10px] text-muted-foreground block font-mono">e.g. nomic-embed-text, bge-m3</span>
+              </div>
+
+              {/* Classification Model */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-mono font-medium text-muted-foreground uppercase">
+                  Classification Model
+                </label>
+                <input
+                  type="text"
+                  value={classificationModel}
+                  onChange={(e) => setClassificationModel(e.target.value)}
+                  placeholder="gpt-oss:120b-cloud"
+                  className="w-full bg-surface-list border border-border rounded-lg px-2.5 py-1.5 text-xs font-mono text-foreground focus:ring-1 focus:ring-ring outline-none"
+                />
+                <span className="text-[10px] text-muted-foreground block font-mono">Used when LLM is enabled</span>
+              </div>
+
+              {/* Fallback Model */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-mono font-medium text-muted-foreground uppercase">
+                  Fallback Model
+                </label>
+                <input
+                  type="text"
+                  value={fallbackModel}
+                  onChange={(e) => setFallbackModel(e.target.value)}
+                  placeholder="all-MiniLM-L6-v2"
+                  className="w-full bg-surface-list border border-border rounded-lg px-2.5 py-1.5 text-xs font-mono text-foreground focus:ring-1 focus:ring-ring outline-none"
+                />
+                <span className="text-[10px] text-muted-foreground block font-mono">Offline local fallback</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Active 5 Core MCP Tools Status Card */}
+          <div className="p-4 rounded-xl bg-surface-hover/30 border border-border space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-foreground">Registered MCP Core Tools (5 Lean Tools)</span>
+              <span className="px-2 py-0.5 rounded bg-surface-selected font-mono text-[10px] font-bold text-foreground">
+                Active &amp; Ready
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 pt-1">
+              {[
+                { name: 'store', desc: 'Auto-categorizes & creates/appends' },
+                { name: 'update', desc: 'Updates or merges note content' },
+                { name: 'delete', desc: 'Deletes note from DB & vector' },
+                { name: 'fetch', desc: 'Retrieves note or lists memories' },
+                { name: 'hybrid_fetch', desc: '50/30/20 weighted RAG search' },
+              ].map((t) => (
+                <div key={t.name} className="p-2 rounded-lg bg-surface-list border border-border/60 space-y-0.5">
+                  <span className="font-mono font-bold text-[11px] text-foreground block">⚡ {t.name}</span>
+                  <span className="text-[10px] text-muted-foreground block leading-tight">{t.desc}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="p-4 rounded-xl bg-surface-hover/60 border border-border space-y-4">
             <div>
               <label className="text-[11px] text-muted-foreground block mb-1.5 font-medium">
-                Active Unified Model (Ollama Local & OpenAI Remote):
+                Active Chat Model (Ollama Local & OpenAI Remote):
               </label>
               <select
                 value={`${selectedProvider}::${selectedModel}`}
@@ -557,6 +722,7 @@ export const SettingsPanel: React.FC = () => {
             </div>
           </div>
         </section>
+
 
         {/* Section 4: Keyboard Shortcuts Customization & Presets */}
         <section className="space-y-3">

@@ -35,32 +35,38 @@ def test_settings_functions(tmp_path: Path):
     assert data.get("llm_provider") == "openai"
     assert data.get("search_top_k") == 8
 
+    # Test use_llm and model parameters
+    assert set_setting("use_llm", "true", filepath=settings_file) is True
+    assert get_setting("use_llm") is True
+    assert set_setting("use_llm", False, filepath=settings_file) is True
+    assert get_setting("use_llm") is False
+    assert set_setting("embedding_model", "bge-m3", filepath=settings_file) is True
+    assert get_setting("embedding_model") == "bge-m3"
+
     # Reset settings
     assert reset_settings(filepath=settings_file) is True
     assert get_setting("llm_provider") == "ollama"
     assert get_setting("search_top_k") == 4
 
 
-
-
-def test_parse_and_execute_tool_create_memory():
-    raw_llm_json = '```json\n{"tool": "create_memory", "parameters": {"title": "Test Ollama Tool Memory", "content": "Sample content from tool", "category": "projects", "tags": ["ollama", "test"]}}\n```'
+def test_parse_and_execute_tool_store():
+    raw_llm_json = '```json\n{"tool": "store", "parameters": {"title": "Test Lean Tool Memory", "content": "Sample content from tool", "category": "projects", "tags": ["lean", "test"]}}\n```'
     exec_result, _ = parse_and_execute_tool(raw_llm_json)
     
     assert exec_result is not None
-    assert exec_result.get("tool") == "create_memory"
+    assert exec_result.get("tool") == "store"
     assert exec_result.get("status") == "success"
     result_data = exec_result.get("result", {})
     assert result_data.get("status") == "success"
-    assert result_data.get("title") == "Test Ollama Tool Memory"
+    assert result_data.get("title") == "Test Lean Tool Memory"
 
 
-
-def test_parse_and_execute_tool_search_memories():
-    raw_llm_json = '{"tool": "search_memories", "parameters": {"query": "test"}}'
+def test_parse_and_execute_tool_hybrid_fetch():
+    raw_llm_json = '{"tool": "hybrid_fetch", "parameters": {"query": "test"}}'
     exec_result, _ = parse_and_execute_tool(raw_llm_json)
     
     assert exec_result is not None
-    assert exec_result.get("tool") == "search_memories"
+    assert exec_result.get("tool") == "hybrid_fetch"
     assert exec_result.get("status") == "success"
     assert isinstance(exec_result.get("result"), list)
+
