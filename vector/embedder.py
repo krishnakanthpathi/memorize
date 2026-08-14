@@ -1,8 +1,21 @@
+import logging
 import os
-import requests
-
+import warnings
 from typing import List, Optional, Union
 
+import requests
+
+# Suppress HuggingFace / Transformers warnings and progress bars from polluting the CLI
+os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"
+
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
+
+for noisy_lib in ("transformers", "sentence_transformers", "huggingface_hub"):
+    logging.getLogger(noisy_lib).setLevel(logging.ERROR)
 
 from config.constants import (
     EMBEDDING_MODEL_NAME,

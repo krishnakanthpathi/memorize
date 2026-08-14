@@ -44,12 +44,18 @@ FALLBACK_EMBEDDING_MODEL = os.getenv("FALLBACK_EMBEDDING_MODEL", "all-MiniLM-L6-
 # Embedding Provider Selection: "local" (default), "openai", "ollama", or "auto"
 EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "local").lower()
 
-# OpenAI primary model
+# LLM Generation & Chat Engine Configuration
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama").lower()
+LLM_MODEL = os.getenv("LLM_MODEL", os.getenv("DEFAULT_LLM_MODEL", "gpt-oss:120b-cloud"))
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", os.getenv("OLLAMA_CLASSIFICATION_MODEL", "gpt-oss:120b-cloud"))
+
+# OpenAI primary model & endpoints
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://bedrock-mantle.ap-southeast-2.api.aws/v1")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 EMBEDDING_MODEL_NAME = os.getenv("ACTIVE_EMBEDDING_MODEL", "titan-embed-text-v2")
 
-# Ollama embeddings model
+# Ollama embeddings & model
 OLLAMA_EMBEDDING_MODEL = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
@@ -73,6 +79,9 @@ MODEL_CHUNK_CONFIGS = {
     
     # Ollama Models
     "nomic-embed-text": {"chunk_size": 500, "overlap": 50},
+    "nomic-embed-text:latest": {"chunk_size": 500, "overlap": 50},
+    "bge-m3": {"chunk_size": 512, "overlap": 50},
+    "bge-m3:latest": {"chunk_size": 512, "overlap": 50},
     "mxbai-embed-large": {"chunk_size": 512, "overlap": 50},
     
     # Local HuggingFace Models

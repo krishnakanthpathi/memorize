@@ -20,13 +20,9 @@ def chat_companion_endpoint(req: ChatRequest):
 
     context_str = "\n\n".join(context_snippets) if context_snippets else "No relevant memories found in database."
 
-    system_prompt = (
-        "You are Memorize AI Companion — a helpful, highly knowledgeable personal friend and assistant. "
-        "You have direct access to the user's stored personal, technical, and project memories. "
-        "Use the retrieved memory context below to answer the user's questions accurately and concisely.\n\n"
-        f"RETRIEVED MEMORY CONTEXT:\n{context_str}\n\n"
-        "Guidelines: Be friendly, direct, clear, and professional. Reference memories naturally when applicable."
-    )
+    from config.prompts import get_prompt
+
+    system_prompt = get_prompt("companion", context_str=context_str)
 
     reply = generate_llm_response(
         prompt=req.message,

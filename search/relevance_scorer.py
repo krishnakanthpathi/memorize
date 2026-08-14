@@ -126,11 +126,13 @@ def search_hybrid_relevance(
 
     vector_results = []
     if query_embeddings:
-        vector_results = query_vector_db(
+        raw_res = query_vector_db(
             query_embedding=query_embeddings[0],
             n_results=top_k * 4,
             category_filter=None,
         )
+        if isinstance(raw_res, list):
+            vector_results = raw_res
 
     # 3. Load SQLite metadata to enrich candidate memories
     all_indexed = get_all_memories()
@@ -139,10 +141,11 @@ def search_hybrid_relevance(
     vector_sim_map = {}
     vector_item_map = {}
     for item in vector_results:
-        mem_id = item.get("memory_id", "")
-        if mem_id and mem_id not in vector_sim_map:
-            vector_sim_map[mem_id] = item.get("similarity_score", 0.0)
-            vector_item_map[mem_id] = item
+        if isinstance(item, dict):
+            mem_id = item.get("memory_id", "")
+            if mem_id and mem_id not in vector_sim_map:
+                vector_sim_map[mem_id] = item.get("similarity_score", 0.0)
+                vector_item_map[mem_id] = item
 
     # 4. Gather candidate memory IDs (from vector search + direct SQLite keyword matches)
     candidate_ids = set(vector_sim_map.keys())
@@ -224,11 +227,14 @@ def search_vector_similarity(
         return []
 
     # 2. Query ChromaDB for vector similarity matches
-    vector_results = query_vector_db(
+    vector_results = []
+    raw_res = query_vector_db(
         query_embedding=query_embeddings[0],
         n_results=top_k * 3,
         category_filter=category_filter if category_filter else None,
     )
+    if isinstance(raw_res, list):
+        vector_results = raw_res
 
     # 3. Load SQLite metadata to enrich memories
     all_indexed = get_all_memories()
@@ -238,6 +244,8 @@ def search_vector_similarity(
     seen_memory_ids = set()
 
     for item in vector_results:
+        if not isinstance(item, dict):
+            continue
         memory_id = item.get("memory_id", "")
         if not memory_id or memory_id in seen_memory_ids:
             continue

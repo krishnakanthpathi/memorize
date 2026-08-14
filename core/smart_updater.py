@@ -1,20 +1,11 @@
 import re
 from typing import Optional
 
+from config.prompts import SMART_MERGE_SYSTEM_PROMPT
 from core.logger import handle_errors, logger
 from utils.llm_client import generate_llm_response
 
-SMART_UPDATE_SYSTEM_PROMPT = (
-    "You are an expert AI memory manager. Your task is to intelligently merge new information into an existing "
-    "Markdown memory document.\n"
-    "Rules:\n"
-    "1. Preserve unchanged context and structure from the existing memory.\n"
-    "2. Replace outdated or superseded details with the new facts.\n"
-    "3. Seamlessly integrate new details into relevant existing sections or add new logical section headers if needed.\n"
-    "4. Do NOT naively append '### Update' sections at the bottom unless it represents a distinct timeline event.\n"
-    "5. Do NOT include conversation preambles, intros, or markdown block ticks (e.g. ```markdown ... ```).\n"
-    "6. Output ONLY the complete, cleanly updated Markdown content body."
-)
+SMART_UPDATE_SYSTEM_PROMPT = SMART_MERGE_SYSTEM_PROMPT
 
 
 @handle_errors

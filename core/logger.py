@@ -20,11 +20,26 @@ if not logger.handlers:
 
 def configure_cli_logging(level=logging.WARNING):
     """
-    Configures logging verbosity for CLI interactive / execution modes.
+    Configures logging verbosity for CLI interactive / execution modes and silences third-party chatter.
     """
     logger.setLevel(level)
     for h in logger.handlers:
         h.setLevel(level)
+
+    # Silence noisy 3rd party loggers during CLI interactions
+    for noisy_logger in [
+        "httpx",
+        "httpcore",
+        "urllib3",
+        "sentence_transformers",
+        "transformers",
+        "huggingface_hub",
+        "chromadb",
+        "chromadb.telemetry",
+        "chromadb.segment",
+        "tqdm",
+    ]:
+        logging.getLogger(noisy_logger).setLevel(logging.ERROR)
 
 
 

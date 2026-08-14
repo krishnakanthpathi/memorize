@@ -27,7 +27,7 @@ def handle_list(category: Optional[str] = None, tag: Optional[str] = None):
 
 def handle_search(query: str, category: Optional[str] = None):
     results = search_hybrid_relevance(query=query, category_filter=category, top_k=5)
-    printer.print_search_results(results, query=query)
+    printer.print_search_results(query=query, results=results)
 
 
 def handle_create(
@@ -68,6 +68,8 @@ def handle_settings(key: Optional[str] = None, value: Optional[str] = None):
 
 
 def handle_chat(message: str):
+    from config.prompts import get_prompt
+
     provider = get_setting("llm_provider", "ollama")
     model = get_setting("ollama_model", "gpt-oss:120b-cloud")
     base_url = get_setting("ollama_base_url", "http://localhost:11434")
@@ -76,66 +78,82 @@ def handle_chat(message: str):
     tool_exec = get_setting("tool_execution", True)
     temp = float(get_setting("temperature", 0.3))
 
-
     search_results = []
     context_str = "No relevant memory context attached."
-    if auto_context:
-        search_results = search_hybrid_relevance(query=message, top_k=top_k)
-        if search_results:
-            context_snippets = [
-                f"[{idx}] Title: {item.get('title')}\nCategory: {item.get('category')}\nExcerpt: {item.get('snippet') or item.get('content', '')}"
-                for idx, item in enumerate(search_results, start=1)
-            ]
-            context_str = "\n\n".join(context_snippets)
+    reply = ""
+    tool_res = None
+    mem_used = []
 
-    tool_instruction = ""
-    if tool_exec:
-        tool_instruction = (
-            "\nAVAILABLE TOOLS:\n"
-            "- create_memory: Save a new memory into the system\n"
-            "  Parameters: title: str (required), content: str = \"\", category: str = \"personal\", tags: Optional[List[str]] = None\n"
-            "- search_memories: Search stored memories (parameters: query: str, category: Optional[str] = None)\n"
-            "If the user explicitly asks you to create/remember/store something or search something specific and you need to invoke a tool, "
-            "respond ONLY with a valid JSON object in this format:\n"
-            '{"tool": "create_memory", "parameters": {"title": "Title", "content": "Content", "category": "personal", "tags": ["tag1"]}}\n'
-        )
+    with printer.console.status(f"[bold orange1]🤔 Memorize is thinking with {model}...[/bold orange1]", spinner="dots") as status:
+        if auto_context:
+            status.update("[bold orange1]🧠 Retrieving relevant memory context & querying vector DB...[/bold orange1]")
+            search_results = search_hybrid_relevance(query=message, top_k=top_k)
+            if search_results:
+                context_snippets = [
+                    f"[{idx}] Title: {item.get('title')}\nCategory: {item.get('category')}\nExcerpt: {item.get('snippet') or item.get('content', '')}"
+                    for idx, item in enumerate(search_results, start=1)
+                ]
+                context_str = "\n\n".join(context_snippets)
 
-    system_prompt = (
-        "You are Memorize AI Companion powered by Ollama. "
-        "You have direct access to stored personal, project, and technical memories.\n"
-        f"{tool_instruction}\n"
-        f"RETRIEVED MEMORY CONTEXT:\n{context_str}\n\n"
-        "Guidelines: Be concise, friendly, helpful, and reference retrieved memories accurately."
-    )
+        system_prompt = get_prompt("companion", context_str=context_str)
 
-    try:
-        reply = generate_llm_response(
-            prompt=message,
-            system_prompt=system_prompt,
-            model=model,
-            temperature=temp,
-            provider=provider,
-            base_url=base_url,
-        )
+        try:
+            status.update(f"[bold orange1]🤖 Synthesizing response with {model}...[/bold orange1]")
+            reply = generate_llm_response(
+                prompt=message,
+                system_prompt=system_prompt,
+                model=model,
+                temperature=temp,
+                provider=provider,
+                base_url=base_url,
+            )
 
-        tool_res = None
-        if tool_exec:
-            tool_res, raw_reply = parse_and_execute_tool(reply)
-            if tool_res:
-                t_name = tool_res.get("tool")
-                if t_name == "create_memory":
-                    res_data = tool_res.get("result", {})
-                    reply = f"Memory saved successfully! Title: '{res_data.get('title')}' (ID: {res_data.get('memory_id')}, Category: {res_data.get('category')})."
-                elif t_name == "search_memories":
-                    res_data = tool_res.get("result", [])
-                    res_titles = [m.get("title") for m in res_data] if isinstance(res_data, list) else []
-                    reply = f"Found {len(res_titles)} matching memory/memories: {', '.join(res_titles) if res_titles else 'None'}."
+            if tool_exec:
+                status.update("[bold orange1]⚡ Processing memory tool execution...[/bold orange1]")
+                tool_res, raw_reply = parse_and_execute_tool(reply)
+                if tool_res:
+                    t_name = tool_res.get("tool")
+                    if t_name == "create_memory":
+                        res_data = tool_res.get("result", {})
+                        reply = f"Memory saved successfully! Title: '{res_data.get('title')}' (ID: {res_data.get('memory_id')}, Category: {res_data.get('category')})."
+                    elif t_name == "search_memories":
+                        res_data = tool_res.get("result", [])
+                        res_titles = [m.get("title") for m in res_data] if isinstance(res_data, list) else []
+                        reply = f"Found {len(res_titles)} matching memory/memories: {', '.join(res_titles) if res_titles else 'None'}."
+                    elif t_name in ("read_memory", "get_memory", "read"):
+                        res_data = tool_res.get("result", {})
+                        if res_data.get("status") != "error":
+                            reply = f"📖 **{res_data.get('title')}** (`{res_data.get('memory_id')}` | Category: {res_data.get('category')})\n\n{res_data.get('content')}"
+                        else:
+                            reply = f"Could not find memory details: {res_data.get('message', 'Not found')}."
+                    elif t_name in ("delete_memory", "delete"):
+                        res_data = tool_res.get("result", {})
+                        reply = f"Memory deleted: {res_data.get('message', 'Success')}."
+                    elif t_name in ("clear_all_memories", "clear_all", "reset_memories", "purge_all"):
+                        reply = "All stored memories, SQLite index records, and vector embeddings have been cleared successfully."
+                    elif t_name in ("list_memories", "list"):
+                        res_data = tool_res.get("result", [])
+                        titles = [f"• {m.get('title')} ({m.get('id')})" for m in res_data] if isinstance(res_data, list) else []
+                        reply = f"Stored memories ({len(titles)}):\n" + "\n".join(titles) if titles else "No memories found."
 
-        mem_used = [{"id": m.get("id"), "title": m.get("title"), "category": m.get("category")} for m in search_results]
-        printer.print_chat_reply(message=message, reply=reply, memories_used=mem_used, tool_executed=tool_res)
+            seen_ids = set()
+            mem_used = []
+            for m in search_results:
+                m_id = m.get("id") or m.get("memory_id")
+                if m_id and m_id not in seen_ids:
+                    seen_ids.add(m_id)
+                    m_title = m.get("title") or m_id
+                    mem_used.append({
+                        "id": m_id,
+                        "title": m_title,
+                        "category": m.get("category", "personal"),
+                    })
 
-    except Exception as e:
-        printer.print_error(f"Ollama chat error: {e}")
+        except Exception as e:
+            printer.print_error(f"Ollama chat error: {e}")
+            return
+
+    printer.print_chat_reply(message=message, reply=reply, memories_used=mem_used, tool_executed=tool_res)
 
 
 def handle_read(memory_id_or_path: str):
@@ -143,11 +161,7 @@ def handle_read(memory_id_or_path: str):
     if res.get("status") == "error":
         printer.print_error(res.get("message"))
     else:
-        printer.print_info(f"Memory Details for '{memory_id_or_path}':")
-        if printer.console:
-            printer.console.print(res)
-        else:
-            print(res)
+        printer.print_memory_details(res)
 
 
 def handle_delete(memory_id: str):
@@ -156,6 +170,20 @@ def handle_delete(memory_id: str):
         printer.print_success(f"Successfully deleted memory '{memory_id}'.")
     else:
         printer.print_error(res.get("message", "Error deleting memory."))
+
+
+def handle_clear_all():
+    """
+    Prompts user for confirmation before wiping all memories across disk, DB, and ChromaDB.
+    """
+    confirm = printer.console.input("[bold red]⚠️ Are you sure you want to delete ALL stored memories? (y/N): [/bold red]").strip().lower()
+    if confirm in ("y", "yes"):
+        from storage.sync_manager import clear_all_memories
+        with printer.console.status("[bold red]🧹 Clearing all memories from disk, SQLite DB, and ChromaDB...[/bold red]", spinner="dots"):
+            res = clear_all_memories()
+        printer.print_success("All stored memories, database records, and vector chunks have been cleared.")
+    else:
+        printer.print_info("Operation cancelled.")
 
 
 def handle_revert(memory_id: str, version: Optional[int] = None):
@@ -167,21 +195,48 @@ def handle_revert(memory_id: str, version: Optional[int] = None):
 
 
 def handle_audit():
-    report = audit_storage_integrity(auto_fix=False)
+    with printer.console.status("[bold orange1]⚙️ Running storage integrity & orphan diagnostics...[/bold orange1]", spinner="dots"):
+        report = audit_storage_integrity(auto_fix=False)
     printer.print_audit_report(report)
 
 
-def handle_clean_orphans():
-    f_res = delete_orphan_files()
-    i_res = delete_orphan_indexes()
-    c_res = delete_orphan_chunks()
-    printer.print_success(
-        f"Cleaned orphans — Deleted files: {f_res.get('deleted_count')}, "
-        f"Indexes: {i_res.get('deleted_count')}, Chunks: {c_res.get('deleted_count')}."
-    )
+def handle_purge_orphans():
+    with printer.console.status("[bold orange1]🧹 Purging orphan database records & vector chunks...[/bold orange1]", spinner="dots"):
+        i_res = delete_orphan_indexes()
+        c_res = delete_orphan_chunks()
+    del_indexes = i_res.get("deleted_count", 0)
+    del_chunks = c_res.get("deleted_count", 0)
+    if del_indexes or del_chunks:
+        printer.print_success(
+            f"Purged dead records — Removed {del_indexes} orphan DB index record(s) and {del_chunks} orphan ChromaDB chunk(s)."
+        )
+    else:
+        printer.print_info("No orphan DB records or vector chunks found to purge.")
+
+
+# Alias for backwards compatibility
+handle_clean_orphans = handle_purge_orphans
 
 
 def handle_recover_orphans():
-    res = recover_orphaned_documents()
-    printer.print_success(f"Recovered {res.get('recovered_count', 0)} document(s) with newly generated IDs.")
+    with printer.console.status("[bold orange1]🩹 Scanning & recovering unindexed markdown documents...[/bold orange1]", spinner="dots"):
+        res = recover_orphaned_documents()
+    rec_count = res.get("recovered_count", 0)
+    if rec_count:
+        printer.print_success(f"Recovered {rec_count} document(s) with newly generated IDs.")
+    else:
+        printer.print_info("No unindexed orphan markdown files found on disk.")
+
+
+def handle_sync():
+    printer.print_info("Running automatic storage synchronization & repair...")
+    with printer.console.status("[bold orange1]⚙️ Reconciling disk files, SQLite records, and ChromaDB embeddings...[/bold orange1]", spinner="dots"):
+        report = audit_storage_integrity(auto_fix=True)
+    res = report.get("auto_fix_results", {})
+    printer.print_success(
+        f"Storage synchronized — Recovered {res.get('recovered_documents', 0)} document(s), "
+        f"Purged {res.get('deleted_orphan_indexes', 0)} dead index(es), "
+        f"Purged {res.get('deleted_orphan_chunks', 0)} dead chunk(s)."
+    )
+    printer.print_audit_report(report)
 

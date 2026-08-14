@@ -166,9 +166,11 @@ def delete_orphan_chunks() -> Dict[str, Any]:
 def recover_orphaned_documents() -> Dict[str, Any]:
     """
     Scans unindexed Markdown files on disk, generates new IDs for documents missing IDs,
-    indexes them in the SQLite database, and creates vector embeddings in ChromaDB.
+    indexes them in-place in SQLite database, and creates vector embeddings in ChromaDB.
     """
-    from core.memory_service import execute_upsert_memory
+    from core.memory_service import reindex_memory_chunks
+    from storage.db_manager import upsert_memory_index
+    from storage.markdown_handler import create_markdown_file, normalize_title
 
     orphans = find_orphan_files()
     recovered_count = 0
@@ -181,26 +183,50 @@ def recover_orphaned_documents() -> Dict[str, Any]:
 
         frontmatter, content = read_markdown_file(file_path)
         mem_id = frontmatter.get("id") or generate_memory_id()
-        title = frontmatter.get("title") or file_path.stem.replace("_", " ").title()
+        raw_title = frontmatter.get("title") or file_path.stem.replace("_", " ").title()
+        title = normalize_title(raw_title)
         category = frontmatter.get("category") or orphan.get("category") or "personal"
         tags = frontmatter.get("tags") or []
+        created_at = frontmatter.get("created_at")
+        updated_at = frontmatter.get("updated_at")
+        content_hash = compute_string_hash(content)
 
-        res = execute_upsert_memory(
+        # Update the frontmatter in-place in the exact existing file
+        create_markdown_file(
+            memory_id=mem_id,
             title=title,
-            content=content,
-            action="update" if frontmatter.get("id") else "insert",
             category=category,
             tags=tags,
-            memory_id=mem_id,
+            content=content,
+            content_hash=content_hash,
+            created_at=created_at,
+            updated_at=updated_at,
+            file_path=file_path,
+            overwrite=True,
         )
 
-        if isinstance(res, dict) and res.get("status") == "success":
-            recovered_count += 1
-            recovered_details.append({
-                "memory_id": mem_id,
-                "title": title,
-                "file_path": str(file_path),
-            })
+        # Re-index vector chunks in ChromaDB
+        chunks, chunk_ids = reindex_memory_chunks(mem_id, content)
+
+        # Index in SQLite database
+        memory_entry = {
+            "id": mem_id,
+            "title": title,
+            "category": category,
+            "tags": tags,
+            "file_path": str(file_path.resolve()),
+            "content": content,
+            "content_hash": content_hash,
+            "chunk_ids": chunk_ids,
+        }
+        upsert_memory_index(memory_entry)
+
+        recovered_count += 1
+        recovered_details.append({
+            "memory_id": mem_id,
+            "title": title,
+            "file_path": str(file_path),
+        })
 
     return {
         "status": "success",
@@ -247,6 +273,11 @@ def audit_storage_integrity(auto_fix: bool = False) -> Dict[str, Any]:
             "deleted_orphan_chunks": deleted_chk.get("deleted_count", 0),
             "recovered_documents": recovered_docs.get("recovered_count", 0),
         }
+        # Refresh state after auto-fix
+        orphan_files = find_orphan_files()
+        orphan_indexes = find_orphan_indexes()
+        orphan_chunks = find_orphan_chunks()
+        hash_mismatches = []
 
     is_healthy = not (orphan_files or orphan_indexes or orphan_chunks or hash_mismatches)
 

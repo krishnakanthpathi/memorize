@@ -64,8 +64,9 @@ class TestSearchEngine(unittest.TestCase):
                 "tags": ["shopping", "food"],
             },
         ]
-        emb1 = [0.2] * 384
-        emb2 = [-0.2] * 384
+        from vector.embedder import generate_embeddings
+        emb1 = generate_embeddings([chunks[0]["text"]])[0]
+        emb2 = generate_embeddings([chunks[1]["text"]])[0]
         add_chunks_to_vector_db(chunks, [emb1, emb2])
 
     def tearDown(self):

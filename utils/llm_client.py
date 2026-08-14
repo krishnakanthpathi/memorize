@@ -1,17 +1,19 @@
 import json
 import os
+import re
 from typing import Optional
 import requests
 
 from config.constants import (
+    LLM_MODEL,
+    LLM_PROVIDER,
     OLLAMA_BASE_URL,
-    OLLAMA_CLASSIFICATION_MODEL,
+    OLLAMA_MODEL,
     OPENAI_API_KEY,
     OPENAI_BASE_URL,
+    OPENAI_MODEL,
 )
 from core.logger import logger
-
-DEFAULT_LLM_MODEL = os.getenv("DEFAULT_LLM_MODEL", "gpt-4o-mini")
 
 
 def generate_openai_response(
@@ -27,7 +29,7 @@ def generate_openai_response(
         raise ValueError("OPENAI_API_KEY is not configured.")
 
     import openai
-    chosen_model = model or DEFAULT_LLM_MODEL
+    chosen_model = model or OPENAI_MODEL or LLM_MODEL or "gpt-4o-mini"
     client = openai.OpenAI(base_url=OPENAI_BASE_URL, api_key=OPENAI_API_KEY)
 
     messages = []
@@ -57,7 +59,7 @@ def generate_ollama_response(
     """
     Generates text response using the Ollama REST API endpoint.
     """
-    ollama_model = model or OLLAMA_CLASSIFICATION_MODEL or "gpt-oss:120b-cloud"
+    ollama_model = model or OLLAMA_MODEL or LLM_MODEL or "gpt-oss:120b-cloud"
     effective_url = (base_url or OLLAMA_BASE_URL).rstrip("/")
     url = f"{effective_url}/api/generate"
     full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
@@ -88,7 +90,7 @@ def generate_llm_response(
     """
     Generates text response with optional provider routing or automatic fallback between OpenAI and Ollama.
     """
-    prov_lower = (provider or "").strip().lower()
+    prov_lower = (provider or LLM_PROVIDER or "ollama").strip().lower()
 
     if prov_lower == "openai":
         return generate_openai_response(prompt, system_prompt, model, temperature)
@@ -96,7 +98,7 @@ def generate_llm_response(
         return generate_ollama_response(prompt, system_prompt, model, temperature, base_url=base_url)
 
     # Automatic fallback: Try OpenAI first if configured, then Ollama
-    if OPENAI_API_KEY:
+    if OPENAI_API_KEY and OPENAI_BASE_URL:
         try:
             return generate_openai_response(prompt, system_prompt, model, temperature)
         except Exception as e:
@@ -111,10 +113,12 @@ def generate_llm_response(
 
 def execute_tool_call(tool_name: str, params: dict) -> dict:
     """
-    Executes tool calls requested by the LLM (e.g. search_memories, create_memory).
+    Executes tool calls requested by the LLM (e.g. search_memories, create_memory, read_memory, delete_memory, list_memories).
     """
-    from core.memory_service import execute_upsert_memory
+    from core.memory_service import execute_upsert_memory, handle_delete_memory
     from search.relevance_scorer import search_hybrid_relevance
+    from storage.db_manager import get_all_memories
+    from storage.sync_manager import get_memory_file_status
 
     tool_clean = tool_name.strip().lower()
     if tool_clean in ("create_memory", "store_memory", "upsert_memory"):
@@ -133,6 +137,23 @@ def execute_tool_call(tool_name: str, params: dict) -> dict:
             top_k=params.get("top_k", 4),
         )
         return {"tool": tool_clean, "status": "success", "result": results}
+    elif tool_clean in ("read_memory", "get_memory", "read"):
+        mem_id = params.get("memory_id") or params.get("id") or params.get("title", "")
+        res = get_memory_file_status(mem_id)
+        return {"tool": tool_clean, "status": "success" if res.get("status") != "error" else "error", "result": res}
+    elif tool_clean in ("delete_memory", "delete"):
+        mem_id = params.get("memory_id") or params.get("id", "")
+        res = handle_delete_memory(norm_title="", category="", memory_id=mem_id)
+        return {"tool": tool_clean, "status": "success" if res.get("status") == "success" else "error", "result": res}
+    elif tool_clean in ("list_memories", "list"):
+        cat = params.get("category")
+        tag = params.get("tag")
+        mems = get_all_memories(category_filter=cat, tag_filter=tag)
+        return {"tool": tool_clean, "status": "success", "result": mems}
+    elif tool_clean in ("clear_all_memories", "clear_all", "reset_memories", "purge_all", "delete_all"):
+        from storage.sync_manager import clear_all_memories
+        res = clear_all_memories()
+        return {"tool": "clear_all_memories", "status": "success", "result": res}
     else:
         return {"tool": tool_clean, "status": "error", "message": f"Unknown tool: {tool_name}"}
 
@@ -140,21 +161,16 @@ def execute_tool_call(tool_name: str, params: dict) -> dict:
 def parse_and_execute_tool(raw_response: str) -> tuple[Optional[dict], str]:
     """
     Parses LLM output for structured JSON tool invocation.
+    Robustly extracts embedded JSON objects even if accompanied by explanation text.
     Returns (tool_execution_result, final_or_raw_response).
     """
     cleaned = raw_response.strip()
-    # Try parsing direct JSON or JSON enclosed in ```json ```
-    json_str = None
-    if cleaned.startswith("```json") and cleaned.endswith("```"):
-        json_str = cleaned[7:-3].strip()
-    elif cleaned.startswith("```") and cleaned.endswith("```"):
-        json_str = cleaned[3:-3].strip()
-    elif cleaned.startswith("{") and cleaned.endswith("}"):
-        json_str = cleaned
 
-    if json_str:
+    # 1. Try stripping markdown code fences
+    fence_pattern = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, re.DOTALL)
+    if fence_pattern:
         try:
-            data = json.loads(json_str)
+            data = json.loads(fence_pattern.group(1))
             if isinstance(data, dict) and "tool" in data:
                 tool_name = data.get("tool")
                 params = data.get("parameters") or data.get("args") or {}
@@ -162,6 +178,24 @@ def parse_and_execute_tool(raw_response: str) -> tuple[Optional[dict], str]:
                 return exec_result, raw_response
         except Exception:
             pass
+
+    # 2. Try streaming raw JSON decoding from any opening '{'
+    idx = 0
+    while True:
+        start_idx = cleaned.find("{", idx)
+        if start_idx == -1:
+            break
+        try:
+            decoder = json.JSONDecoder()
+            data, end_pos = decoder.raw_decode(cleaned[start_idx:])
+            if isinstance(data, dict) and "tool" in data:
+                tool_name = data.get("tool")
+                params = data.get("parameters") or data.get("args") or {}
+                exec_result = execute_tool_call(tool_name, params)
+                return exec_result, raw_response
+        except Exception:
+            pass
+        idx = start_idx + 1
 
     return None, raw_response
 

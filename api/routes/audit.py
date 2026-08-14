@@ -16,6 +16,8 @@ from storage.sync_manager import (
 router = APIRouter(prefix="/api/audit", tags=["storage_audit"])
 
 
+@router.get("")
+@router.get("/")
 @router.get("/summary")
 def get_audit_summary_endpoint():
     return audit_storage_integrity(auto_fix=False)

@@ -21,7 +21,7 @@ from storage.markdown_handler import (
 )
 from storage.version_manager import create_version_snapshot
 from vector.chunker import chunk_text
-from vector.embedder import generate_local_embeddings
+from vector.embedder import generate_embeddings
 from vector.vector_db import add_chunks_to_vector_db, delete_chunks_by_memory_id
 
 
@@ -36,7 +36,7 @@ def reindex_memory_chunks(memory_id: str, content: str) -> tuple[list, list]:
 
     if chunks:
         chunk_texts = [c.get("text") or c.get("content", "") for c in chunks]
-        embeddings = generate_local_embeddings(chunk_texts)
+        embeddings = generate_embeddings(chunk_texts)
         add_chunks_to_vector_db(chunks, embeddings)
         chunk_ids = [c.get("chunk_id") or c.get("id", "") for c in chunks]
 

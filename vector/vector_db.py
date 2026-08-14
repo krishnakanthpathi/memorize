@@ -42,10 +42,12 @@ def get_chroma_client():
 def get_or_create_collection(collection_name: str = "memories"):
     """
     Retrieves or creates a ChromaDB collection using cosine similarity metric.
+    Explicitly sets embedding_function=None to support arbitrary embedding dimensions (e.g. 768, 1536).
     """
     client = get_chroma_client()
     return client.get_or_create_collection(
         name=collection_name,
+        embedding_function=None,
         metadata={"hnsw:space": "cosine"},
     )
 
@@ -102,12 +104,36 @@ def add_chunks_to_vector_db(
             "tags": tags_str,
         })
 
-    collection.upsert(
-        ids=ids,
-        embeddings=embeddings,
-        documents=documents,
-        metadatas=metadatas,
-    )
+    try:
+        collection.upsert(
+            ids=ids,
+            embeddings=embeddings,
+            documents=documents,
+            metadatas=metadatas,
+        )
+    except Exception as e:
+        err_msg = str(e)
+        if "dimension" in err_msg.lower() or "expecting embedding" in err_msg.lower():
+            logger.warning(
+                f"ChromaDB embedding dimension mismatch detected ({err_msg}). "
+                f"Recreating collection '{collection_name}' for updated embedding model..."
+            )
+            global CHROMA_CLIENT
+            client = get_chroma_client()
+            try:
+                client.delete_collection(name=collection_name)
+            except Exception:
+                pass
+            CHROMA_CLIENT = None
+            collection = get_or_create_collection(collection_name)
+            collection.upsert(
+                ids=ids,
+                embeddings=embeddings,
+                documents=documents,
+                metadatas=metadatas,
+            )
+        else:
+            raise e
 
     logger.info(
         f"Successfully added/updated {len(ids)} chunks in ChromaDB ('{collection_name}')."
@@ -132,12 +158,30 @@ def query_vector_db(
     collection = get_or_create_collection(collection_name)
     where_clause = {"category": category_filter} if category_filter else None
 
-    results = collection.query(
-        query_embeddings=[query_embedding],
-        n_results=n_results,
-        where=where_clause,
-        include=["documents", "metadatas", "distances"],
-    )
+    try:
+        results = collection.query(
+            query_embeddings=[query_embedding],
+            n_results=n_results,
+            where=where_clause,
+            include=["documents", "metadatas", "distances"],
+        )
+    except Exception as e:
+        err_msg = str(e)
+        if "dimension" in err_msg.lower() or "expecting embedding" in err_msg.lower():
+            logger.warning(
+                f"ChromaDB query embedding dimension mismatch detected ({err_msg}). "
+                f"Recreating collection '{collection_name}'..."
+            )
+            global CHROMA_CLIENT
+            client = get_chroma_client()
+            try:
+                client.delete_collection(name=collection_name)
+            except Exception:
+                pass
+            CHROMA_CLIENT = None
+            get_or_create_collection(collection_name)
+            return []
+        raise e
 
     matched_chunks = []
     if results and results.get("ids") and results["ids"][0]:
