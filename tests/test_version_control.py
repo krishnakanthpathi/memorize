@@ -22,20 +22,37 @@ class TestVersionControl(unittest.TestCase):
 
         self.orig_data_dir = constants.DATA_DIR
         self.orig_db_path = constants.DB_PATH
+        self.orig_memories_dir = constants.MEMORIES_DIR
+        self.orig_backup_dir = constants.BACKUP_DIR
 
         constants.DATA_DIR = self.patch_data_dir
         constants.DB_PATH = self.patch_db_path
+        constants.MEMORIES_DIR = self.patch_data_dir / "memories"
+        constants.BACKUP_DIR = self.patch_data_dir / "backups"
+
+        constants.DATA_DIR.mkdir(parents=True, exist_ok=True)
+        constants.MEMORIES_DIR.mkdir(parents=True, exist_ok=True)
+        constants.BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+
+        import vector.vector_db
+        self.orig_chroma_dir = vector.vector_db.CHROMA_DIR
+        vector.vector_db.CHROMA_DIR = Path(self.temp_dir) / "chroma_db"
+        vector.vector_db.CHROMA_CLIENT = None
 
         init_db()
-        clear_all_index_memories()
-        clear_all_memory_versions_from_db()
 
     def tearDown(self):
-        clear_all_index_memories()
-        clear_all_memory_versions_from_db()
+        import vector.vector_db
+        vector.vector_db.CHROMA_CLIENT = None
+        vector.vector_db.CHROMA_DIR = self.orig_chroma_dir
+
         constants.DATA_DIR = self.orig_data_dir
         constants.DB_PATH = self.orig_db_path
-        shutil.rmtree(self.temp_dir)
+        constants.MEMORIES_DIR = self.orig_memories_dir
+        constants.BACKUP_DIR = self.orig_backup_dir
+
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
 
     def test_version_snapshots_and_reverting(self):
         # 1. Create initial memory

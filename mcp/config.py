@@ -3,8 +3,10 @@ from config.settings import get_setting
 
 SERVER_NAME = "Memorize Server"
 SERVER_VERSION = "2.0.0"
+SERVER_DESCRIPTION = "Personal Knowledge Base MCP Server with Semantic RAG, Storage Reconciliation, and Lean Core Tools"
 DEFAULT_TRANSPORT = "stdio"
 DEFAULT_PORT = int(os.getenv("BACKEND_PORT", os.getenv("PORT", "7777")))
+
 
 
 

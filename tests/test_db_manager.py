@@ -13,14 +13,29 @@ from storage.db_manager import (
 )
 
 
+import config.constants as constants
+
+
 class TestDBManager(unittest.TestCase):
 
     def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.tmp_path = Path(self.tmp_dir.name)
+        
+        self.orig_data_dir = constants.DATA_DIR
+        self.orig_db_path = constants.DB_PATH
+
+        constants.DATA_DIR = self.tmp_path / "data"
+        constants.DB_PATH = constants.DATA_DIR / "test_db_manager.db"
+        constants.DATA_DIR.mkdir(parents=True, exist_ok=True)
+
         init_db()
-        clear_all_index_memories()
 
     def tearDown(self):
-        clear_all_index_memories()
+        constants.DATA_DIR = self.orig_data_dir
+        constants.DB_PATH = self.orig_db_path
+        self.tmp_dir.cleanup()
+
 
     def test_upsert_and_get_memory(self):
         """Test inserting, updating, and querying memory entries in SQLite."""

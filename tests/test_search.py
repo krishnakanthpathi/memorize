@@ -10,18 +10,32 @@ from storage.db_manager import clear_all_index_memories, init_db, upsert_memory_
 from vector.vector_db import add_chunks_to_vector_db
 
 
+import config.constants as constants
+
+
 class TestSearchEngine(unittest.TestCase):
 
     def setUp(self):
         self.tmp_dir = tempfile.TemporaryDirectory()
-        self.test_chroma_dir = Path(self.tmp_dir.name) / "chroma_db"
+        self.tmp_path = Path(self.tmp_dir.name)
+
+        self.orig_data_dir = constants.DATA_DIR
+        self.orig_db_path = constants.DB_PATH
+        self.orig_memories_dir = constants.MEMORIES_DIR
+
+        constants.DATA_DIR = self.tmp_path / "data"
+        constants.DB_PATH = constants.DATA_DIR / "test_search.db"
+        constants.MEMORIES_DIR = constants.DATA_DIR / "memories"
+        constants.DATA_DIR.mkdir(parents=True, exist_ok=True)
+        constants.MEMORIES_DIR.mkdir(parents=True, exist_ok=True)
 
         import vector.vector_db
-        vector.vector_db.CHROMA_DIR = self.test_chroma_dir
+        self.orig_chroma_dir = vector.vector_db.CHROMA_DIR
+        vector.vector_db.CHROMA_DIR = self.tmp_path / "chroma_db"
         vector.vector_db.CHROMA_CLIENT = None
 
         init_db()
-        clear_all_index_memories()
+
 
         # Seed sample memories into SQLite & Vector DB
         mem1 = {
@@ -72,8 +86,14 @@ class TestSearchEngine(unittest.TestCase):
     def tearDown(self):
         import vector.vector_db
         vector.vector_db.CHROMA_CLIENT = None
-        clear_all_index_memories()
+        vector.vector_db.CHROMA_DIR = self.orig_chroma_dir
+
+        constants.DATA_DIR = self.orig_data_dir
+        constants.DB_PATH = self.orig_db_path
+        constants.MEMORIES_DIR = self.orig_memories_dir
+
         self.tmp_dir.cleanup()
+
 
     def test_search_vector_similarity(self):
         """Test pure vector similarity search returning ranked results."""
