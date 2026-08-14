@@ -48,6 +48,8 @@ def read_root():
 
 if __name__ == "__main__":
     import uvicorn
-    from config.constants import API_PORT
-    uvicorn.run("api.server:app", host="0.0.0.0", port=API_PORT, reload=True)
+    from config.constants import BACKEND_PORT
+
+    uvicorn.run("api.server:app", host="0.0.0.0", port=BACKEND_PORT, reload=True)
+
 

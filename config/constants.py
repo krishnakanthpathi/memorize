@@ -8,11 +8,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Load environment variables from .env file
 load_dotenv(BASE_DIR / ".env")
 
-# Server Ports
-PORT = int(os.getenv("PORT", os.getenv("API_PORT", "7777")))
-API_PORT = PORT
-MCP_PORT = int(os.getenv("MCP_PORT", str(PORT)))
-FRONTEND_PORT = int(os.getenv("FRONTEND_PORT", os.getenv("VITE_PORT", "8888")))
+# Server Ports (Backend: 7777, Frontend: 8888)
+BACKEND_PORT = int(os.getenv("BACKEND_PORT", os.getenv("PORT", "7777")))
+FRONTEND_PORT = int(os.getenv("FRONTEND_PORT", "8888"))
 
 # Storage Data Directory
 
