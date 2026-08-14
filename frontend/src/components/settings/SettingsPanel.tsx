@@ -565,21 +565,23 @@ export const SettingsPanel: React.FC = () => {
             </div>
           </div>
 
-          {/* Active 5 Core MCP Tools Status Card */}
+          {/* Active MCP Core Tools Status Card */}
           <div className="p-4 rounded-xl bg-surface-hover/30 border border-border space-y-2.5">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-foreground">Registered MCP Core Tools (5 Lean Tools)</span>
+              <span className="text-xs font-semibold text-foreground">Registered MCP Tools (7 Active Tools)</span>
               <span className="px-2 py-0.5 rounded bg-surface-selected font-mono text-[10px] font-bold text-foreground">
                 Active &amp; Ready
               </span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-4 md:grid-cols-7 gap-2 pt-1">
               {[
                 { name: 'store', desc: 'Auto-categorizes & creates/appends' },
                 { name: 'update', desc: 'Updates or merges note content' },
                 { name: 'delete', desc: 'Deletes note from DB & vector' },
-                { name: 'fetch', desc: 'Retrieves note or lists memories' },
+                { name: 'fetch', desc: 'Retrieves full note by ID/title' },
                 { name: 'hybrid_fetch', desc: '50/30/20 weighted RAG search' },
+                { name: 'list_memories', desc: 'Lists memory summaries & filter' },
+                { name: 'get_categories', desc: 'Lists 11 categories & note counts' },
               ].map((t) => (
                 <div key={t.name} className="p-2 rounded-lg bg-surface-list border border-border/60 space-y-0.5">
                   <span className="font-mono font-bold text-[11px] text-foreground block">⚡ {t.name}</span>
@@ -590,6 +592,7 @@ export const SettingsPanel: React.FC = () => {
           </div>
 
           <div className="p-4 rounded-xl bg-surface-hover/60 border border-border space-y-4">
+
             <div>
               <label className="text-[11px] text-muted-foreground block mb-1.5 font-medium">
                 Active Chat Model (Ollama Local & OpenAI Remote):

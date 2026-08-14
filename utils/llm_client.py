@@ -167,12 +167,17 @@ def execute_tool_call(tool_name: str, params: dict) -> dict:
         tag = params.get("tag") or params.get("tag_filter")
         mems = get_all_memories(category_filter=cat, tag_filter=tag)
         return {"tool": tool_clean, "status": "success", "result": mems}
+    elif tool_clean in ("get_categories", "categories", "list_categories"):
+        from mcp.tools.memory_tools import get_categories as fetch_categories
+        res = fetch_categories()
+        return {"tool": tool_clean, "status": "success", "result": res}
     elif tool_clean in ("clear_all_memories", "clear_all", "reset_memories", "purge_all", "delete_all"):
         from storage.sync_manager import clear_all_memories
         res = clear_all_memories()
         return {"tool": "clear_all_memories", "status": "success", "result": res}
     else:
         return {"tool": tool_clean, "status": "error", "message": f"Unknown tool: {tool_name}"}
+
 
 
 

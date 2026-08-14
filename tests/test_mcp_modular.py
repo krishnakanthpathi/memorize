@@ -1,10 +1,11 @@
 """
-Unit Tests for Lean MCP Package & 5 Core Tools
+Unit Tests for Lean MCP Package & Core Tools
 """
 
 import unittest
 from mcp import mcp, create_mcp_server, SERVER_NAME, SERVER_VERSION
 from mcp.config import USE_LLM, EMBEDDING_MODEL, CLASSIFICATION_MODEL, FALLBACK_MODEL
+from mcp.tools.memory_tools import list_memories, get_categories
 
 
 class TestModularMCP(unittest.TestCase):
@@ -14,10 +15,10 @@ class TestModularMCP(unittest.TestCase):
         self.assertEqual(SERVER_NAME, "Memorize Server")
         self.assertIsNotNone(mcp)
         tools = mcp._tool_manager.list_tools()
-        self.assertEqual(len(tools), 5)
+        self.assertEqual(len(tools), 7)
 
     def test_all_expected_tools_registered(self):
-        """Verify exactly the 5 core lean tools are present on the server."""
+        """Verify exactly the expected core tools are present on the server."""
         tools = {t.name for t in mcp._tool_manager.list_tools()}
         expected_tools = {
             "store",
@@ -25,6 +26,8 @@ class TestModularMCP(unittest.TestCase):
             "delete",
             "fetch",
             "hybrid_fetch",
+            "list_memories",
+            "get_categories",
         }
         self.assertEqual(tools, expected_tools, f"MCP tools mismatch. Got: {tools}, Expected: {expected_tools}")
 
@@ -35,13 +38,25 @@ class TestModularMCP(unittest.TestCase):
         self.assertIsInstance(CLASSIFICATION_MODEL, str)
         self.assertIsInstance(FALLBACK_MODEL, str)
 
-    def test_fetch_listing_tool(self):
-        """Test fetch tool with no arguments lists memories."""
+    def test_list_memories_tool(self):
+        """Test list_memories tool execution."""
         from storage.db_manager import init_db
         init_db()
-        # fetch tool handler
-        tool = next(t for t in mcp._tool_manager.list_tools() if t.name == "fetch")
-        self.assertIsNotNone(tool)
+        res = list_memories()
+        self.assertEqual(res.get("status"), "success")
+        self.assertIn("memories", res)
+        self.assertIn("total_count", res)
+
+    def test_get_categories_tool(self):
+        """Test get_categories tool execution and structure."""
+        res = get_categories()
+        self.assertEqual(res.get("status"), "success")
+        self.assertIn("categories", res)
+        self.assertGreaterEqual(res.get("total_categories", 0), 11)
+        cats = [c["category"] for c in res["categories"]]
+        self.assertIn("personal", cats)
+        self.assertIn("development", cats)
+        self.assertIn("projects", cats)
 
     def test_auto_classify_offline_behavior(self):
         """Test classification works deterministically offline."""
@@ -53,4 +68,5 @@ class TestModularMCP(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
 

@@ -1,13 +1,14 @@
 """
 MCP Tools Package
-Exports lean core MCP tools for Memorize (store, update, delete, fetch, hybrid_fetch).
+Exports core MCP tools for Memorize (store, update, delete, fetch, hybrid_fetch, list_memories, get_categories).
 """
 
 from mcp.tools.memory_tools import register_memory_tools
 
 
 def register_all_tools(mcp):
-    """Register the 5 lean core MCP tools on the FastMCP instance."""
+    """Register all memory and category MCP tools on the FastMCP instance."""
     register_memory_tools(mcp)
     return mcp
+
 

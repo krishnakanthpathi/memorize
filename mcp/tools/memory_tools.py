@@ -244,14 +244,115 @@ def hybrid_fetch(
     )
 
 
+def list_memories(
+    category_filter: Optional[str] = None,
+    tag_filter: Optional[str] = None,
+    limit: Optional[int] = None,
+) -> dict:
+    """
+    Lists stored memories with optional category or tag filtering.
+    Returns structured summaries of memories including ID, title, category, tags, and timestamps.
+    
+    Available category filters:
+    'personal', 'development', 'projects', 'job', 'education', 'finance', 'gaming', 'achievements', 'integration', 'media', 'others'.
+    
+    Args:
+        category_filter: Optional category restriction
+        tag_filter: Optional tag restriction
+        limit: Optional maximum number of memories to return
+    """
+    all_mems = get_all_memories(category_filter=category_filter, tag_filter=tag_filter)
+    if limit and limit > 0:
+        all_mems = all_mems[:limit]
+
+    summaries = []
+    for m in all_mems:
+        summaries.append({
+            "id": m.get("id"),
+            "title": m.get("title"),
+            "category": m.get("category"),
+            "tags": m.get("tags", []),
+            "updated_at": m.get("updated_at"),
+            "created_at": m.get("created_at"),
+        })
+
+    return {
+        "status": "success",
+        "total_count": len(summaries),
+        "memories": summaries,
+    }
+
+
+def get_categories() -> dict:
+    """
+    Returns all 11 standard predefined memory categories along with descriptions
+    and the count of notes currently stored in each category.
+    
+    Categories:
+    - 'personal': Habits, daily routines, diary, thoughts, health, sleep, preferences, contacts, family, lifestyle.
+    - 'development': Programming languages (Python, TypeScript, JS, Rust, Go, C++), frameworks (React, FastAPI, Node), code snippets, algorithms, bug fixes, UI/CSS, git.
+    - 'projects': Specific software applications, side projects, product ideas, roadmaps, architecture blueprints, feature specs.
+    - 'job': Career history, work experience, resume, employment, interviews, salary, workplace projects, company tasks.
+    - 'education': University/college courses, degrees, study notes, academic research, computer science concepts, exam prep.
+    - 'finance': Personal budget, expenses, investments, stocks, crypto, banking, tax planning, financial goals.
+    - 'gaming': Video games, strategies, achievements, platforms (Steam, PlayStation, Xbox, Nintendo), esports.
+    - 'achievements': Competitive exam ranks (JEE, SAT), awards, honors, hackathons, tournament prizes, milestone certifications.
+    - 'integration': MCP servers, API endpoints, webhooks, cloud setup, Tailscale, WSL, Linux server configs, OAuth, CI/CD.
+    - 'media': Books, podcasts, audio, video, movies, reading lists, YouTube channels, OCR document scans.
+    - 'others': Miscellaneous or temporary reference information that does not fit the above categories.
+    """
+    from utils import get_available_categories
+
+    categories = get_available_categories()
+    all_mems = get_all_memories()
+
+    category_counts = {}
+    for cat in categories:
+        category_counts[cat] = 0
+    for m in all_mems:
+        c = m.get("category", "personal").lower()
+        category_counts[c] = category_counts.get(c, 0) + 1
+
+    category_descriptions = {
+        "personal": "Habits, daily routines, diary, thoughts, health, sleep, preferences, contacts, family, lifestyle.",
+        "development": "Programming languages, frameworks (React, FastAPI, Python, TS), code snippets, algorithms, dev tools, CSS/UI, debugging.",
+        "projects": "Application builds, side projects, product specs, MVPs, feature roadmaps, system designs.",
+        "job": "Career, resume, employment history, company projects, interviews, work achievements, salary.",
+        "education": "College/university, study notes, degrees, exam prep, academic research, courses.",
+        "finance": "Budget, expenses, investments, stock portfolio, crypto, bank accounts, taxes.",
+        "gaming": "Video games, game lore, strategies, game achievements, Steam/console gaming.",
+        "achievements": "Exam ranks, awards, prizes, certifications, hackathon wins, major milestones.",
+        "integration": "MCP server configs, APIs, webhooks, SSH, WSL, cloud infrastructure, OAuth.",
+        "media": "Books, movies, podcasts, YouTube playlists, reading summaries, audio/video notes.",
+        "others": "General miscellaneous reference notes.",
+    }
+
+    results = []
+    for cat in categories:
+        results.append({
+            "category": cat,
+            "count": category_counts.get(cat, 0),
+            "description": category_descriptions.get(cat, "General knowledge notes."),
+        })
+
+    return {
+        "status": "success",
+        "total_categories": len(results),
+        "categories": results,
+    }
+
+
 def register_memory_tools(mcp):
-    """Register the 5 core MCP tools on the FastMCP server instance."""
+    """Register all memory and category MCP tools on the FastMCP server instance."""
     mcp.tool()(store)
     mcp.tool()(update)
     mcp.tool()(delete)
     mcp.tool()(fetch)
     mcp.tool()(hybrid_fetch)
+    mcp.tool()(list_memories)
+    mcp.tool()(get_categories)
     return mcp
+
 
 
 

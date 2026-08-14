@@ -297,8 +297,10 @@ def memorize(title: str, content: str):
                   { name: 'store', desc: 'Stores a memory into the system. If no category is given, auto-categorizes using the 11-category taxonomy.' },
                   { name: 'update', desc: 'Updates an existing memory. Overwrites, merges, or appends new information cleanly.' },
                   { name: 'delete', desc: 'Deletes a memory across disk markdown storage, SQLite DB index, and ChromaDB vector store.' },
-                  { name: 'fetch', desc: 'Fetches full memory metadata and markdown content by ID/title, or lists stored memories.' },
+                  { name: 'fetch', desc: 'Fetches full memory metadata and markdown content by ID/title.' },
                   { name: 'hybrid_fetch', desc: 'Performs 50/30/20 weighted hybrid RAG search combining vector similarity, tag matches, and categories.' },
+                  { name: 'list_memories', desc: 'Lists stored memories with optional category/tag filters and limit.' },
+                  { name: 'get_categories', desc: 'Returns all 11 standard predefined categories with note counts and descriptions.' },
                 ].map((tool) => (
                   <div key={tool.name} className="p-3.5 rounded-xl border border-border bg-surface-hover/40 space-y-1">
                     <span className="font-mono font-bold text-xs text-foreground block">
@@ -308,6 +310,7 @@ def memorize(title: str, content: str):
                   </div>
                 ))}
               </div>
+
 
               {/* Predefined Categories Taxonomy */}
               <div className="space-y-3 pt-2">
