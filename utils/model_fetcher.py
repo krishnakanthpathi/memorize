@@ -1,11 +1,12 @@
 import argparse
 import os
+import re
 from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
 import requests
 
-from config.constants import OPENAI_BASE_URL
+from config.constants import OPENAI_BASE_URL, OLLAMA_BASE_URL
 from core.logger import logger
 
 # Ensure environment variables from .env are loaded
@@ -53,6 +54,41 @@ GENERATIVE_KEYWORDS = [
     "completion",
 ]
 
+FAST_KEYWORDS = [
+    "mini",
+    "small",
+    "flash",
+    "nano",
+    "3b",
+    "4b",
+    "7b",
+    "8b",
+    "12b",
+    "14b",
+    "20b",
+    "24b",
+    "30b",
+    "32b",
+    "haiku",
+    "turbo",
+]
+
+REASONING_KEYWORDS = [
+    "thinking",
+    "reasoning",
+    "deepseek",
+    "r1",
+    "large",
+    "coder",
+    "kimi",
+    "120b",
+    "235b",
+    "480b",
+    "675b",
+    "opus",
+    "pro",
+]
+
 
 def classify_model(model_id: str) -> str:
     """
@@ -60,15 +96,13 @@ def classify_model(model_id: str) -> str:
     """
     model_id_lower = model_id.lower()
 
-    # Check for explicit embedding markers
     if any(keyword in model_id_lower for keyword in EMBEDDING_KEYWORDS):
         return "embedding"
 
-    # Check for generative / chat markers
     if any(keyword in model_id_lower for keyword in GENERATIVE_KEYWORDS):
         return "generative"
 
-    return "other"
+    return "generative"  # Default to generative for general LLM options
 
 
 def get_available_models(
@@ -102,111 +136,172 @@ def get_available_models(
             logger.warning(f"Unexpected response structure from {models_endpoint}")
             return []
     except Exception as e:
-        logger.error(f"Failed to fetch models from {models_endpoint}: {e}")
-        raise RuntimeError(f"Could not fetch models from '{models_endpoint}': {e}") from e
+        logger.warning(f"Failed to fetch remote models from {models_endpoint}: {e}")
+        return []
+
+
+def get_ollama_models(ollama_url: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    Fetches local models from Ollama API (/api/tags).
+    """
+    base = (ollama_url or os.getenv("OLLAMA_BASE_URL") or OLLAMA_BASE_URL or "http://localhost:11434").rstrip("/")
+    tags_url = f"{base}/api/tags"
+    try:
+        resp = requests.get(tags_url, timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            models = data.get("models", [])
+            res = []
+            for m in models:
+                res.append({
+                    "id": m.get("name") or m.get("model", ""),
+                    "object": "model",
+                    "owned_by": "ollama",
+                    "status": "available",
+                    "details": m.get("details", {}),
+                })
+            return res
+    except Exception as e:
+        logger.debug(f"Ollama not reachable at {tags_url}: {e}")
+    return []
+
+
+def _bifurcate_model_list(model_items: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Helper to classify a list of model items into fast, reasoning, generative, and embedding."""
+    embedding_models: List[Dict[str, Any]] = []
+    generative_models: List[Dict[str, Any]] = []
+    fast_models: List[str] = []
+    reasoning_models: List[str] = []
+    all_models: List[str] = []
+
+    seen = set()
+    for item in model_items:
+        model_id = item.get("id", "") if isinstance(item, dict) else str(item)
+        if not model_id or model_id in seen:
+            continue
+        seen.add(model_id)
+        all_models.append(model_id)
+
+        category = classify_model(model_id)
+        if category == "embedding":
+            embedding_models.append(item)
+        else:
+            generative_models.append(item)
+            m_lower = model_id.lower()
+            if any(k in m_lower for k in REASONING_KEYWORDS):
+                reasoning_models.append(model_id)
+            elif any(k in m_lower for k in FAST_KEYWORDS):
+                fast_models.append(model_id)
+            else:
+                fast_models.append(model_id)
+
+    default_model = ""
+    if fast_models:
+        default_model = fast_models[0]
+    elif generative_models:
+        default_model = generative_models[0].get("id", "")
+    elif all_models:
+        default_model = all_models[0]
+
+    return {
+        "total_count": len(all_models),
+        "fast_models": fast_models,
+        "reasoning_models": reasoning_models,
+        "generative_models": generative_models,
+        "embedding_models": embedding_models,
+        "all_models": all_models,
+        "current_default": default_model,
+    }
 
 
 def fetch_and_bifurcate_models(
-    base_url: Optional[str] = None, api_key: Optional[str] = None
+    base_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+    provider: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Fetches available models from the specified base URL and API key,
-    and bifurcates them into embedding models and generative models.
-
-    :param base_url: OpenAI-compatible API base URL (e.g. https://bedrock-mantle.ap-southeast-2.api.aws/v1)
-    :param api_key: API authorization key
-    :return: Dictionary containing 'embedding_models', 'generative_models', 'other_models', and 'total_count'.
+    Fetches available models bifurcated strictly by provider (Ollama vs OpenAI / Remote).
     """
-    raw_models = get_available_models(base_url=base_url, api_key=api_key)
+    remote_models = get_available_models(base_url=base_url, api_key=api_key)
+    ollama_models = get_ollama_models()
 
-    embedding_models: List[Dict[str, Any]] = []
-    generative_models: List[Dict[str, Any]] = []
-    other_models: List[Dict[str, Any]] = []
+    ollama_bifurcated = _bifurcate_model_list(ollama_models)
+    openai_bifurcated = _bifurcate_model_list(remote_models)
 
-    for item in raw_models:
-        model_id = item.get("id", "") if isinstance(item, dict) else str(item)
-        category = classify_model(model_id)
+    providers = {
+        "ollama": {
+            "name": "Ollama (Local)",
+            "available": len(ollama_models) > 0,
+            "base_url": os.getenv("OLLAMA_BASE_URL") or OLLAMA_BASE_URL or "http://localhost:11434",
+            **ollama_bifurcated,
+        },
+        "openai": {
+            "name": "OpenAI Compatible (Remote API)",
+            "available": len(remote_models) > 0,
+            "base_url": base_url or os.getenv("OPENAI_BASE_URL") or OPENAI_BASE_URL,
+            **openai_bifurcated,
+        },
+    }
 
-        model_info = {
-            "id": model_id,
-            "object": item.get("object", "model") if isinstance(item, dict) else "model",
-            "owned_by": item.get("owned_by", "") if isinstance(item, dict) else "",
-            "status": item.get("status", "available") if isinstance(item, dict) else "available",
-        }
-
-        if category == "embedding":
-            embedding_models.append(model_info)
-        elif category == "generative":
-            generative_models.append(model_info)
-        else:
-            other_models.append(model_info)
+    # Selected provider or default
+    active_prov = provider if provider in providers else ("ollama" if len(ollama_models) > 0 else "openai")
+    active_data = providers[active_prov]
 
     return {
-        "base_url": base_url or os.getenv("OPENAI_BASE_URL") or OPENAI_BASE_URL,
-        "total_count": len(raw_models),
-        "embedding_models": embedding_models,
-        "generative_models": generative_models,
-        "other_models": other_models,
+        "status": "success",
+        "selected_provider": active_prov,
+        "providers": providers,
+        "base_url": active_data.get("base_url", ""),
+        "total_count": active_data.get("total_count", 0),
+        "fast_models": active_data.get("fast_models", []),
+        "reasoning_models": active_data.get("reasoning_models", []),
+        "generative_models": active_data.get("generative_models", []),
+        "embedding_models": active_data.get("embedding_models", []),
+        "all_models": active_data.get("all_models", []),
+        "current_default": active_data.get("current_default", ""),
     }
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Fetch and bifurcate available models from an OpenAI-compatible endpoint."
+        description="Fetch and bifurcate available models strictly by provider."
     )
     parser.add_argument(
         "--base-url",
         type=str,
         default=None,
-        help="Base URL for the API (default: OPENAI_BASE_URL constant or env)",
+        help="Base URL for remote API",
     )
     parser.add_argument(
         "--api-key",
         type=str,
         default=None,
-        help="API Key for authorization (default: OPENAI_API_KEY env)",
+        help="API Key for authorization",
+    )
+    parser.add_argument(
+        "--provider",
+        type=str,
+        default=None,
+        help="Filter by provider ('ollama' or 'openai')",
     )
 
     args = parser.parse_args()
 
-    print("\nFetching models...")
+    print("\nFetching bifurcated models...")
     try:
-        result = fetch_and_bifurcate_models(base_url=args.base_url, api_key=args.api_key)
+        result = fetch_and_bifurcate_models(base_url=args.base_url, api_key=args.api_key, provider=args.provider)
     except Exception as err:
         print(f"\n❌ Error: {err}")
         return
 
-    base_url_used = result["base_url"]
-    embedding_models = result["embedding_models"]
-    generative_models = result["generative_models"]
-    other_models = result["other_models"]
-
     print(f"\n=======================================================")
-    print(f"  Model Discovery Summary")
-    print(f"  Base URL: {base_url_used}")
-    print(f"  Total Models Found: {result['total_count']}")
+    print(f"  Model Discovery Summary (Provider: {result['selected_provider']})")
+    print(f"  Total Models in Provider: {result['total_count']}")
+    print(f"  Fast Models: {result['fast_models']}")
+    print(f"  Reasoning Models: {result['reasoning_models']}")
+    print(f"  Ollama Total: {result['providers']['ollama']['total_count']}")
+    print(f"  OpenAI Total: {result['providers']['openai']['total_count']}")
     print(f"=======================================================\n")
-
-    print(f"📌 EMBEDDING MODELS ({len(embedding_models)}):")
-    if embedding_models:
-        for idx, m in enumerate(embedding_models, 1):
-            print(f"  {idx}. {m['id']} (Status: {m['status']})")
-    else:
-        print("  (None found)")
-
-    print(f"\n💬 GENERATIVE / CHAT MODELS ({len(generative_models)}):")
-    if generative_models:
-        for idx, m in enumerate(generative_models, 1):
-            print(f"  {idx}. {m['id']} (Status: {m['status']})")
-    else:
-        print("  (None found)")
-
-    if other_models:
-        print(f"\n❓ OTHER MODELS ({len(other_models)}):")
-        for idx, m in enumerate(other_models, 1):
-            print(f"  {idx}. {m['id']} (Status: {m['status']})")
-
-    print(f"\n=======================================================\n")
 
 
 if __name__ == "__main__":

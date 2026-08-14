@@ -8,7 +8,8 @@ router = APIRouter(prefix="/api/models", tags=["models"])
 
 @router.get("")
 def list_available_models_endpoint(
+    provider: Optional[str] = Query(None),
     base_url: Optional[str] = Query(None),
     api_key: Optional[str] = Query(None),
 ):
-    return fetch_and_bifurcate_models(base_url=base_url, api_key=api_key)
+    return fetch_and_bifurcate_models(base_url=base_url, api_key=api_key, provider=provider)
