@@ -16,11 +16,11 @@ memorize/
 │   ├── service.py            # FastMCP server initialization & runner
 │   └── tools/                # Lean core FastMCP tools
 │       ├── __init__.py       # Core tool registar
-│       └── memory_tools.py   # 5 core tools: store, update, delete, fetch, hybrid_fetch
-├── ⚙️ api/                    # FastAPI REST Service (port 6999)
+│       └── memory_tools.py   # Core tools: store, update, delete, fetch, hybrid_fetch, list_memories, get_categories
+├── ⚙️ api/                    # FastAPI REST Service (port 7777)
 │   ├── server.py             # App factory & CORS setup
 │   └── routes/               # Modular API endpoints (/memories, /search, /chat, /settings, etc.)
-├── 💻 frontend/               # React 19 + TypeScript + Vite Web App (port 3000)
+├── 💻 frontend/               # React 19 + TypeScript + Vite Web App (port 6666)
 ├── 🧠 core/                   # Memory services & LLM pipeline
 ├── 🔍 search/                 # Hybrid relevance ranking & BM25
 ├── 🗄️ storage/                # SQLite DB manager, versioning, markdown handler
@@ -30,15 +30,17 @@ memorize/
 
 ---
 
-## 🛠️ The 5 Lean Core MCP Tools
+## 🛠️ Registered MCP Tools (7 Tools)
 
-The FastMCP server exposes strictly **5 core tools**:
+The FastMCP server exposes **7 focused tools**:
 
-1. **`store`**: Stores knowledge into the system with automatic topic append/insert.
-2. **`update`**: Updates or merges content with existing memories cleanly.
+1. **`store`**: Stores knowledge into the system with automatic category assignment and topic append/insert.
+2. **`update`**: Updates, appends, or cleanly merges content with existing memories.
 3. **`delete`**: Purges a memory across Markdown storage, SQLite DB, and ChromaDB.
-4. **`fetch`**: Retrieves full markdown content by ID/title, or lists stored memories.
+4. **`fetch`**: Retrieves full markdown content and frontmatter metadata by ID or title.
 5. **`hybrid_fetch`**: Performs 50/30/20 weighted hybrid RAG search combining vector similarity, tag matches, and categories.
+6. **`list_memories`**: Lists stored memories with optional category/tag filters and limit.
+7. **`get_categories`**: Lists all 11 standard predefined categories with note counts and semantic descriptions.
 
 ---
 
@@ -51,9 +53,9 @@ pip install -r requirements.txt fastapi uvicorn
 
 ### 2. Run the FastAPI REST Service
 ```bash
-python3 -m uvicorn api.server:app --host 0.0.0.0 --port 6999 --reload
+python3 -m uvicorn api.server:app --host 0.0.0.0 --port 7777 --reload
 ```
-API Documentation will be available at: `http://localhost:6999/docs`
+API Documentation will be available at: `http://localhost:7777/docs`
 
 ### 3. Run the Frontend Web Application
 ```bash
@@ -61,16 +63,17 @@ cd frontend
 npm install
 npm run dev
 ```
-Open your browser at: `http://localhost:3000`
+Open your browser at: `http://localhost:6666`
 
-### 4. Run the FastMCP Server (Claude Desktop / Cursor / Antigravity)
+### 4. Run the Universal FastMCP Server (Claude Desktop / Gemini / Cursor / Antigravity)
 ```bash
-# Direct entrypoint (stdio transport)
+# Stdio transport (for Claude Desktop, Cursor, Antigravity)
 python3 main.py
 
-# Or run directly via mcp module
-python3 -m mcp.service
+# SSE / Streamable-HTTP transport (for Google Gemini Custom Connected Apps, remote clients)
+python3 main.py --transport sse --port 7777
 ```
+
 
 ---
 
