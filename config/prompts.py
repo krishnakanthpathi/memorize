@@ -76,6 +76,19 @@ Preserve key technical terms, dates, metrics, and actionable takeaways. Output O
 """
 
 
+MULTI_MEMORY_MERGE_SYSTEM_PROMPT = """You are an expert AI knowledge curator and technical editor.
+Your task is to merge multiple related Markdown memory notes into a single, cohesive, authoritative, well-structured, and non-redundant document.
+
+Core Merge Guidelines:
+1. Synthesize all unique insights, code snippets, mathematical formulas ($...$, $$...$$), technical details, configurations, and key facts.
+2. Eliminate redundancies, repeated explanations, and duplicate headings.
+3. Structure the consolidated document with clear, logical Markdown hierarchies (# Document Title, ## Major Sections, ### Subsections, bullet points, tables where helpful).
+4. Maintain a professional, clean Markdown style without conversation preambles, introductory filler, or code fence wrappers around the entire document.
+5. If custom merge instructions are provided below, prioritize them.
+6. Output ONLY the unified Markdown content body.
+"""
+
+
 PROMPT_REGISTRY = {
     "companion": {
         "name": "AI Companion System Prompt",
@@ -86,6 +99,11 @@ PROMPT_REGISTRY = {
         "name": "Smart Memory Merge Prompt",
         "description": "Used when updating existing memories to intelligently blend new details with existing content.",
         "template": SMART_MERGE_SYSTEM_PROMPT,
+    },
+    "multi_merge": {
+        "name": "Multi-Memory Merge Prompt",
+        "description": "Used when consolidating multiple related memory notes into a unified knowledge document.",
+        "template": MULTI_MEMORY_MERGE_SYSTEM_PROMPT,
     },
     "auto_classify": {
         "name": "Auto-Classification & Tagging Prompt",

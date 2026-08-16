@@ -2,6 +2,9 @@ import {
   AuditSummary,
   CategoryStat,
   ChatMessage,
+  CorrelationItem,
+  MergeMemoriesRequest,
+  MergeMemoriesResponse,
   ModelsResponse,
   Note,
   SearchResult,
@@ -98,6 +101,27 @@ export const api = {
     });
     if (!res.ok) throw new Error(`Delete failed: ${res.statusText}`);
     return res.json();
+  },
+
+  // Multi-Memory LLM Merge
+  async mergeMemories(data: MergeMemoriesRequest): Promise<MergeMemoriesResponse> {
+    const res = await fetch(`${API_BASE}/memories/merge`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Merge failed (${res.status})`);
+    }
+    return res.json();
+  },
+
+  async getCorrelatedMemories(memoryId: string, topK: number = 5): Promise<CorrelationItem[]> {
+    const res = await fetch(`${API_BASE}/memories/${encodeURIComponent(memoryId)}/correlations?top_k=${topK}`);
+    if (!res.ok) throw new Error(`Fetch correlations failed: ${res.statusText}`);
+    const data = await res.json();
+    return data.correlations || [];
   },
 
   // Versioning

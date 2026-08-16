@@ -1,7 +1,8 @@
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 
-from api.schemas import MemoryCreateRequest, RevertRequest
+from api.schemas import MemoryCreateRequest, MemoryMergeRequest, RevertRequest
+from core.memory_merger import find_correlated_memories, merge_memories_service
 from core.memory_service import (
     execute_revert_memory,
     execute_upsert_memory,
@@ -70,6 +71,38 @@ def get_memory_versions_endpoint(memory_id: str):
         "title": target.get("title"),
         "total_versions": len(history),
         "versions": history,
+    }
+
+
+@router.post("/merge")
+def merge_memories_endpoint(req: MemoryMergeRequest):
+    res = merge_memories_service(
+        memory_ids=req.memory_ids,
+        target_title=req.target_title,
+        target_category=req.target_category,
+        target_tags=req.target_tags,
+        delete_sources=req.delete_sources,
+        instruction=req.instruction,
+    )
+    if isinstance(res, dict) and res.get("status") == "error":
+        raise HTTPException(status_code=400, detail=res.get("message", "Error merging memories."))
+    return res
+
+
+@router.get("/{memory_id}/correlations")
+def get_memory_correlations_endpoint(
+    memory_id: str,
+    top_k: int = Query(5, ge=1, le=20),
+):
+    target = get_memory_by_id(memory_id)
+    if not target:
+        raise HTTPException(status_code=404, detail=f"Memory '{memory_id}' not found.")
+    correlations = find_correlated_memories(memory_id=memory_id, top_k=top_k)
+    return {
+        "status": "success",
+        "memory_id": memory_id,
+        "total_correlated": len(correlations),
+        "correlations": correlations,
     }
 
 

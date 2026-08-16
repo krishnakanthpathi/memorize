@@ -12,6 +12,7 @@ from typing import List, Optional, Union
 
 from classification.classifier import classify_memory
 from config.settings import get_setting
+from core.memory_merger import find_correlated_memories as core_find_correlated, merge_memories_service
 from core.memory_service import execute_upsert_memory, handle_delete_memory
 from search.relevance_scorer import search_hybrid_relevance
 from storage.db_manager import find_memory_by_title_or_slug, get_all_memories, get_memory_by_id
@@ -342,6 +343,57 @@ def get_categories() -> dict:
     }
 
 
+def merge_memories(
+    memory_ids: List[str],
+    target_title: Optional[str] = None,
+    target_category: Optional[str] = None,
+    target_tags: Optional[List[str]] = None,
+    delete_sources: bool = True,
+    instruction: Optional[str] = None,
+) -> dict:
+    """
+    Consolidates multiple correlated memories/notes into a single, cohesive, non-redundant Markdown document using context-safe LLM synthesis.
+    Automatically ensures the combined notes do not exceed the LLM context window.
+    
+    Args:
+        memory_ids: List of 2 or more memory IDs to merge (e.g. ['mem_abc123', 'mem_def456'])
+        target_title: Optional title for the merged master memory (defaults to primary note title)
+        target_category: Optional category name from the taxonomy (e.g. 'development', 'projects')
+        target_tags: Optional list of tags to attach to the merged memory
+        delete_sources: Whether to remove the individual source notes after successful consolidation (default True)
+        instruction: Optional specific guidance for the LLM during consolidation (e.g. 'Focus on LeetCode patterns', 'Merge CLI configs')
+    """
+    return merge_memories_service(
+        memory_ids=memory_ids,
+        target_title=target_title,
+        target_category=target_category,
+        target_tags=target_tags,
+        delete_sources=delete_sources,
+        instruction=instruction,
+    )
+
+
+def find_correlated_memories(
+    memory_id: str,
+    top_k: int = 5,
+) -> dict:
+    """
+    Discovers related/correlated memories for a given note using vector similarity, category matches, and tag overlap.
+    Useful for finding candidate notes to merge.
+    
+    Args:
+        memory_id: The memory ID to find related notes for (e.g. 'mem_abc123')
+        top_k: Number of correlated notes to return (default 5)
+    """
+    results = core_find_correlated(memory_id=memory_id, top_k=top_k)
+    return {
+        "status": "success",
+        "memory_id": memory_id,
+        "total_correlated": len(results),
+        "correlated_memories": results,
+    }
+
+
 def register_memory_tools(mcp):
     """Register all memory and category MCP tools on the FastMCP server instance."""
     mcp.tool()(store)
@@ -351,6 +403,8 @@ def register_memory_tools(mcp):
     mcp.tool()(hybrid_fetch)
     mcp.tool()(list_memories)
     mcp.tool()(get_categories)
+    mcp.tool()(merge_memories)
+    mcp.tool()(find_correlated_memories)
     return mcp
 
 

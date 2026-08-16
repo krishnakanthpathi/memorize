@@ -13,6 +13,7 @@ import { BackupModal } from '@/components/modals/BackupModal';
 import { NewCategoryModal } from '@/components/modals/NewCategoryModal';
 import { DeleteConfirmationModal } from '@/components/modals/DeleteConfirmationModal';
 import { KeyboardShortcutsModal } from '@/components/modals/KeyboardShortcutsModal';
+import { MergeMemoriesModal } from '@/components/modals/MergeMemoriesModal';
 import { useNotesStore } from '@/store/useNotesStore';
 
 export const AppLayout: React.FC = () => {
@@ -186,6 +187,7 @@ export const AppLayout: React.FC = () => {
       <NewCategoryModal />
       <DeleteConfirmationModal />
       <KeyboardShortcutsModal />
+      <MergeMemoriesModal />
     </div>
   );
 };

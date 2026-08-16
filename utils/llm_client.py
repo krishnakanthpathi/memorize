@@ -171,6 +171,24 @@ def execute_tool_call(tool_name: str, params: dict) -> dict:
         from mcp.tools.memory_tools import get_categories as fetch_categories
         res = fetch_categories()
         return {"tool": tool_clean, "status": "success", "result": res}
+    elif tool_clean in ("merge_memories", "llm_merge", "merge"):
+        from core.memory_merger import merge_memories_service
+        res = merge_memories_service(
+            memory_ids=params.get("memory_ids", []),
+            target_title=params.get("target_title"),
+            target_category=params.get("target_category"),
+            target_tags=params.get("target_tags"),
+            delete_sources=params.get("delete_sources", True),
+            instruction=params.get("instruction"),
+        )
+        return {"tool": tool_clean, "status": "success" if res.get("status") == "success" else "error", "result": res}
+    elif tool_clean in ("find_correlated_memories", "correlations", "find_related_memories"):
+        from core.memory_merger import find_correlated_memories
+        res = find_correlated_memories(
+            memory_id=params.get("memory_id", ""),
+            top_k=params.get("top_k", 5),
+        )
+        return {"tool": tool_clean, "status": "success", "result": res}
     elif tool_clean in ("clear_all_memories", "clear_all", "reset_memories", "purge_all", "delete_all"):
         from storage.sync_manager import clear_all_memories
         res = clear_all_memories()

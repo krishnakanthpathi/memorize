@@ -11,6 +11,15 @@ class MemoryCreateRequest(BaseModel):
     memory_id: Optional[str] = Field(default=None, description="Optional existing memory ID")
 
 
+class MemoryMergeRequest(BaseModel):
+    memory_ids: List[str] = Field(..., min_length=2, description="List of at least 2 memory IDs to merge")
+    target_title: Optional[str] = Field(default=None, description="Optional custom unified title")
+    target_category: Optional[str] = Field(default=None, description="Optional target category")
+    target_tags: Optional[List[str]] = Field(default=None, description="Optional list of tags for merged note")
+    delete_sources: bool = Field(default=True, description="Whether to delete/trash original source memories after merge")
+    instruction: Optional[str] = Field(default=None, description="Optional custom LLM merge instructions")
+
+
 class RevertRequest(BaseModel):
     version_number: Optional[int] = Field(default=None, description="Version number to revert to")
 

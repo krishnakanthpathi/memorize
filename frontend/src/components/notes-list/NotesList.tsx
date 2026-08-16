@@ -14,6 +14,9 @@ import {
   X,
   Copy,
   Check,
+  Combine,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
@@ -40,6 +43,10 @@ export const NotesList: React.FC = () => {
     toggleFavorite,
     setSearchQuery,
     setActiveModal,
+    selectedNoteIds,
+    toggleNoteSelection,
+    clearNoteSelection,
+    openMergeModal,
   } = useNotesStore();
 
   const [sortBy, setSortBy] = useState<SortOption>('updated');
@@ -248,23 +255,52 @@ export const NotesList: React.FC = () => {
         ) : (
           filteredNotes.map((note) => {
             const isSelected = activeNoteId === note.id;
+            const isChecked = selectedNoteIds.includes(note.id);
             const snippet = cleanMarkdownSnippet(note.content || note.snippet || '');
 
             return (
               <ContextMenu.Root key={note.id}>
                 <ContextMenu.Trigger asChild>
                   <div
-                    onClick={() => selectNote(note.id)}
+                    onClick={(e) => {
+                      if (e.shiftKey || e.metaKey || e.ctrlKey) {
+                        e.preventDefault();
+                        toggleNoteSelection(note.id);
+                      } else {
+                        selectNote(note.id);
+                      }
+                    }}
                     className={cn(
-                      'p-3 cursor-pointer transition-all relative border-l-2',
+                      'p-3 cursor-pointer transition-all relative border-l-2 group select-none',
                       isSelected
                         ? 'bg-surface-selected border-foreground shadow-xs'
+                        : isChecked
+                        ? 'bg-surface-hover/80 border-primary/50'
                         : 'border-transparent hover:bg-surface-hover'
                     )}
                   >
-                    {/* Header: Title + relative date + pin */}
+                    {/* Header: Title + relative date + pin + selection checkbox */}
                     <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-1.5 truncate">
+                      <div className="flex items-center gap-2 truncate">
+                        {/* Multi-select Checkbox */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleNoteSelection(note.id);
+                          }}
+                          className={cn(
+                            'p-0.5 rounded transition-all text-muted-foreground hover:text-foreground',
+                            isChecked || selectedNoteIds.length > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-60'
+                          )}
+                        >
+                          {isChecked ? (
+                            <CheckSquare className="w-3.5 h-3.5 text-foreground fill-surface-selected" />
+                          ) : (
+                            <Square className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+
                         {note.isPinned && (
                           <Pin className="w-3 h-3 text-foreground shrink-0 fill-current" />
                         )}
@@ -286,12 +322,12 @@ export const NotesList: React.FC = () => {
                     </div>
 
                     {/* Clean markdown snippet preview */}
-                    <p className="text-[11px] text-muted-foreground line-clamp-1 mt-1 font-normal">
+                    <p className="text-[11px] text-muted-foreground line-clamp-1 mt-1 font-normal pl-5">
                       {snippet || <span className="italic opacity-60">No additional text</span>}
                     </p>
 
                     {/* Badges footer (Category + Tags) */}
-                    <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                    <div className="flex items-center gap-1.5 mt-2 flex-wrap pl-5">
                       <span className="inline-flex items-center gap-0.5 text-[9px] font-mono px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground capitalize">
                         <Folder className="w-2.5 h-2.5 opacity-70" />
                         {note.category || 'personal'}
@@ -317,7 +353,7 @@ export const NotesList: React.FC = () => {
 
                 {/* Right Click Context Menu */}
                 <ContextMenu.Portal>
-                  <ContextMenu.Content className="z-50 min-w-[170px] bg-popover text-popover-foreground rounded-md p-1 border border-border shadow-xl text-xs animate-in fade-in zoom-in-95">
+                  <ContextMenu.Content className="z-50 min-w-[190px] bg-popover text-popover-foreground rounded-md p-1 border border-border shadow-xl text-xs animate-in fade-in zoom-in-95">
                     {activeView !== 'trash' ? (
                       <>
                         <ContextMenu.Item
@@ -333,6 +369,34 @@ export const NotesList: React.FC = () => {
                             <>
                               <Copy className="w-3.5 h-3.5 text-muted-foreground" />
                               <span>Copy Memory ID</span>
+                            </>
+                          )}
+                        </ContextMenu.Item>
+
+                        <ContextMenu.Separator className="h-px bg-border my-1" />
+
+                        {/* Merge Actions */}
+                        <ContextMenu.Item
+                          onClick={() => openMergeModal([note.id])}
+                          className="px-2.5 py-1.5 rounded cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2 font-medium text-foreground"
+                        >
+                          <Combine className="w-3.5 h-3.5" />
+                          <span>Merge with Related Notes...</span>
+                        </ContextMenu.Item>
+
+                        <ContextMenu.Item
+                          onClick={() => toggleNoteSelection(note.id)}
+                          className="px-2.5 py-1.5 rounded cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2 text-muted-foreground hover:text-foreground"
+                        >
+                          {isChecked ? (
+                            <>
+                              <CheckSquare className="w-3.5 h-3.5" />
+                              <span>Unselect Note</span>
+                            </>
+                          ) : (
+                            <>
+                              <Square className="w-3.5 h-3.5" />
+                              <span>Select for Multi-Merge</span>
                             </>
                           )}
                         </ContextMenu.Item>
@@ -421,6 +485,32 @@ export const NotesList: React.FC = () => {
           })
         )}
       </div>
+
+      {/* Floating Multi-Selection Action Bar */}
+      {selectedNoteIds.length > 0 && activeView !== 'trash' && (
+        <div className="p-2.5 bg-surface-sidebar border-t border-border flex items-center justify-between animate-in slide-in-from-bottom-2 select-none shrink-0 shadow-lg">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+            <Combine className="w-4 h-4 text-foreground" />
+            <span>{selectedNoteIds.length} notes selected</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => clearNoteSelection()}
+              className="px-2.5 py-1 rounded text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors"
+            >
+              Clear
+            </button>
+            <button
+              onClick={() => openMergeModal()}
+              disabled={selectedNoteIds.length < 2}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-foreground text-background text-xs font-bold hover:opacity-90 transition-opacity disabled:opacity-50 shadow-xs cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Merge ({selectedNoteIds.length})</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

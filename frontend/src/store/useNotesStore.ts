@@ -27,7 +27,14 @@ interface NotesState {
   isOnline: boolean;
   lastSavedAt: string | null;
   sidebarCollapsed: boolean;
-  activeModal: 'search' | 'chat' | 'versions' | 'audit' | 'backup' | 'models' | 'settings' | 'new-category' | 'shortcuts' | null;
+  activeModal: 'search' | 'chat' | 'versions' | 'audit' | 'backup' | 'models' | 'settings' | 'new-category' | 'shortcuts' | 'merge' | null;
+
+  // Multi-selection & Merge State
+  selectedNoteIds: string[];
+  toggleNoteSelection: (id: string) => void;
+  selectAllNotes: (ids?: string[]) => void;
+  clearNoteSelection: () => void;
+  openMergeModal: (initialIds?: string[]) => void;
 
   // LLM Config
   selectedModel: string;
@@ -490,6 +497,36 @@ export const useNotesStore = create<NotesState>((set, get) => {
 
     toggleSidebar: () => {
       set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed }));
+    },
+
+    selectedNoteIds: [],
+    toggleNoteSelection: (id) => {
+      set((state) => {
+        const exists = state.selectedNoteIds.includes(id);
+        return {
+          selectedNoteIds: exists
+            ? state.selectedNoteIds.filter((x) => x !== id)
+            : [...state.selectedNoteIds, id],
+        };
+      });
+    },
+    selectAllNotes: (ids) => {
+      if (ids) {
+        set({ selectedNoteIds: ids });
+      } else {
+        const { notes } = get();
+        set({ selectedNoteIds: notes.map((n) => n.id) });
+      }
+    },
+    clearNoteSelection: () => {
+      set({ selectedNoteIds: [] });
+    },
+    openMergeModal: (initialIds) => {
+      if (initialIds && initialIds.length > 0) {
+        set({ selectedNoteIds: initialIds, activeModal: 'merge' });
+      } else {
+        set({ activeModal: 'merge' });
+      }
     },
 
     setActiveModal: (modal) => {

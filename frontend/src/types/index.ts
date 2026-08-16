@@ -142,3 +142,38 @@ export interface ModelsResponse {
   current_default?: string;
   total_count?: number;
 }
+
+export interface MergeMemoriesRequest {
+  memory_ids: string[];
+  target_title?: string;
+  target_category?: string;
+  target_tags?: string[];
+  delete_sources?: boolean;
+  instruction?: string;
+}
+
+export interface MergeMemoriesResponse {
+  status: string;
+  action: string;
+  merged_memory_id: string;
+  title: string;
+  category: string;
+  tags: string[];
+  file_path: string;
+  chunk_count: number;
+  merged_source_count: number;
+  deleted_source_ids: string[];
+  content_preview: string;
+}
+
+export interface CorrelationItem {
+  id: string;
+  title: string;
+  category: string;
+  tags: string[];
+  shared_tags: string[];
+  same_category: boolean;
+  similarity_score: number;
+  similarity_percent: number;
+  snippet: string;
+}
