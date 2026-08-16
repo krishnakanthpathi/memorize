@@ -17,6 +17,8 @@ import {
   Columns,
   Save,
   Loader2,
+  Copy,
+  Check,
 } from 'lucide-react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useNotesStore } from '@/store/useNotesStore';
@@ -48,6 +50,7 @@ export const EditorCanvas: React.FC = () => {
 
   const [tagInput, setTagInput] = useState('');
   const [showTagInput, setShowTagInput] = useState(false);
+  const [copiedId, setCopiedId] = useState(false);
   const [viewMode, setViewMode] = useState<EditorViewMode>('markdown'); // Default as Markdown Viewer
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const splitTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -427,6 +430,32 @@ export const EditorCanvas: React.FC = () => {
 
         {/* Tags & Metadata bar */}
         <div className="flex items-center flex-wrap gap-2 pt-2 pb-6 border-b border-border/50 text-xs">
+          {/* Memory ID Chip with Copy Action */}
+          <button
+            onClick={() => {
+              if (activeNote?.id) {
+                navigator.clipboard.writeText(activeNote.id);
+                setCopiedId(true);
+                setTimeout(() => setCopiedId(false), 2000);
+              }
+            }}
+            title="Click to copy Memory ID"
+            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-surface-hover/80 hover:bg-surface-hover text-muted-foreground hover:text-foreground font-mono text-[11px] border border-border/60 transition-colors cursor-pointer"
+          >
+            {copiedId ? (
+              <>
+                <Check className="w-3 h-3 text-emerald-500" />
+                <span className="text-emerald-500 font-medium">Copied ID!</span>
+              </>
+            ) : (
+              <>
+                <span className="opacity-60">ID:</span>
+                <span className="font-semibold text-foreground/80">{activeNote.id}</span>
+                <Copy className="w-2.5 h-2.5 opacity-60" />
+              </>
+            )}
+          </button>
+
           {/* Tags list */}
           {Array.isArray(activeNote.tags) &&
             activeNote.tags.map((tag) => (

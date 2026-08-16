@@ -7,7 +7,9 @@ import { listener, listenerCtx } from '@milkdown/plugin-listener';
 import { history } from '@milkdown/plugin-history';
 import { clipboard } from '@milkdown/plugin-clipboard';
 import { prism, prismConfig } from '@milkdown/plugin-prism';
+import { math } from '@milkdown/plugin-math';
 import { refractor } from 'refractor/all';
+import 'katex/dist/katex.min.css';
 
 interface MilkdownEditorProps {
   noteId: string;
@@ -45,6 +47,7 @@ const EditorInner: React.FC<MilkdownEditorProps> = ({
       .use(commonmark)
       .use(gfm)
       .use(prism)
+      .use(math)
       .use(history)
       .use(clipboard)
       .use(listener)

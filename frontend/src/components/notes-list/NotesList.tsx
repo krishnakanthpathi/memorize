@@ -12,6 +12,8 @@ import {
   Folder,
   Sparkles,
   X,
+  Copy,
+  Check,
 } from 'lucide-react';
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
@@ -41,6 +43,14 @@ export const NotesList: React.FC = () => {
   } = useNotesStore();
 
   const [sortBy, setSortBy] = useState<SortOption>('updated');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopyId = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(id);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   // Filter notes based on activeView, category, tag, and search query
   const filteredNotes = useMemo(() => {
@@ -311,6 +321,25 @@ export const NotesList: React.FC = () => {
                     {activeView !== 'trash' ? (
                       <>
                         <ContextMenu.Item
+                          onClick={(e) => handleCopyId(e, note.id)}
+                          className="px-2.5 py-1.5 rounded cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2"
+                        >
+                          {copiedId === note.id ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 text-emerald-500" />
+                              <span className="text-emerald-500 font-medium">Copied Memory ID!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5 text-muted-foreground" />
+                              <span>Copy Memory ID</span>
+                            </>
+                          )}
+                        </ContextMenu.Item>
+
+                        <ContextMenu.Separator className="h-px bg-border my-1" />
+
+                        <ContextMenu.Item
                           onClick={() => togglePin(note.id)}
                           className="px-2.5 py-1.5 rounded cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2"
                         >
@@ -349,6 +378,25 @@ export const NotesList: React.FC = () => {
                       </>
                     ) : (
                       <>
+                        <ContextMenu.Item
+                          onClick={(e) => handleCopyId(e, note.id)}
+                          className="px-2.5 py-1.5 rounded cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2"
+                        >
+                          {copiedId === note.id ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 text-emerald-500" />
+                              <span className="text-emerald-500 font-medium">Copied Memory ID!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5 text-muted-foreground" />
+                              <span>Copy Memory ID</span>
+                            </>
+                          )}
+                        </ContextMenu.Item>
+
+                        <ContextMenu.Separator className="h-px bg-border my-1" />
+
                         <ContextMenu.Item
                           onClick={() => restoreNote(note.id)}
                           className="px-2.5 py-1.5 rounded cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2"

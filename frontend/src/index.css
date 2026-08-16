@@ -287,6 +287,24 @@
   cursor: pointer;
 }
 
+/* KaTeX and Math Block Styling */
+.milkdown .math-block,
+.milkdown .katex-display {
+  margin: 1.25rem 0;
+  padding: 0.75rem 1rem;
+  background-color: hsl(var(--surface-hover) / 0.5);
+  border-radius: 0.5rem;
+  border: 1px solid hsl(var(--border));
+  overflow-x: auto;
+  text-align: center;
+}
+
+.milkdown .math-inline,
+.milkdown .katex {
+  font-size: 1.05em;
+  color: hsl(var(--foreground));
+}
+
 /* Raw Markdown Line Numbers & Editor Styling */
 .markdown-line-numbers {
   user-select: none;

@@ -63,10 +63,13 @@ def get_version_history(memory_id: str) -> List[Dict[str, Any]]:
     history = []
     for v in versions:
         history.append({
+            "id": v.get("id"),
+            "memory_id": v.get("memory_id"),
             "version_number": v["version_number"],
             "title": v["title"],
             "category": v["category"],
             "tags": v["tags"],
+            "content": v.get("content", ""),
             "created_at": v["created_at"],
             "content_snippet": v["content"][:200] + ("..." if len(v["content"]) > 200 else ""),
             "content_hash": v["content_hash"],
