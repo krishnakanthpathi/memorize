@@ -305,6 +305,25 @@
   color: hsl(var(--foreground));
 }
 
+/* KaTeX Formulas Inside Tables */
+.milkdown td .katex,
+.milkdown th .katex {
+  display: inline-block;
+  vertical-align: middle;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.milkdown td .katex-display,
+.milkdown th .katex-display {
+  margin: 0.25rem 0 !important;
+  padding: 0.25rem 0.5rem !important;
+  background-color: transparent !important;
+  border: none !important;
+  display: inline-block !important;
+  text-align: left !important;
+}
+
 /* Raw Markdown Line Numbers & Editor Styling */
 .markdown-line-numbers {
   user-select: none;

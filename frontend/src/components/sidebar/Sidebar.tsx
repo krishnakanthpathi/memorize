@@ -26,6 +26,10 @@ import {
   Brain,
   Terminal,
   Database,
+  Maximize2,
+  Minimize2,
+  Expand,
+  Shrink,
 } from 'lucide-react';
 import { useNotesStore } from '@/store/useNotesStore';
 import { ThemeMode } from '@/types';
@@ -50,6 +54,10 @@ export const Sidebar: React.FC = () => {
     setSelectedTag,
     createNewNote,
     setActiveModal,
+    isFullScreen,
+    isFocusMode,
+    toggleFullScreen,
+    toggleFocusMode,
   } = useNotesStore();
 
   const [categoriesOpen, setCategoriesOpen] = useState(false);
@@ -391,6 +399,40 @@ export const Sidebar: React.FC = () => {
                   <Cpu className="w-4 h-4 text-foreground/80" />
                   <span>LLM Models Engine</span>
                 </div>
+              </button>
+
+              <button
+                onClick={toggleFullScreen}
+                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5">
+                  {isFullScreen ? (
+                    <Minimize2 className="w-4 h-4 text-amber-500" />
+                  ) : (
+                    <Maximize2 className="w-4 h-4 text-foreground/80" />
+                  )}
+                  <span>{isFullScreen ? 'Exit Full Screen' : 'Full Screen Mode'}</span>
+                </div>
+                <kbd className="text-[9px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
+                  F11
+                </kbd>
+              </button>
+
+              <button
+                onClick={toggleFocusMode}
+                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5">
+                  {isFocusMode ? (
+                    <Shrink className="w-4 h-4 text-primary" />
+                  ) : (
+                    <Expand className="w-4 h-4 text-foreground/80" />
+                  )}
+                  <span>{isFocusMode ? 'Exit Zen Mode' : 'Zen Focus Mode'}</span>
+                </div>
+                <kbd className="text-[9px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
+                  ⌘⇧Z
+                </kbd>
               </button>
             </div>
           )}

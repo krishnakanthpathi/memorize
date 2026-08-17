@@ -23,6 +23,11 @@ import {
   Wand2,
   AlignLeft,
   ListOrdered,
+  Maximize2,
+  Minimize2,
+  Expand,
+  Shrink,
+  Minimize,
 } from 'lucide-react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useNotesStore } from '@/store/useNotesStore';
@@ -52,6 +57,11 @@ export const EditorCanvas: React.FC = () => {
     setActiveModal,
     createNewNote,
     codeTheme,
+    isFullScreen,
+    isFocusMode,
+    toggleFullScreen,
+    toggleFocusMode,
+    setIsFocusMode,
   } = useNotesStore();
 
   const [tagInput, setTagInput] = useState('');
@@ -108,14 +118,15 @@ export const EditorCanvas: React.FC = () => {
     return () => window.removeEventListener('keydown', handleSaveKeyDown);
   }, [isTrashed, activeNote, saveCurrentNoteRemote]);
 
-  // Word, lines, and character counts
+  // Word, lines, character counts, and reading time
   const stats = useMemo(() => {
-    if (!activeNote) return { words: 0, chars: 0, lines: 1 };
+    if (!activeNote) return { words: 0, chars: 0, lines: 1, readTimeMinutes: 1 };
     const text = (activeNote.title + ' ' + activeNote.content).trim();
     const words = text ? text.split(/\s+/).filter(Boolean).length : 0;
     const chars = (activeNote.content || '').length;
     const lines = (activeNote.content || '').split('\n').length || 1;
-    return { words, chars, lines };
+    const readTimeMinutes = Math.max(1, Math.ceil(words / 200));
+    return { words, chars, lines, readTimeMinutes };
   }, [activeNote]);
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -452,6 +463,34 @@ export const EditorCanvas: React.FC = () => {
                 </DropdownMenu.Portal>
               </DropdownMenu.Root>
 
+              {/* Full Screen Mode Toggle */}
+              <button
+                onClick={toggleFullScreen}
+                title={isFullScreen ? "Exit Full Screen (F11 / ⌘⇧F)" : "Full Screen Mode (F11 / ⌘⇧F)"}
+                className={cn(
+                  "p-1.5 rounded-md transition-colors",
+                  isFullScreen
+                    ? "text-amber-500 bg-amber-500/10 hover:bg-amber-500/20"
+                    : "text-muted-foreground hover:text-foreground hover:bg-surface-hover"
+                )}
+              >
+                {isFullScreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              </button>
+
+              {/* Zen / Focus Mode Toggle */}
+              <button
+                onClick={toggleFocusMode}
+                title={isFocusMode ? "Exit Focus Mode (Esc / ⌘⇧Z)" : "Zen Focus Mode (⌘⇧Z)"}
+                className={cn(
+                  "p-1.5 rounded-md transition-colors",
+                  isFocusMode
+                    ? "text-primary bg-primary/10 hover:bg-primary/20 font-semibold"
+                    : "text-muted-foreground hover:text-foreground hover:bg-surface-hover"
+                )}
+              >
+                {isFocusMode ? <Shrink className="w-4 h-4" /> : <Expand className="w-4 h-4" />}
+              </button>
+
               {/* AI Companion Chat Trigger */}
               <button
                 onClick={() => setActiveModal('chat')}
@@ -535,14 +574,48 @@ export const EditorCanvas: React.FC = () => {
             Apply
           </button>
           <button
-            onClick={() => {
-              setShowCustomPromptInput(false);
-              setCustomAiPrompt('');
-            }}
-            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground"
+            onClick={() => setShowCustomPromptInput(false)}
+            className="p-1 rounded text-muted-foreground hover:text-foreground"
           >
             <X className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {/* Zen Focus Mode Top Bar */}
+      {isFocusMode && (
+        <div className="px-6 sm:px-12 py-2 bg-card/95 backdrop-blur-md border-b border-border flex items-center justify-between text-xs animate-in slide-in-from-top-1 select-none shadow-xs">
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1.5 font-semibold text-primary">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <span>Zen Focus Mode</span>
+            </span>
+            <span className="text-muted-foreground/60">•</span>
+            <span className="text-muted-foreground font-mono text-[11px]">
+              {stats.words.toLocaleString()} words &nbsp;•&nbsp; {stats.chars.toLocaleString()} chars &nbsp;•&nbsp; ~{stats.readTimeMinutes} min read
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggleFullScreen}
+              title={isFullScreen ? "Exit Native Full Screen (F11)" : "Enter Native Full Screen (F11)"}
+              className="px-2 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors flex items-center gap-1"
+            >
+              {isFullScreen ? <Minimize2 className="w-3.5 h-3.5 text-amber-500" /> : <Maximize2 className="w-3.5 h-3.5" />}
+              <span className="hidden sm:inline">{isFullScreen ? 'Windowed' : 'Full Screen'}</span>
+            </button>
+
+            <button
+              onClick={() => setIsFocusMode(false)}
+              title="Exit Zen Focus Mode (Esc)"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-surface-hover hover:bg-surface-hover/80 text-foreground border border-border transition-all active:scale-95 cursor-pointer"
+            >
+              <Shrink className="w-3.5 h-3.5" />
+              <span>Exit Focus</span>
+              <kbd className="ml-1 px-1 py-0.2 rounded text-[10px] bg-card border border-border/70 font-mono text-muted-foreground">Esc</kbd>
+            </button>
+          </div>
         </div>
       )}
 

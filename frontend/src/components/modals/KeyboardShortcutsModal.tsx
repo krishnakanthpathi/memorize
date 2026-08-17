@@ -27,11 +27,13 @@ export const KeyboardShortcutsModal: React.FC = () => {
     {
       section: 'Navigation & Tools',
       items: [
+        { title: 'Full Screen Mode', keys: ['F11', 'or', '⌘', '⇧', 'F'], description: 'Toggle native browser full screen' },
+        { title: 'Zen Focus Mode', keys: ['⌘', '⇧', 'Z'], description: 'Toggle distraction-free full editor canvas' },
         { title: 'Global Search', keys: ['⌘', 'K'], description: 'Open hybrid vector & text search' },
         { title: 'Settings View', keys: ['⌘', ','], description: 'Open dedicated full settings environment' },
         { title: 'AI Companion', keys: ['⌘', '⇧', 'A'], description: 'Toggle AI Companion side drawer' },
         { title: 'Shortcuts Help', keys: ['⌘', '/'], description: 'Show keyboard shortcuts cheat sheet' },
-        { title: 'Close / Back', keys: ['Esc'], description: 'Close any active modal or exit settings' },
+        { title: 'Close / Back', keys: ['Esc'], description: 'Close active modal, exit focus, or return to notes' },
       ],
     },
   ];

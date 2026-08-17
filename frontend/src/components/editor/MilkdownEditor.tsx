@@ -7,9 +7,10 @@ import { listener, listenerCtx } from '@milkdown/plugin-listener';
 import { history } from '@milkdown/plugin-history';
 import { clipboard } from '@milkdown/plugin-clipboard';
 import { prism, prismConfig } from '@milkdown/plugin-prism';
-import { math } from '@milkdown/plugin-math';
+import { math, katexOptionsCtx } from '@milkdown/plugin-math';
 import { refractor } from 'refractor/all';
 import 'katex/dist/katex.min.css';
+import { normalizeMarkdownMath } from '@/lib/renderMath';
 
 interface MilkdownEditorProps {
   noteId: string;
@@ -26,16 +27,23 @@ const EditorInner: React.FC<MilkdownEditorProps> = ({
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
-  const { get } = useEditor((root) =>
-    Editor.make()
+  const { get } = useEditor((root) => {
+    const cleanContent = normalizeMarkdownMath(initialContent || '');
+    return Editor.make()
       .config((ctx) => {
         ctx.set(rootCtx, root);
-        ctx.set(defaultValueCtx, initialContent || '');
+        ctx.set(defaultValueCtx, cleanContent);
         if (readOnly) {
           ctx.set(editorViewOptionsCtx, { editable: () => false });
         }
         ctx.set(prismConfig.key, {
           configureRefractor: () => refractor,
+        });
+        ctx.set(katexOptionsCtx.key, {
+          throwOnError: false,
+          errorColor: '#ef4444',
+          strict: false,
+          trust: true,
         });
         const listenerPlugin = ctx.get(listenerCtx);
         listenerPlugin.markdownUpdated((_, markdown) => {
@@ -50,8 +58,8 @@ const EditorInner: React.FC<MilkdownEditorProps> = ({
       .use(math)
       .use(history)
       .use(clipboard)
-      .use(listener)
-  );
+      .use(listener);
+  });
 
   return (
     <div className="milkdown-wrapper w-full h-full min-h-[400px]">

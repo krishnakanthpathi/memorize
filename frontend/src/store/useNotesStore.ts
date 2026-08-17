@@ -28,6 +28,8 @@ interface NotesState {
   isOnline: boolean;
   lastSavedAt: string | null;
   sidebarCollapsed: boolean;
+  isFullScreen: boolean;
+  isFocusMode: boolean;
   activeModal: 'search' | 'chat' | 'versions' | 'audit' | 'backup' | 'models' | 'settings' | 'new-category' | 'shortcuts' | 'merge' | null;
 
   // Multi-selection & Merge State
@@ -71,6 +73,10 @@ interface NotesState {
   setSearchQuery: (query: string) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebar: () => void;
+  setIsFullScreen: (full: boolean) => void;
+  setIsFocusMode: (focus: boolean) => void;
+  toggleFullScreen: () => void;
+  toggleFocusMode: () => void;
   setActiveModal: (modal: NotesState['activeModal']) => void;
   exportActiveNote: () => void;
 }
@@ -160,6 +166,8 @@ export const useNotesStore = create<NotesState>((set, get) => {
     isOnline: true,
     lastSavedAt: null,
     sidebarCollapsed: false,
+    isFullScreen: false,
+    isFocusMode: false,
     activeModal: null,
 
     pinnedIds: initialPinned,
@@ -531,6 +539,34 @@ export const useNotesStore = create<NotesState>((set, get) => {
 
     toggleSidebar: () => {
       set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed }));
+    },
+
+    setIsFullScreen: (full) => {
+      set({ isFullScreen: full });
+    },
+
+    setIsFocusMode: (focus) => {
+      set({ isFocusMode: focus });
+    },
+
+    toggleFullScreen: () => {
+      if (typeof document !== 'undefined') {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen?.().catch((err) => {
+            console.warn('Error requesting fullscreen:', err);
+          });
+          set({ isFullScreen: true });
+        } else {
+          document.exitFullscreen?.().catch((err) => {
+            console.warn('Error exiting fullscreen:', err);
+          });
+          set({ isFullScreen: false });
+        }
+      }
+    },
+
+    toggleFocusMode: () => {
+      set((state) => ({ isFocusMode: !state.isFocusMode }));
     },
 
     selectedNoteIds: [],
