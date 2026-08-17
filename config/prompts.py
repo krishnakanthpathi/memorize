@@ -102,6 +102,28 @@ Guidelines:
 """
 
 
+TITLE_GENERATION_PROMPT = """You are an expert AI editor and document architect.
+Your task is to generate a clear, concise, descriptive, and high-signal title (3 to 7 words) for the provided Markdown note content or excerpt.
+
+Rules:
+1. Do NOT enclose the title in quotes, backticks, or markdown bold/italics.
+2. Do NOT add prefixes like "Title:", "Note:", or "Summary:".
+3. Capture the core subject, entity, technical topic, or intent accurately.
+4. Return ONLY the title text on a single line.
+"""
+
+
+ORGANIZE_SELECTION_SYSTEM_PROMPT = """You are an expert AI text editor and writing assistant.
+Your task is to rewrite, organize, or transform the user's selected text snippet or paragraph according to their requested goal (e.g., polish paragraph, summarize into bullet takeaways, format as technical reference with code/formulas, simplify, expand, or apply a custom instruction).
+
+Guidelines:
+1. Maintain context, accurate terminology, and technical fidelity ($...$, $$...$$, code syntax, and key parameters).
+2. Output ONLY the replacement text for the selected passage.
+3. Do NOT include conversational introductory preambles or wrap the entire output in markdown code fences (unless the output is explicitly a code block).
+4. Ensure clean, elegant formatting matching standard Markdown.
+"""
+
+
 PROMPT_REGISTRY = {
     "companion": {
         "name": "AI Companion System Prompt",
@@ -122,6 +144,16 @@ PROMPT_REGISTRY = {
         "name": "Single Memory AI Organizer Prompt",
         "description": "Used to polish, restructure, clean up, or summarize individual memory notes.",
         "template": ORGANIZE_MEMORY_SYSTEM_PROMPT,
+    },
+    "generate_title": {
+        "name": "Note Title Generation Prompt",
+        "description": "Used to generate concise, high-signal, descriptive titles for notes and excerpts.",
+        "template": TITLE_GENERATION_PROMPT,
+    },
+    "organize_selection": {
+        "name": "Selected Paragraph / Text Organizer Prompt",
+        "description": "Used to polish, summarize, or transform selected paragraphs and text excerpts.",
+        "template": ORGANIZE_SELECTION_SYSTEM_PROMPT,
     },
     "auto_classify": {
         "name": "Auto-Classification & Tagging Prompt",

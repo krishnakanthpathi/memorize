@@ -24,6 +24,22 @@ class MemoryMergeRequest(BaseModel):
 class MemoryOrganizeRequest(BaseModel):
     instruction: Optional[str] = Field(default=None, description="Optional instruction or goal (e.g. summarize into key takeaways, polish formatting)")
     use_ai: bool = Field(default=True, description="Whether to use AI for restructuring and organizing")
+    generate_title: bool = Field(default=False, description="Whether to also generate and update a new descriptive title")
+
+
+class GenerateTitleRequest(BaseModel):
+    content: str = Field(..., description="Note content or text excerpt to generate a title from")
+    current_title: Optional[str] = Field(default=None, description="Optional current working title")
+    instruction: Optional[str] = Field(default=None, description="Optional goal or context for title generation")
+    memory_id: Optional[str] = Field(default=None, description="Optional existing memory ID to update directly")
+    save_to_memory: bool = Field(default=False, description="Whether to automatically save the new title to the memory file and database")
+
+
+class TextTransformRequest(BaseModel):
+    selected_text: str = Field(..., min_length=1, description="Selected text or paragraph to transform")
+    instruction: Optional[str] = Field(default=None, description="Optional custom transformation instruction")
+    mode: Optional[str] = Field(default="polish", description="Transformation mode: polish, summarize, technical, simplify, expand, title")
+    full_context: Optional[str] = Field(default=None, description="Optional surrounding document context")
 
 
 class RevertRequest(BaseModel):

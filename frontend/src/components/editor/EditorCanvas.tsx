@@ -45,12 +45,16 @@ export const EditorCanvas: React.FC = () => {
     categories,
     isSaving,
     isOrganizingNote,
+    isGeneratingTitle,
+    isTransformingSelection,
     lastSavedAt,
     sidebarCollapsed,
     toggleSidebar,
     updateActiveNote,
     saveCurrentNoteRemote,
     organizeNote,
+    generateNoteTitle,
+    transformSelectedText,
     requestDeleteNote,
     restoreNote,
     exportActiveNote,
@@ -72,6 +76,22 @@ export const EditorCanvas: React.FC = () => {
   const [viewMode, setViewMode] = useState<EditorViewMode>('markdown'); // Default as Markdown Viewer
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const splitTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Selected Paragraph / Text Floating AI Organizer State
+  interface TextSelectionState {
+    text: string;
+    start: number;
+    end: number;
+    targetEl: HTMLTextAreaElement | null;
+    top: number;
+    left: number;
+    visible: boolean;
+  }
+  const [selectionState, setSelectionState] = useState<TextSelectionState | null>(null);
+  const [selectionPrompt, setSelectionPrompt] = useState('');
+  const [showSelectionPromptInput, setShowSelectionPromptInput] = useState(false);
+  const [selectionActionSuccess, setSelectionActionSuccess] = useState<string | null>(null);
+  const selectionToolbarRef = useRef<HTMLDivElement>(null);
 
   // Find active note in regular notes OR trash notes
   const activeNote = useMemo(() => {
@@ -153,6 +173,94 @@ export const EditorCanvas: React.FC = () => {
       }, 0);
     }
   };
+
+  // Handle text selection in raw markdown textareas
+  const handleTextareaSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    if (isTrashed || isTransformingSelection) return;
+    const target = e.currentTarget;
+    const start = target.selectionStart;
+    const end = target.selectionEnd;
+
+    if (start !== end && start >= 0 && end > start) {
+      const selected = target.value.substring(start, end);
+      if (selected.trim().length >= 2) {
+        const rect = target.getBoundingClientRect();
+        const textBefore = target.value.substring(0, start);
+        const lineIndex = textBefore.split('\n').length - 1;
+        const approximateLineHeight = 22;
+        const topOffset = rect.top + Math.min(rect.height - 70, Math.max(10, lineIndex * approximateLineHeight - 45));
+
+        setSelectionState({
+          text: selected,
+          start,
+          end,
+          targetEl: target,
+          top: Math.max(80, Math.min(window.innerHeight - 90, topOffset)),
+          left: Math.max(20, Math.min(window.innerWidth - 480, rect.left + 40)),
+          visible: true,
+        });
+        return;
+      }
+    }
+
+    if (!showSelectionPromptInput && !isTransformingSelection) {
+      setSelectionState(null);
+    }
+  };
+
+  // Transform or generate title on selected text
+  const handleTransformSelection = async (mode: string, customInstruction?: string) => {
+    if (!selectionState || !activeNote) return;
+    const { text, start, end, targetEl } = selectionState;
+
+    if (mode === 'title') {
+      const newTitle = await generateNoteTitle(activeNote.id, text, customInstruction);
+      if (newTitle) {
+        setSelectionActionSuccess('Note Title Updated!');
+        setTimeout(() => {
+          setSelectionActionSuccess(null);
+          setSelectionState(null);
+        }, 1800);
+      }
+      return;
+    }
+
+    const transformed = await transformSelectedText(text, customInstruction, mode, activeNote.content);
+    if (transformed !== undefined) {
+      const full = activeNote.content || '';
+      const updated = full.substring(0, start) + transformed + full.substring(end);
+      handleContentChange(updated);
+      setSelectionActionSuccess('Transformed!');
+      setTimeout(() => {
+        setSelectionActionSuccess(null);
+        setSelectionState(null);
+        if (targetEl) {
+          targetEl.focus();
+          targetEl.selectionStart = start;
+          targetEl.selectionEnd = start + transformed.length;
+        }
+      }, 1200);
+    }
+  };
+
+  // Dismiss selection toolbar if clicking outside
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (
+        selectionToolbarRef.current &&
+        !selectionToolbarRef.current.contains(e.target as Node) &&
+        textareaRef.current !== e.target &&
+        splitTextareaRef.current !== e.target
+      ) {
+        if (!isTransformingSelection) {
+          setSelectionState(null);
+          setShowSelectionPromptInput(false);
+        }
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [isTransformingSelection]);
 
   const handleAddTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (isTrashed) return;
@@ -386,11 +494,11 @@ export const EditorCanvas: React.FC = () => {
               <DropdownMenu.Root>
                 <DropdownMenu.Trigger asChild>
                   <button
-                    disabled={isOrganizingNote}
-                    title="Organize, polish, or summarize note with AI"
+                    disabled={isOrganizingNote || isGeneratingTitle}
+                    title="Organize, polish, or generate title with AI"
                     className={cn(
                       'flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-xs select-none border border-border/80',
-                      isOrganizingNote
+                      isOrganizingNote || isGeneratingTitle
                         ? 'bg-muted text-muted-foreground cursor-wait'
                         : 'bg-surface-hover hover:bg-surface-hover/80 text-foreground'
                     )}
@@ -399,6 +507,11 @@ export const EditorCanvas: React.FC = () => {
                       <>
                         <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
                         <span className="text-[11px] hidden md:inline">Organizing...</span>
+                      </>
+                    ) : isGeneratingTitle ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
+                        <span className="text-[11px] hidden md:inline">Generating Title...</span>
                       </>
                     ) : (
                       <>
@@ -411,11 +524,35 @@ export const EditorCanvas: React.FC = () => {
                 <DropdownMenu.Portal>
                   <DropdownMenu.Content
                     align="end"
-                    className="z-50 min-w-[220px] bg-popover text-popover-foreground rounded-lg p-1.5 border border-border shadow-xl text-xs animate-in fade-in zoom-in-95 space-y-0.5"
+                    className="z-50 min-w-[240px] bg-popover text-popover-foreground rounded-lg p-1.5 border border-border shadow-xl text-xs animate-in fade-in zoom-in-95 space-y-0.5"
                   >
                     <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
                       AI Note Enhancement
                     </div>
+
+                    <DropdownMenu.Item
+                      onClick={() => organizeNote(activeNote.id, undefined, true, true)}
+                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                      <div>
+                        <span className="font-semibold block">Polish & Auto-Generate Title</span>
+                        <span className="text-[10px] text-muted-foreground">Restructure content and generate smart title</span>
+                      </div>
+                    </DropdownMenu.Item>
+
+                    <DropdownMenu.Item
+                      onClick={() => generateNoteTitle(activeNote.id, activeNote.content)}
+                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                      <div>
+                        <span className="font-semibold block">Generate Title Only</span>
+                        <span className="text-[10px] text-muted-foreground">Extract concise title from note content</span>
+                      </div>
+                    </DropdownMenu.Item>
+
+                    <DropdownMenu.Separator className="h-px bg-border my-1" />
 
                     <DropdownMenu.Item
                       onClick={() => organizeNote(activeNote.id)}
@@ -621,18 +758,46 @@ export const EditorCanvas: React.FC = () => {
 
       {/* Editor Main Canvas Body */}
       <div className="flex-1 overflow-y-auto px-6 sm:px-12 py-8 max-w-5xl mx-auto w-full flex flex-col">
-        {/* Note Title Input */}
-        <input
-          type="text"
-          value={activeNote.title}
-          onChange={handleTitleChange}
-          readOnly={isTrashed}
-          placeholder="Note Title"
-          className={cn(
-            'w-full bg-transparent text-3xl font-bold tracking-tight text-foreground placeholder:text-muted-foreground/40 border-none outline-none pb-2 focus:ring-0 leading-tight',
-            isTrashed && 'opacity-80 cursor-default'
+        {/* Note Title Input with AI Title Generation Button */}
+        <div className="flex items-center justify-between gap-3 group relative pb-2">
+          <input
+            type="text"
+            value={activeNote.title}
+            onChange={handleTitleChange}
+            readOnly={isTrashed}
+            placeholder="Note Title"
+            className={cn(
+              'flex-1 bg-transparent text-3xl font-bold tracking-tight text-foreground placeholder:text-muted-foreground/40 border-none outline-none focus:ring-0 leading-tight',
+              isTrashed && 'opacity-80 cursor-default'
+            )}
+          />
+
+          {!isTrashed && (
+            <button
+              onClick={() => generateNoteTitle(activeNote.id, activeNote.content)}
+              disabled={isGeneratingTitle || isOrganizingNote || !activeNote.content?.trim()}
+              title="Generate concise, high-signal title from note content using AI"
+              className={cn(
+                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all select-none shadow-xs shrink-0 cursor-pointer",
+                isGeneratingTitle
+                  ? "bg-amber-500/10 text-amber-500 border-amber-500/30 cursor-wait animate-pulse"
+                  : "bg-surface-hover hover:bg-surface-hover/80 text-muted-foreground hover:text-foreground border-border/80 active:scale-95"
+              )}
+            >
+              {isGeneratingTitle ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
+                  <span className="hidden sm:inline">Generating Title...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  <span className="hidden sm:inline">Generate Title</span>
+                </>
+              )}
+            </button>
           )}
-        />
+        </div>
 
         {/* Tags & Metadata bar */}
         <div className="flex items-center flex-wrap gap-2 pt-2 pb-6 border-b border-border/50 text-xs">
@@ -729,6 +894,9 @@ export const EditorCanvas: React.FC = () => {
                 value={activeNote.content || ''}
                 onChange={(e) => handleContentChange(e.target.value)}
                 onKeyDown={handleTextareaKeyDown}
+                onSelect={handleTextareaSelect}
+                onMouseUp={handleTextareaSelect}
+                onKeyUp={handleTextareaSelect}
                 readOnly={isTrashed}
                 placeholder="Write markdown here (# Heading, - List, ```code)..."
                 className="markdown-textarea flex-1 w-full min-h-[450px] resize-none outline-none border-none focus:ring-0 p-0 overflow-hidden"
@@ -765,6 +933,9 @@ export const EditorCanvas: React.FC = () => {
                   value={activeNote.content || ''}
                   onChange={(e) => handleContentChange(e.target.value)}
                   onKeyDown={handleTextareaKeyDown}
+                  onSelect={handleTextareaSelect}
+                  onMouseUp={handleTextareaSelect}
+                  onKeyUp={handleTextareaSelect}
                   readOnly={isTrashed}
                   placeholder="Markdown source..."
                   className="markdown-textarea flex-1 w-full min-h-[400px] resize-none outline-none border-none focus:ring-0 p-0 overflow-hidden"
@@ -825,6 +996,130 @@ export const EditorCanvas: React.FC = () => {
           <span>{stats.chars} chars</span>
         </div>
       </footer>
+
+      {/* Floating Selected Paragraph / Text AI Organizer Toolbar */}
+      {selectionState?.visible && !isTrashed && (
+        <div
+          ref={selectionToolbarRef}
+          style={{
+            top: `${selectionState.top}px`,
+            left: `${selectionState.left}px`,
+          }}
+          className="fixed z-50 animate-in fade-in zoom-in-95 duration-150 shadow-2xl rounded-xl border border-border bg-card/95 backdrop-blur-md px-2 py-1.5 flex items-center gap-1.5 text-xs text-foreground ring-1 ring-border"
+        >
+          {isTransformingSelection ? (
+            <div className="flex items-center gap-2 px-2.5 py-1 text-xs text-foreground font-medium select-none">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
+              <span>Organizing selection with AI...</span>
+            </div>
+          ) : selectionActionSuccess ? (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-emerald-500 font-semibold animate-in fade-in select-none">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>{selectionActionSuccess}</span>
+            </div>
+          ) : showSelectionPromptInput ? (
+            <div className="flex items-center gap-1.5 min-w-[280px]">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <input
+                type="text"
+                value={selectionPrompt}
+                onChange={(e) => setSelectionPrompt(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && selectionPrompt.trim()) {
+                    handleTransformSelection('custom', selectionPrompt.trim());
+                    setShowSelectionPromptInput(false);
+                    setSelectionPrompt('');
+                  } else if (e.key === 'Escape') {
+                    setShowSelectionPromptInput(false);
+                  }
+                }}
+                placeholder="Custom prompt for selection..."
+                className="flex-1 px-2 py-1 rounded bg-surface-hover border border-border text-xs text-foreground outline-none focus:ring-1 focus:ring-ring"
+                autoFocus
+              />
+              <button
+                onClick={() => {
+                  if (selectionPrompt.trim()) {
+                    handleTransformSelection('custom', selectionPrompt.trim());
+                    setShowSelectionPromptInput(false);
+                    setSelectionPrompt('');
+                  }
+                }}
+                disabled={!selectionPrompt.trim()}
+                className="px-2.5 py-1 rounded bg-foreground text-background font-semibold text-[11px] hover:opacity-90 disabled:opacity-50 cursor-pointer"
+              >
+                Apply
+              </button>
+              <button
+                onClick={() => setShowSelectionPromptInput(false)}
+                className="p-1 rounded text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground px-1 border-r border-border select-none">
+                <Sparkles className="w-3 h-3 text-amber-500" />
+                <span>AI Selection</span>
+              </div>
+
+              <button
+                onClick={() => handleTransformSelection('polish')}
+                title="Polish and clean grammar, typography, and formatting"
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-surface-hover hover:bg-surface-hover/80 text-foreground transition-colors cursor-pointer"
+              >
+                <Wand2 className="w-3 h-3 text-amber-500" />
+                <span>Polish</span>
+              </button>
+
+              <button
+                onClick={() => handleTransformSelection('summarize')}
+                title="Summarize selection into concise key takeaway bullet points"
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-surface-hover hover:bg-surface-hover/80 text-foreground transition-colors cursor-pointer"
+              >
+                <ListOrdered className="w-3 h-3 text-blue-500" />
+                <span>Summarize</span>
+              </button>
+
+              <button
+                onClick={() => handleTransformSelection('technical')}
+                title="Format as technical documentation with clear headings, code syntax, and parameters"
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-surface-hover hover:bg-surface-hover/80 text-foreground transition-colors cursor-pointer"
+              >
+                <AlignLeft className="w-3 h-3 text-emerald-500" />
+                <span>Tech Docs</span>
+              </button>
+
+              <button
+                onClick={() => handleTransformSelection('title')}
+                title="Generate and set note title from this selected paragraph"
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-surface-hover hover:bg-surface-hover/80 text-foreground transition-colors cursor-pointer"
+              >
+                <FileText className="w-3 h-3 text-indigo-500" />
+                <span>Make Title</span>
+              </button>
+
+              <button
+                onClick={() => setShowSelectionPromptInput(true)}
+                title="Apply custom AI prompt to this selection"
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-surface-hover hover:bg-surface-hover/80 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+              >
+                <Sparkles className="w-3 h-3" />
+                <span>Custom...</span>
+              </button>
+
+              <button
+                onClick={() => setSelectionState(null)}
+                title="Dismiss"
+                className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors ml-0.5 cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 };

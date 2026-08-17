@@ -25,6 +25,8 @@ interface NotesState {
   isLoading: boolean;
   isSaving: boolean;
   isOrganizingNote: boolean;
+  isGeneratingTitle: boolean;
+  isTransformingSelection: boolean;
   isOnline: boolean;
   lastSavedAt: string | null;
   sidebarCollapsed: boolean;
@@ -62,7 +64,9 @@ interface NotesState {
   createNewNote: (category?: string) => Note;
   updateActiveNote: (fields: Partial<Note>, syncRemote?: boolean) => void;
   saveCurrentNoteRemote: () => Promise<void>;
-  organizeNote: (memoryId: string, instruction?: string, useAi?: boolean) => Promise<any>;
+  organizeNote: (memoryId: string, instruction?: string, useAi?: boolean, generateTitle?: boolean) => Promise<any>;
+  generateNoteTitle: (memoryId: string, customContent?: string, instruction?: string) => Promise<string | undefined>;
+  transformSelectedText: (selectedText: string, instruction?: string, mode?: string, fullContext?: string) => Promise<string | undefined>;
   deleteNote: (id: string, permanent?: boolean) => Promise<void>;
   restoreNote: (id: string) => void;
   togglePin: (id: string) => void;
@@ -163,6 +167,8 @@ export const useNotesStore = create<NotesState>((set, get) => {
     isLoading: false,
     isSaving: false,
     isOrganizingNote: false,
+    isGeneratingTitle: false,
+    isTransformingSelection: false,
     isOnline: true,
     lastSavedAt: null,
     sidebarCollapsed: false,
@@ -343,17 +349,18 @@ export const useNotesStore = create<NotesState>((set, get) => {
       }
     },
 
-    organizeNote: async (memoryId: string, instruction?: string, useAi: boolean = true) => {
-      const { notes, activeNoteId } = get();
+    organizeNote: async (memoryId: string, instruction?: string, useAi: boolean = true, generateTitle: boolean = false) => {
+      const { notes } = get();
       const target = notes.find((n) => n.id === memoryId);
       if (!target) return;
 
       set({ isOrganizingNote: true });
       try {
-        const res = await api.organizeMemory(memoryId, instruction, useAi);
+        const res = await api.organizeMemory(memoryId, instruction, useAi, generateTitle);
         if (res.status === 'success' && res.content) {
           const updatedNote: Note = {
             ...target,
+            title: res.title || target.title,
             content: res.content,
             snippet: res.content_preview || res.content.slice(0, 180),
             updatedAt: new Date().toISOString(),
@@ -371,6 +378,59 @@ export const useNotesStore = create<NotesState>((set, get) => {
         console.error('Failed to organize note with AI:', err);
       } finally {
         set({ isOrganizingNote: false });
+      }
+    },
+
+    generateNoteTitle: async (memoryId: string, customContent?: string, instruction?: string) => {
+      const { notes } = get();
+      const target = notes.find((n) => n.id === memoryId);
+      const contentToUse = customContent !== undefined ? customContent : target?.content || '';
+      if (!contentToUse.trim()) return;
+
+      set({ isGeneratingTitle: true });
+      try {
+        const res = await api.generateTitle(
+          contentToUse,
+          target?.title,
+          instruction,
+          memoryId,
+          true
+        );
+        if (res.status === 'success' && res.title) {
+          const cleanTitle = res.title;
+          if (target) {
+            const updatedNote: Note = {
+              ...target,
+              title: cleanTitle,
+              updatedAt: new Date().toISOString(),
+            };
+            set((state) => ({
+              notes: state.notes.map((n) => (n.id === memoryId ? updatedNote : n)),
+              isGeneratingTitle: false,
+            }));
+            await get().fetchCategories();
+          }
+          return cleanTitle;
+        }
+      } catch (err) {
+        console.error('Failed to generate title with AI:', err);
+      } finally {
+        set({ isGeneratingTitle: false });
+      }
+    },
+
+    transformSelectedText: async (selectedText: string, instruction?: string, mode: string = 'polish', fullContext?: string) => {
+      if (!selectedText || !selectedText.trim()) return;
+      set({ isTransformingSelection: true });
+      try {
+        const res = await api.transformSelection(selectedText, instruction, mode, fullContext);
+        if (res.status === 'success') {
+          return res.transformed_text;
+        }
+      } catch (err) {
+        console.error('Failed to transform selected text:', err);
+      } finally {
+        set({ isTransformingSelection: false });
       }
     },
 

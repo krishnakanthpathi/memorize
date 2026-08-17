@@ -3,12 +3,14 @@ import {
   CategoryStat,
   ChatMessage,
   CorrelationItem,
+  GenerateTitleResponse,
   MemoryOrganizeResponse,
   MergeMemoriesRequest,
   MergeMemoriesResponse,
   ModelsResponse,
   Note,
   SearchResult,
+  TextTransformResponse,
   VersionItem,
 } from "@/types";
 
@@ -129,16 +131,67 @@ export const api = {
   async organizeMemory(
     memoryId: string,
     instruction?: string,
-    useAi: boolean = true
+    useAi: boolean = true,
+    generateTitle: boolean = false
   ): Promise<MemoryOrganizeResponse> {
     const res = await fetch(`${API_BASE}/memories/${encodeURIComponent(memoryId)}/organize`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ instruction, use_ai: useAi }),
+      body: JSON.stringify({ instruction, use_ai: useAi, generate_title: generateTitle }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || `Organize failed (${res.status})`);
+    }
+    return res.json();
+  },
+
+  // Note Title Generation
+  async generateTitle(
+    content: string,
+    currentTitle?: string,
+    instruction?: string,
+    memoryId?: string,
+    saveToMemory: boolean = false
+  ): Promise<GenerateTitleResponse> {
+    const res = await fetch(`${API_BASE}/memories/generate-title`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        content,
+        current_title: currentTitle,
+        instruction,
+        memory_id: memoryId,
+        save_to_memory: saveToMemory,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Title generation failed (${res.status})`);
+    }
+    return res.json();
+  },
+
+  // Selected Text / Paragraph Organizer
+  async transformSelection(
+    selectedText: string,
+    instruction?: string,
+    mode: string = "polish",
+    fullContext?: string
+  ): Promise<TextTransformResponse> {
+    const res = await fetch(`${API_BASE}/memories/transform-selection`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        selected_text: selectedText,
+        instruction,
+        mode,
+        full_context: fullContext,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Selection transform failed (${res.status})`);
     }
     return res.json();
   },

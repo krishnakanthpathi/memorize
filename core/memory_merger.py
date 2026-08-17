@@ -2,7 +2,12 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from config.prompts import MULTI_MEMORY_MERGE_SYSTEM_PROMPT, ORGANIZE_MEMORY_SYSTEM_PROMPT
+from config.prompts import (
+    MULTI_MEMORY_MERGE_SYSTEM_PROMPT,
+    ORGANIZE_MEMORY_SYSTEM_PROMPT,
+    ORGANIZE_SELECTION_SYSTEM_PROMPT,
+    TITLE_GENERATION_PROMPT,
+)
 from config.settings import get_setting
 from core.hashing import compute_string_hash
 from core.logger import handle_errors, logger
@@ -378,14 +383,166 @@ def find_correlated_memories(
     return candidates[:top_k]
 
 
+def clean_generated_title(raw_title: str) -> str:
+    """Strips quotes, prefixes, markdown artifacts and normalizes a generated title."""
+    if not raw_title:
+        return "Untitled Note"
+    clean = raw_title.strip()
+    # Strip wrapping quotes, backticks
+    clean = re.sub(r"^[\"\'`]+|[\"\'`]+$", "", clean).strip()
+    # Strip prefixes like 'Title:', '# Title:', '**Title**:'
+    clean = re.sub(r"^(?:#+\s*|\*{1,2})?(?:title|summary|topic):\s*", "", clean, flags=re.IGNORECASE).strip()
+    clean = re.sub(r"^#+\s*", "", clean).strip()
+    clean = re.sub(r"^\*\*(.*?)\*\*$", r"\1", clean).strip()
+    clean = re.sub(r"^\*(.*?)\*$", r"\1", clean).strip()
+    clean = clean.split("\n")[0].strip()
+    # Clean leading numbers or bullet markers
+    clean = re.sub(r"^\d+[\.\)]\s*", "", clean).strip()
+    return normalize_title(clean) if clean else "Untitled Note"
+
+
+@handle_errors
+def generate_title_service(
+    content: str,
+    current_title: Optional[str] = None,
+    instruction: Optional[str] = None,
+    use_ai: bool = True,
+) -> str:
+    """
+    Generates a concise, descriptive, and high-signal title (3-7 words) from markdown content or excerpt.
+    """
+    if not content or not content.strip():
+        return normalize_title(current_title) if current_title else "Untitled Note"
+
+    clean_content = content.strip()
+
+    if use_ai:
+        prompt_parts = []
+        if current_title and current_title not in ("Untitled Note", "Untitled Memory", "Untitled", "Note"):
+            prompt_parts.append(f"Current Working Title: {current_title}")
+        if instruction:
+            prompt_parts.append(f"User Goal / Context: {instruction}")
+        prompt_parts.append(f"Content Body:\n{clean_content[:3500]}\n")
+        prompt_parts.append("Generate concise descriptive title:")
+        prompt = "\n".join(prompt_parts)
+
+        try:
+            res = generate_llm_response(
+                prompt=prompt,
+                system_prompt=TITLE_GENERATION_PROMPT,
+                temperature=0.3,
+            )
+            title = clean_generated_title(res)
+            if title and title != "Untitled Note":
+                return title
+        except Exception as e:
+            logger.warning(f"AI title generation failed: {e}. Falling back to heuristic extraction.")
+
+    # Heuristic fallback: Extract first heading or first few words
+    lines = [line.strip() for line in clean_content.split("\n") if line.strip()]
+    for line in lines:
+        if line.startswith("#"):
+            heading = re.sub(r"^#+\s*", "", line).strip()
+            if heading:
+                return clean_generated_title(heading)
+    if lines:
+        first_line = lines[0]
+        words = first_line.split()[:7]
+        return clean_generated_title(" ".join(words))
+
+    return normalize_title(current_title) if current_title else "Untitled Note"
+
+
+@handle_errors
+def organize_selection_service(
+    selected_text: str,
+    instruction: Optional[str] = None,
+    mode: Optional[str] = "polish",
+    full_context: Optional[str] = None,
+    use_ai: bool = True,
+) -> Dict[str, Any]:
+    """
+    Polishes, summarizes, or transforms a selected paragraph or text snippet using AI.
+    """
+    if not selected_text or not selected_text.strip():
+        return {
+            "status": "error",
+            "message": "No text selected to transform.",
+        }
+
+    clean_selection = selected_text.strip()
+    mode_clean = (mode or "polish").strip().lower()
+
+    if mode_clean == "title":
+        generated_title = generate_title_service(
+            content=clean_selection,
+            instruction=instruction,
+            use_ai=use_ai,
+        )
+        return {
+            "status": "success",
+            "action": "title_generated",
+            "mode": mode_clean,
+            "transformed_text": generated_title,
+            "title": generated_title,
+        }
+
+    if not use_ai:
+        return {
+            "status": "success",
+            "action": "transformed",
+            "mode": mode_clean,
+            "transformed_text": clean_selection,
+        }
+
+    mode_instructions = {
+        "polish": "Polish grammar, improve sentence flow, fix indentation, and format cleanly as Markdown.",
+        "summarize": "Summarize the core insights of this selection into concise, high-impact bullet points.",
+        "technical": "Restructure and format as clean technical documentation with clear subheadings, code syntax blocks, equations ($...$), or parameter lists.",
+        "simplify": "Simplify this passage for maximum clarity and quick readability while keeping all key facts.",
+        "expand": "Elaborate on the key ideas with structured explanations and concrete details.",
+    }
+
+    effective_instruction = instruction if instruction else mode_instructions.get(mode_clean, mode_instructions["polish"])
+
+    prompt_parts = []
+    if full_context:
+        prompt_parts.append(f"Surrounding Document Context:\n{full_context[:1200]}\n")
+    prompt_parts.append(f"Task / Goal: {effective_instruction}")
+    prompt_parts.append(f"--- SELECTED TEXT TO TRANSFORM ---\n{clean_selection}\n\nTransformed Markdown Replacement:")
+    prompt = "\n".join(prompt_parts)
+
+    try:
+        res = generate_llm_response(
+            prompt=prompt,
+            system_prompt=ORGANIZE_SELECTION_SYSTEM_PROMPT,
+            temperature=0.2,
+        )
+        transformed = clean_llm_markdown_output(res)
+        if not transformed:
+            transformed = clean_selection
+    except Exception as e:
+        logger.warning(f"AI selection transformation failed: {e}. Returning original.")
+        transformed = clean_selection
+
+    return {
+        "status": "success",
+        "action": "transformed",
+        "mode": mode_clean,
+        "transformed_text": transformed,
+    }
+
+
 @handle_errors
 def organize_single_memory_service(
     memory_id: str,
     instruction: Optional[str] = None,
     use_ai: bool = True,
+    generate_title: bool = False,
 ) -> Dict[str, Any]:
     """
     Polishes, restructures, organizes, or summarizes a single memory using AI.
+    Optionally generates and updates a concise, descriptive title.
     Automatically creates a version snapshot before updating so the user can easily revert.
     """
     target = get_memory_by_id(memory_id)
@@ -452,20 +609,38 @@ def organize_single_memory_service(
     if not organized_content:
         organized_content = content
 
-    # 3. Save updated Markdown file to disk
-    from storage.markdown_handler import title_to_slug
+    # 3. Generate or refine title if requested or if title is untitled
+    final_title = title
+    if generate_title or title in ("Untitled Note", "Untitled Memory", "Untitled", ""):
+        try:
+            generated_t = generate_title_service(
+                content=organized_content,
+                current_title=title,
+                instruction=instruction,
+                use_ai=use_ai,
+            )
+            if generated_t and generated_t not in ("Untitled Note", "Untitled Memory"):
+                final_title = generated_t
+        except Exception as e:
+            logger.warning(f"Title generation during AI organize failed: {e}")
+
+    # 4. Save updated Markdown file to disk
+    old_file_path = Path(file_path) if file_path else None
     created_path = create_markdown_file(
         memory_id=memory_id,
-        title=title,
+        title=final_title,
         category=category,
         tags=tags,
         content=organized_content,
-        file_path=file_path if file_path else None,
         overwrite=True,
     )
-    slug = title_to_slug(title)
+    if old_file_path and old_file_path.exists() and old_file_path.resolve() != created_path.resolve():
+        try:
+            old_file_path.unlink(missing_ok=True)
+        except Exception:
+            pass
 
-    # 4. Re-index vector embeddings in ChromaDB
+    # 5. Re-index vector embeddings in ChromaDB
     chunk_count = 0
     chunk_ids = []
     try:
@@ -474,12 +649,12 @@ def organize_single_memory_service(
     except Exception as e:
         logger.warning(f"Vector reindexing failed during organization: {e}")
 
-    # 5. Upsert SQLite record
+    # 6. Upsert SQLite record
     content_hash = compute_string_hash(organized_content)
     snippet = organized_content[:180].replace("\n", " ").strip()
     memory_entry = {
         "id": memory_id,
-        "title": title,
+        "title": final_title,
         "category": category,
         "tags": tags,
         "file_path": str(created_path),
@@ -491,12 +666,12 @@ def organize_single_memory_service(
     }
     upsert_memory_index(memory_entry)
 
-    logger.info(f"Successfully organized memory '{memory_id}' ('{title}') with AI.")
+    logger.info(f"Successfully organized memory '{memory_id}' ('{final_title}') with AI.")
     return {
         "status": "success",
         "action": "organized",
         "memory_id": memory_id,
-        "title": title,
+        "title": final_title,
         "category": category,
         "tags": tags,
         "file_path": str(created_path),

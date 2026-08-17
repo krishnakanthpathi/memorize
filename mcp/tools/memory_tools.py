@@ -14,7 +14,9 @@ from classification.classifier import classify_memory
 from config.settings import get_setting
 from core.memory_merger import (
     find_correlated_memories as core_find_correlated,
+    generate_title_service,
     merge_memories_service,
+    organize_selection_service,
     organize_single_memory_service,
 )
 from core.memory_service import execute_upsert_memory, handle_delete_memory
@@ -405,6 +407,7 @@ def organize_memory(
     memory_id: str,
     instruction: Optional[str] = None,
     use_ai: bool = True,
+    generate_title: bool = False,
 ) -> dict:
     """
     Polishes, restructures, organizes, or summarizes a single memory note using AI.
@@ -414,11 +417,62 @@ def organize_memory(
         memory_id: The memory ID to organize/polish (e.g. 'mem_abc123')
         instruction: Optional goal or instruction (e.g. 'Summarize into key takeaways', 'Format as clean API reference')
         use_ai: Whether to use AI for intelligent restructuring (default True)
+        generate_title: Whether to also generate and update a new descriptive title (default False)
     """
     return organize_single_memory_service(
         memory_id=memory_id,
         instruction=instruction,
         use_ai=use_ai,
+        generate_title=generate_title,
+    )
+
+
+def generate_title(
+    content: str,
+    current_title: Optional[str] = None,
+    instruction: Optional[str] = None,
+) -> dict:
+    """
+    Generates a concise, descriptive, and high-signal title (3-7 words) from markdown content or selected text.
+
+    Args:
+        content: The note content or text excerpt to generate a title from
+        current_title: Optional current working title
+        instruction: Optional user context or focus
+    """
+    title = generate_title_service(
+        content=content,
+        current_title=current_title,
+        instruction=instruction,
+        use_ai=True,
+    )
+    return {
+        "status": "success",
+        "title": title,
+    }
+
+
+def organize_selection(
+    selected_text: str,
+    instruction: Optional[str] = None,
+    mode: Optional[str] = "polish",
+    full_context: Optional[str] = None,
+) -> dict:
+    """
+    Polishes, restructures, summarizes, or transforms a selected paragraph or text snippet using AI.
+
+    Args:
+        selected_text: The selected text passage to transform
+        instruction: Optional custom prompt instruction
+        mode: Transformation mode ('polish', 'summarize', 'technical', 'simplify', 'expand', 'title')
+        full_context: Optional surrounding document context
+    """
+    return organize_selection_service(
+        selected_text=selected_text,
+        instruction=instruction,
+        mode=mode,
+        full_context=full_context,
+        use_ai=True,
     )
 
 
@@ -434,6 +488,8 @@ def register_memory_tools(mcp):
     mcp.tool()(merge_memories)
     mcp.tool()(find_correlated_memories)
     mcp.tool()(organize_memory)
+    mcp.tool()(generate_title)
+    mcp.tool()(organize_selection)
     return mcp
 
 

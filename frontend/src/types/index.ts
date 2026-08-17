@@ -170,6 +170,7 @@ export interface MergeMemoriesResponse {
 export interface MemoryOrganizeRequest {
   instruction?: string;
   use_ai?: boolean;
+  generate_title?: boolean;
 }
 
 export interface MemoryOrganizeResponse {
@@ -183,6 +184,35 @@ export interface MemoryOrganizeResponse {
   chunk_count: number;
   content: string;
   content_preview: string;
+}
+
+export interface GenerateTitleRequest {
+  content: string;
+  current_title?: string;
+  instruction?: string;
+  memory_id?: string;
+  save_to_memory?: boolean;
+}
+
+export interface GenerateTitleResponse {
+  status: string;
+  title: string;
+  memory_id?: string;
+}
+
+export interface TextTransformRequest {
+  selected_text: string;
+  instruction?: string;
+  mode?: 'polish' | 'summarize' | 'technical' | 'simplify' | 'expand' | 'title' | string;
+  full_context?: string;
+}
+
+export interface TextTransformResponse {
+  status: string;
+  action: string;
+  mode: string;
+  transformed_text: string;
+  title?: string;
 }
 
 export interface CorrelationItem {

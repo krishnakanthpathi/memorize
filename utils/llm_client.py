@@ -196,6 +196,26 @@ def execute_tool_call(tool_name: str, params: dict) -> dict:
             memory_id=params.get("memory_id", ""),
             instruction=params.get("instruction"),
             use_ai=params.get("use_ai", True),
+            generate_title=params.get("generate_title", False),
+        )
+        return {"tool": tool_clean, "status": "success" if res.get("status") == "success" else "error", "result": res}
+    elif tool_clean in ("generate_title", "create_title", "title_generator"):
+        from core.memory_merger import generate_title_service
+        res_title = generate_title_service(
+            content=params.get("content", ""),
+            current_title=params.get("current_title"),
+            instruction=params.get("instruction"),
+            use_ai=True,
+        )
+        return {"tool": tool_clean, "status": "success", "result": {"title": res_title}}
+    elif tool_clean in ("organize_selection", "transform_selection", "polish_selection"):
+        from core.memory_merger import organize_selection_service
+        res = organize_selection_service(
+            selected_text=params.get("selected_text", params.get("text", "")),
+            instruction=params.get("instruction"),
+            mode=params.get("mode", "polish"),
+            full_context=params.get("full_context"),
+            use_ai=True,
         )
         return {"tool": tool_clean, "status": "success" if res.get("status") == "success" else "error", "result": res}
     elif tool_clean in ("clear_all_memories", "clear_all", "reset_memories", "purge_all", "delete_all"):

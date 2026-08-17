@@ -2,14 +2,18 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 
 from api.schemas import (
+    GenerateTitleRequest,
     MemoryCreateRequest,
     MemoryMergeRequest,
     MemoryOrganizeRequest,
     RevertRequest,
+    TextTransformRequest,
 )
 from core.memory_merger import (
     find_correlated_memories,
+    generate_title_service,
     merge_memories_service,
+    organize_selection_service,
     organize_single_memory_service,
 )
 from core.memory_service import (
@@ -99,14 +103,60 @@ def merge_memories_endpoint(req: MemoryMergeRequest):
     return res
 
 
+@router.post("/generate-title")
+def generate_title_endpoint(req: GenerateTitleRequest):
+    generated_title = generate_title_service(
+        content=req.content,
+        current_title=req.current_title,
+        instruction=req.instruction,
+        use_ai=True,
+    )
+    
+    # Optionally persist the generated title directly to memory if requested
+    if req.save_to_memory and req.memory_id:
+        target = get_memory_by_id(req.memory_id)
+        if target:
+            from core.memory_service import execute_upsert_memory
+            execute_upsert_memory(
+                title=generated_title,
+                content=req.content or target.get("content", ""),
+                category=target.get("category", "personal"),
+                tags=target.get("tags", []),
+                action="update",
+                memory_id=req.memory_id,
+            )
+
+    return {
+        "status": "success",
+        "title": generated_title,
+        "memory_id": req.memory_id,
+    }
+
+
+@router.post("/transform-selection")
+def transform_selection_endpoint(req: TextTransformRequest):
+    res = organize_selection_service(
+        selected_text=req.selected_text,
+        instruction=req.instruction,
+        mode=req.mode,
+        full_context=req.full_context,
+        use_ai=True,
+    )
+    if isinstance(res, dict) and res.get("status") == "error":
+        raise HTTPException(status_code=400, detail=res.get("message", "Error transforming selection."))
+    return res
+
+
 @router.post("/{memory_id}/organize")
 def organize_memory_endpoint(memory_id: str, req: Optional[MemoryOrganizeRequest] = None):
     instruction = req.instruction if req else None
     use_ai = req.use_ai if req is not None else True
+    generate_title = req.generate_title if req is not None else False
     res = organize_single_memory_service(
         memory_id=memory_id,
         instruction=instruction,
         use_ai=use_ai,
+        generate_title=generate_title,
     )
     if isinstance(res, dict) and res.get("status") == "error":
         raise HTTPException(status_code=400, detail=res.get("message", "Error organizing memory."))
