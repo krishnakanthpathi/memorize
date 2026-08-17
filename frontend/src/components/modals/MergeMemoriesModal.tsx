@@ -44,6 +44,7 @@ export const MergeMemoriesModal: React.FC = () => {
   const [targetTags, setTargetTags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState('');
   const [instruction, setInstruction] = useState('');
+  const [useAi, setUseAi] = useState(true);
   const [deleteSources, setDeleteSources] = useState(true);
 
   const [isMerging, setIsMerging] = useState(false);
@@ -130,6 +131,7 @@ export const MergeMemoriesModal: React.FC = () => {
         target_tags: targetTags,
         delete_sources: deleteSources,
         instruction: instruction.trim() || undefined,
+        use_ai: useAi,
       });
 
       setMergeResult(res);
@@ -454,19 +456,43 @@ export const MergeMemoriesModal: React.FC = () => {
                   </div>
 
                   {/* Options */}
-                  <div className="p-3.5 rounded-xl bg-surface-hover/50 border border-border/80 flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-bold text-foreground">Clean Up Source Notes</span>
-                      <p className="text-[11px] text-muted-foreground">
-                        Delete the individual source notes after merging to prevent duplicate search results
-                      </p>
+                  <div className="space-y-2">
+                    {/* AI Toggle */}
+                    <div className="p-3.5 rounded-xl bg-surface-hover/50 border border-border/80 flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                          <span className="text-xs font-bold text-foreground">Synthesize with AI</span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          {useAi
+                            ? 'Intelligently combine and eliminate redundancies using AI synthesis'
+                            : 'Fast deterministic merge (organizes notes under clean markdown headings without calling LLM)'}
+                        </p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={useAi}
+                        onChange={(e) => setUseAi(e.target.checked)}
+                        className="w-4 h-4 rounded border-border text-foreground accent-foreground cursor-pointer"
+                      />
                     </div>
-                    <input
-                      type="checkbox"
-                      checked={deleteSources}
-                      onChange={(e) => setDeleteSources(e.target.checked)}
-                      className="w-4 h-4 rounded border-border text-foreground accent-foreground cursor-pointer"
-                    />
+
+                    {/* Clean Up Source Notes */}
+                    <div className="p-3.5 rounded-xl bg-surface-hover/50 border border-border/80 flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-bold text-foreground">Clean Up Source Notes</span>
+                        <p className="text-[11px] text-muted-foreground">
+                          Delete original source notes after merging to prevent duplicate search results
+                        </p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={deleteSources}
+                        onChange={(e) => setDeleteSources(e.target.checked)}
+                        className="w-4 h-4 rounded border-border text-foreground accent-foreground cursor-pointer"
+                      />
+                    </div>
                   </div>
 
                   {/* Actions */}
@@ -486,12 +512,12 @@ export const MergeMemoriesModal: React.FC = () => {
                       {isMerging ? (
                         <>
                           <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Synthesizing Notes with AI...</span>
+                          <span>{useAi ? 'Synthesizing Notes with AI...' : 'Merging Notes...'}</span>
                         </>
                       ) : (
                         <>
-                          <Combine className="w-4 h-4" />
-                          <span>Merge {selectedNotes.length} Notes with AI</span>
+                          {useAi ? <Sparkles className="w-4 h-4 text-amber-300" /> : <Combine className="w-4 h-4" />}
+                          <span>{useAi ? `Merge ${selectedNotes.length} Notes with AI` : `Merge ${selectedNotes.length} Notes (Direct)`}</span>
                         </>
                       )}
                     </button>

@@ -1,8 +1,17 @@
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 
-from api.schemas import MemoryCreateRequest, MemoryMergeRequest, RevertRequest
-from core.memory_merger import find_correlated_memories, merge_memories_service
+from api.schemas import (
+    MemoryCreateRequest,
+    MemoryMergeRequest,
+    MemoryOrganizeRequest,
+    RevertRequest,
+)
+from core.memory_merger import (
+    find_correlated_memories,
+    merge_memories_service,
+    organize_single_memory_service,
+)
 from core.memory_service import (
     execute_revert_memory,
     execute_upsert_memory,
@@ -83,9 +92,24 @@ def merge_memories_endpoint(req: MemoryMergeRequest):
         target_tags=req.target_tags,
         delete_sources=req.delete_sources,
         instruction=req.instruction,
+        use_ai=req.use_ai,
     )
     if isinstance(res, dict) and res.get("status") == "error":
         raise HTTPException(status_code=400, detail=res.get("message", "Error merging memories."))
+    return res
+
+
+@router.post("/{memory_id}/organize")
+def organize_memory_endpoint(memory_id: str, req: Optional[MemoryOrganizeRequest] = None):
+    instruction = req.instruction if req else None
+    use_ai = req.use_ai if req is not None else True
+    res = organize_single_memory_service(
+        memory_id=memory_id,
+        instruction=instruction,
+        use_ai=use_ai,
+    )
+    if isinstance(res, dict) and res.get("status") == "error":
+        raise HTTPException(status_code=400, detail=res.get("message", "Error organizing memory."))
     return res
 
 

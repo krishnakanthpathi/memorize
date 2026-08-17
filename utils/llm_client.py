@@ -180,6 +180,7 @@ def execute_tool_call(tool_name: str, params: dict) -> dict:
             target_tags=params.get("target_tags"),
             delete_sources=params.get("delete_sources", True),
             instruction=params.get("instruction"),
+            use_ai=params.get("use_ai"),
         )
         return {"tool": tool_clean, "status": "success" if res.get("status") == "success" else "error", "result": res}
     elif tool_clean in ("find_correlated_memories", "correlations", "find_related_memories"):
@@ -189,6 +190,14 @@ def execute_tool_call(tool_name: str, params: dict) -> dict:
             top_k=params.get("top_k", 5),
         )
         return {"tool": tool_clean, "status": "success", "result": res}
+    elif tool_clean in ("organize_memory", "organize", "ai_organize", "polish_memory", "summarize_memory"):
+        from core.memory_merger import organize_single_memory_service
+        res = organize_single_memory_service(
+            memory_id=params.get("memory_id", ""),
+            instruction=params.get("instruction"),
+            use_ai=params.get("use_ai", True),
+        )
+        return {"tool": tool_clean, "status": "success" if res.get("status") == "success" else "error", "result": res}
     elif tool_clean in ("clear_all_memories", "clear_all", "reset_memories", "purge_all", "delete_all"):
         from storage.sync_manager import clear_all_memories
         res = clear_all_memories()

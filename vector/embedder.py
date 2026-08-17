@@ -147,10 +147,21 @@ def get_local_model(model_name: str = FALLBACK_EMBEDDING_MODEL):
                 local_files_only=True,
             )
         except Exception:
-            LOCAL_MODEL_CACHE[model_name] = SentenceTransformer(
-                model_name,
-                cache_folder=str(MODELS_DIR),
-            )
+            try:
+                LOCAL_MODEL_CACHE[model_name] = SentenceTransformer(
+                    model_name,
+                    cache_folder=str(MODELS_DIR),
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to initialize local model '{model_name}': {e}. Falling back to default '{FALLBACK_EMBEDDING_MODEL}'."
+                )
+                if FALLBACK_EMBEDDING_MODEL not in LOCAL_MODEL_CACHE:
+                    LOCAL_MODEL_CACHE[FALLBACK_EMBEDDING_MODEL] = SentenceTransformer(
+                        FALLBACK_EMBEDDING_MODEL,
+                        cache_folder=str(MODELS_DIR),
+                    )
+                LOCAL_MODEL_CACHE[model_name] = LOCAL_MODEL_CACHE[FALLBACK_EMBEDDING_MODEL]
     return LOCAL_MODEL_CACHE[model_name]
 
 

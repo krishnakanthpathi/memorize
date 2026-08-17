@@ -150,6 +150,7 @@ export interface MergeMemoriesRequest {
   target_tags?: string[];
   delete_sources?: boolean;
   instruction?: string;
+  use_ai?: boolean;
 }
 
 export interface MergeMemoriesResponse {
@@ -163,6 +164,24 @@ export interface MergeMemoriesResponse {
   chunk_count: number;
   merged_source_count: number;
   deleted_source_ids: string[];
+  content_preview: string;
+}
+
+export interface MemoryOrganizeRequest {
+  instruction?: string;
+  use_ai?: boolean;
+}
+
+export interface MemoryOrganizeResponse {
+  status: string;
+  action: string;
+  memory_id: string;
+  title: string;
+  category: string;
+  tags: string[];
+  file_path: string;
+  chunk_count: number;
+  content: string;
   content_preview: string;
 }
 

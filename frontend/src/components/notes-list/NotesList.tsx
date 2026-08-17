@@ -17,6 +17,7 @@ import {
   Combine,
   CheckSquare,
   Square,
+  Wand2,
 } from 'lucide-react';
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
@@ -47,6 +48,7 @@ export const NotesList: React.FC = () => {
     toggleNoteSelection,
     clearNoteSelection,
     openMergeModal,
+    organizeNote,
   } = useNotesStore();
 
   const [sortBy, setSortBy] = useState<SortOption>('updated');
@@ -374,6 +376,18 @@ export const NotesList: React.FC = () => {
                         </ContextMenu.Item>
 
                         <ContextMenu.Separator className="h-px bg-border my-1" />
+
+                        {/* AI Organize & Polish */}
+                        <ContextMenu.Item
+                          onClick={() => {
+                            selectNote(note.id);
+                            organizeNote(note.id);
+                          }}
+                          className="px-2.5 py-1.5 rounded cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2 font-medium text-foreground"
+                        >
+                          <Wand2 className="w-3.5 h-3.5 text-amber-500" />
+                          <span>AI Organize & Polish</span>
+                        </ContextMenu.Item>
 
                         {/* Merge Actions */}
                         <ContextMenu.Item

@@ -15,7 +15,7 @@ class TestModularMCP(unittest.TestCase):
         self.assertEqual(SERVER_NAME, "Memorize Server")
         self.assertIsNotNone(mcp)
         tools = mcp._tool_manager.list_tools()
-        self.assertEqual(len(tools), 9)
+        self.assertEqual(len(tools), 10)
 
     def test_all_expected_tools_registered(self):
         """Verify exactly the expected core tools are present on the server."""
@@ -30,6 +30,7 @@ class TestModularMCP(unittest.TestCase):
             "get_categories",
             "merge_memories",
             "find_correlated_memories",
+            "organize_memory",
         }
         self.assertEqual(tools, expected_tools, f"MCP tools mismatch. Got: {tools}, Expected: {expected_tools}")
 

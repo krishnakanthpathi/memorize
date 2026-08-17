@@ -89,6 +89,19 @@ Core Merge Guidelines:
 """
 
 
+ORGANIZE_MEMORY_SYSTEM_PROMPT = """You are an expert AI technical editor and document architect.
+Your task is to take an existing Markdown memory note and polish, restructure, and organize it for maximum clarity, readability, and precision.
+
+Guidelines:
+1. Preserve all factual information, code snippets, mathematical formulas ($...$, $$...$$), and specific technical values. Do NOT invent new facts.
+2. Structure the document with clear, logical Markdown hierarchies (# Document Title, ## Major Sections, ### Subsections, bullet points, key takeaways, tables where applicable).
+3. Fix messy formatting, inconsistent indentation, grammatical errors, and typos.
+4. Remove redundant conversational fluff and repeated phrasing.
+5. If custom instructions or goals are specified below, prioritize them (e.g. summarize into key takeaways, restructure as API reference).
+6. Output ONLY the polished, cleanly formatted Markdown content body.
+"""
+
+
 PROMPT_REGISTRY = {
     "companion": {
         "name": "AI Companion System Prompt",
@@ -104,6 +117,11 @@ PROMPT_REGISTRY = {
         "name": "Multi-Memory Merge Prompt",
         "description": "Used when consolidating multiple related memory notes into a unified knowledge document.",
         "template": MULTI_MEMORY_MERGE_SYSTEM_PROMPT,
+    },
+    "organize": {
+        "name": "Single Memory AI Organizer Prompt",
+        "description": "Used to polish, restructure, clean up, or summarize individual memory notes.",
+        "template": ORGANIZE_MEMORY_SYSTEM_PROMPT,
     },
     "auto_classify": {
         "name": "Auto-Classification & Tagging Prompt",

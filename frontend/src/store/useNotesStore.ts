@@ -24,6 +24,7 @@ interface NotesState {
   // App UI State
   isLoading: boolean;
   isSaving: boolean;
+  isOrganizingNote: boolean;
   isOnline: boolean;
   lastSavedAt: string | null;
   sidebarCollapsed: boolean;
@@ -59,6 +60,7 @@ interface NotesState {
   createNewNote: (category?: string) => Note;
   updateActiveNote: (fields: Partial<Note>, syncRemote?: boolean) => void;
   saveCurrentNoteRemote: () => Promise<void>;
+  organizeNote: (memoryId: string, instruction?: string, useAi?: boolean) => Promise<any>;
   deleteNote: (id: string, permanent?: boolean) => Promise<void>;
   restoreNote: (id: string) => void;
   togglePin: (id: string) => void;
@@ -154,6 +156,7 @@ export const useNotesStore = create<NotesState>((set, get) => {
 
     isLoading: false,
     isSaving: false,
+    isOrganizingNote: false,
     isOnline: true,
     lastSavedAt: null,
     sidebarCollapsed: false,
@@ -329,6 +332,37 @@ export const useNotesStore = create<NotesState>((set, get) => {
       } catch (err) {
         console.error('Remote save failed:', err);
         set({ isSaving: false, isOnline: false });
+      }
+    },
+
+    organizeNote: async (memoryId: string, instruction?: string, useAi: boolean = true) => {
+      const { notes, activeNoteId } = get();
+      const target = notes.find((n) => n.id === memoryId);
+      if (!target) return;
+
+      set({ isOrganizingNote: true });
+      try {
+        const res = await api.organizeMemory(memoryId, instruction, useAi);
+        if (res.status === 'success' && res.content) {
+          const updatedNote: Note = {
+            ...target,
+            content: res.content,
+            snippet: res.content_preview || res.content.slice(0, 180),
+            updatedAt: new Date().toISOString(),
+          };
+
+          set((state) => ({
+            notes: state.notes.map((n) => (n.id === memoryId ? updatedNote : n)),
+            isOrganizingNote: false,
+          }));
+
+          await get().fetchCategories();
+          return res;
+        }
+      } catch (err) {
+        console.error('Failed to organize note with AI:', err);
+      } finally {
+        set({ isOrganizingNote: false });
       }
     },
 

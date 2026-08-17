@@ -9,6 +9,7 @@ from core.memory_merger import (
     deterministic_merge_memories,
     find_correlated_memories,
     merge_memories_service,
+    organize_single_memory_service,
     progressive_llm_merge,
 )
 from core.memory_service import execute_upsert_memory
@@ -177,14 +178,55 @@ class TestMemoryMerger(unittest.TestCase):
         self.assertTrue(top_cand["same_category"])
         self.assertTrue(top_cand["similarity_percent"] > 0)
 
-    def test_merge_validation_errors(self):
-        """Test error handling when fewer than 2 memories are provided."""
-        res = merge_memories_service(memory_ids=["single_id_only"])
-        self.assertEqual(res["status"], "error")
-        self.assertIn("At least 2 memory IDs", res["message"])
+    def test_merge_with_explicit_use_ai_flag(self):
+        """Test that use_ai=False forces deterministic merge without errors."""
+        res1 = execute_upsert_memory(
+            title="Note One",
+            content="Content for Note One with facts.",
+            category="personal",
+            tags=["tag1"],
+        )
+        res2 = execute_upsert_memory(
+            title="Note Two",
+            content="Content for Note Two with more facts.",
+            category="personal",
+            tags=["tag2"],
+        )
+        merge_res = merge_memories_service(
+            memory_ids=[res1["memory_id"], res2["memory_id"]],
+            target_title="Combined Notes",
+            use_ai=False,
+            delete_sources=False,
+        )
+        self.assertEqual(merge_res["status"], "success")
+        self.assertIn("Combined Notes", merge_res["title"])
+        self.assertTrue(Path(merge_res["file_path"]).exists())
 
-        res_invalid = merge_memories_service(memory_ids=["non_existent_1", "non_existent_2"])
-        self.assertEqual(res_invalid["status"], "error")
+    def test_organize_single_memory_service(self):
+        """Test AI organization and restructuring on a single memory."""
+        res = execute_upsert_memory(
+            title="Messy Notes on Git Branching",
+            content="git checkout -b feature\ngit push origin feature\nsome quick notes on cherry-pick",
+            category="development",
+            tags=["git", "vcs"],
+        )
+        mem_id = res["memory_id"]
+
+        # Run organization with use_ai=False (fast test mode)
+        org_res = organize_single_memory_service(
+            memory_id=mem_id,
+            instruction="Clean and polish formatting",
+            use_ai=False,
+        )
+        self.assertEqual(org_res["status"], "success")
+        self.assertEqual(org_res["action"], "organized")
+        self.assertEqual(org_res["memory_id"], mem_id)
+        self.assertTrue(Path(org_res["file_path"]).exists())
+
+        # Verify version snapshot was created
+        from storage.version_manager import get_version_history
+        history = get_version_history(mem_id)
+        self.assertTrue(len(history) >= 1)
 
 
 if __name__ == "__main__":

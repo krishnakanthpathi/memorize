@@ -12,7 +12,11 @@ from typing import List, Optional, Union
 
 from classification.classifier import classify_memory
 from config.settings import get_setting
-from core.memory_merger import find_correlated_memories as core_find_correlated, merge_memories_service
+from core.memory_merger import (
+    find_correlated_memories as core_find_correlated,
+    merge_memories_service,
+    organize_single_memory_service,
+)
 from core.memory_service import execute_upsert_memory, handle_delete_memory
 from search.relevance_scorer import search_hybrid_relevance
 from storage.db_manager import find_memory_by_title_or_slug, get_all_memories, get_memory_by_id
@@ -350,6 +354,7 @@ def merge_memories(
     target_tags: Optional[List[str]] = None,
     delete_sources: bool = True,
     instruction: Optional[str] = None,
+    use_ai: Optional[bool] = None,
 ) -> dict:
     """
     Consolidates multiple correlated memories/notes into a single, cohesive, non-redundant Markdown document using context-safe LLM synthesis.
@@ -362,6 +367,7 @@ def merge_memories(
         target_tags: Optional list of tags to attach to the merged memory
         delete_sources: Whether to remove the individual source notes after successful consolidation (default True)
         instruction: Optional specific guidance for the LLM during consolidation (e.g. 'Focus on LeetCode patterns', 'Merge CLI configs')
+        use_ai: Optional flag to force AI synthesis (True) or deterministic section merge (False). Defaults to global setting.
     """
     return merge_memories_service(
         memory_ids=memory_ids,
@@ -370,6 +376,7 @@ def merge_memories(
         target_tags=target_tags,
         delete_sources=delete_sources,
         instruction=instruction,
+        use_ai=use_ai,
     )
 
 
@@ -394,6 +401,27 @@ def find_correlated_memories(
     }
 
 
+def organize_memory(
+    memory_id: str,
+    instruction: Optional[str] = None,
+    use_ai: bool = True,
+) -> dict:
+    """
+    Polishes, restructures, organizes, or summarizes a single memory note using AI.
+    Automatically creates a version snapshot before applying changes so the original can be reverted.
+
+    Args:
+        memory_id: The memory ID to organize/polish (e.g. 'mem_abc123')
+        instruction: Optional goal or instruction (e.g. 'Summarize into key takeaways', 'Format as clean API reference')
+        use_ai: Whether to use AI for intelligent restructuring (default True)
+    """
+    return organize_single_memory_service(
+        memory_id=memory_id,
+        instruction=instruction,
+        use_ai=use_ai,
+    )
+
+
 def register_memory_tools(mcp):
     """Register all memory and category MCP tools on the FastMCP server instance."""
     mcp.tool()(store)
@@ -405,6 +433,7 @@ def register_memory_tools(mcp):
     mcp.tool()(get_categories)
     mcp.tool()(merge_memories)
     mcp.tool()(find_correlated_memories)
+    mcp.tool()(organize_memory)
     return mcp
 
 

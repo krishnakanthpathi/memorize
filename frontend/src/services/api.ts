@@ -3,6 +3,7 @@ import {
   CategoryStat,
   ChatMessage,
   CorrelationItem,
+  MemoryOrganizeResponse,
   MergeMemoriesRequest,
   MergeMemoriesResponse,
   ModelsResponse,
@@ -122,6 +123,24 @@ export const api = {
     if (!res.ok) throw new Error(`Fetch correlations failed: ${res.statusText}`);
     const data = await res.json();
     return data.correlations || [];
+  },
+
+  // Single-Memory AI Organize & Restructure
+  async organizeMemory(
+    memoryId: string,
+    instruction?: string,
+    useAi: boolean = true
+  ): Promise<MemoryOrganizeResponse> {
+    const res = await fetch(`${API_BASE}/memories/${encodeURIComponent(memoryId)}/organize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ instruction, use_ai: useAi }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Organize failed (${res.status})`);
+    }
+    return res.json();
   },
 
   // Versioning

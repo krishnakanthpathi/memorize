@@ -19,6 +19,10 @@ import {
   Loader2,
   Copy,
   Check,
+  Sparkles,
+  Wand2,
+  AlignLeft,
+  ListOrdered,
 } from 'lucide-react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useNotesStore } from '@/store/useNotesStore';
@@ -35,11 +39,13 @@ export const EditorCanvas: React.FC = () => {
     activeView,
     categories,
     isSaving,
+    isOrganizingNote,
     lastSavedAt,
     sidebarCollapsed,
     toggleSidebar,
     updateActiveNote,
     saveCurrentNoteRemote,
+    organizeNote,
     requestDeleteNote,
     restoreNote,
     exportActiveNote,
@@ -50,6 +56,8 @@ export const EditorCanvas: React.FC = () => {
 
   const [tagInput, setTagInput] = useState('');
   const [showTagInput, setShowTagInput] = useState(false);
+  const [customAiPrompt, setCustomAiPrompt] = useState('');
+  const [showCustomPromptInput, setShowCustomPromptInput] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
   const [viewMode, setViewMode] = useState<EditorViewMode>('markdown'); // Default as Markdown Viewer
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -363,6 +371,87 @@ export const EditorCanvas: React.FC = () => {
                 )}
               </button>
 
+              {/* AI Organize & Polish Dropdown */}
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild>
+                  <button
+                    disabled={isOrganizingNote}
+                    title="Organize, polish, or summarize note with AI"
+                    className={cn(
+                      'flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-xs select-none border border-border/80',
+                      isOrganizingNote
+                        ? 'bg-muted text-muted-foreground cursor-wait'
+                        : 'bg-surface-hover hover:bg-surface-hover/80 text-foreground'
+                    )}
+                  >
+                    {isOrganizingNote ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
+                        <span className="text-[11px] hidden md:inline">Organizing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                        <span className="text-[11px] hidden md:inline">AI Organize</span>
+                      </>
+                    )}
+                  </button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content
+                    align="end"
+                    className="z-50 min-w-[220px] bg-popover text-popover-foreground rounded-lg p-1.5 border border-border shadow-xl text-xs animate-in fade-in zoom-in-95 space-y-0.5"
+                  >
+                    <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                      AI Note Enhancement
+                    </div>
+
+                    <DropdownMenu.Item
+                      onClick={() => organizeNote(activeNote.id)}
+                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2"
+                    >
+                      <Wand2 className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                      <div>
+                        <span className="font-semibold block">Polish & Restructure</span>
+                        <span className="text-[10px] text-muted-foreground">Fix formatting, headers & remove fluff</span>
+                      </div>
+                    </DropdownMenu.Item>
+
+                    <DropdownMenu.Item
+                      onClick={() => organizeNote(activeNote.id, "Summarize into concise executive key takeaways and actionable points")}
+                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2"
+                    >
+                      <ListOrdered className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                      <div>
+                        <span className="font-semibold block">Summarize Key Points</span>
+                        <span className="text-[10px] text-muted-foreground">Extract core bullet insights & summary</span>
+                      </div>
+                    </DropdownMenu.Item>
+
+                    <DropdownMenu.Item
+                      onClick={() => organizeNote(activeNote.id, "Restructure with clear headings, code syntax examples, formulas, and parameters")}
+                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2"
+                    >
+                      <AlignLeft className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <div>
+                        <span className="font-semibold block">Technical Reference</span>
+                        <span className="text-[10px] text-muted-foreground">Format as clean developer documentation</span>
+                      </div>
+                    </DropdownMenu.Item>
+
+                    <DropdownMenu.Separator className="h-px bg-border my-1" />
+
+                    <DropdownMenu.Item
+                      onClick={() => setShowCustomPromptInput(true)}
+                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2 text-muted-foreground hover:text-foreground"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                      <span>Custom AI Instruction...</span>
+                    </DropdownMenu.Item>
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
+
               {/* AI Companion Chat Trigger */}
               <button
                 onClick={() => setActiveModal('chat')}
@@ -412,6 +501,50 @@ export const EditorCanvas: React.FC = () => {
           )}
         </div>
       </header>
+
+      {/* Custom AI Instruction Banner */}
+      {showCustomPromptInput && (
+        <div className="px-6 sm:px-12 py-2.5 bg-surface-sidebar border-b border-border flex items-center gap-2 animate-in slide-in-from-top-1 text-xs">
+          <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+          <input
+            type="text"
+            value={customAiPrompt}
+            onChange={(e) => setCustomAiPrompt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && customAiPrompt.trim()) {
+                organizeNote(activeNote.id, customAiPrompt.trim());
+                setShowCustomPromptInput(false);
+                setCustomAiPrompt('');
+              }
+            }}
+            placeholder="e.g. Extract key formulas into a cheat-sheet, summarize for quick revision..."
+            className="flex-1 px-3 py-1.5 rounded-md bg-surface-hover border border-border text-xs text-foreground outline-none focus:ring-1 focus:ring-ring"
+            autoFocus
+          />
+          <button
+            onClick={() => {
+              if (customAiPrompt.trim()) {
+                organizeNote(activeNote.id, customAiPrompt.trim());
+                setShowCustomPromptInput(false);
+                setCustomAiPrompt('');
+              }
+            }}
+            disabled={isOrganizingNote || !customAiPrompt.trim()}
+            className="px-3 py-1.5 rounded-md bg-foreground text-background font-semibold text-xs hover:opacity-90 disabled:opacity-50"
+          >
+            Apply
+          </button>
+          <button
+            onClick={() => {
+              setShowCustomPromptInput(false);
+              setCustomAiPrompt('');
+            }}
+            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Editor Main Canvas Body */}
       <div className="flex-1 overflow-y-auto px-6 sm:px-12 py-8 max-w-5xl mx-auto w-full flex flex-col">

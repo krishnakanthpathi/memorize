@@ -18,6 +18,12 @@ class MemoryMergeRequest(BaseModel):
     target_tags: Optional[List[str]] = Field(default=None, description="Optional list of tags for merged note")
     delete_sources: bool = Field(default=True, description="Whether to delete/trash original source memories after merge")
     instruction: Optional[str] = Field(default=None, description="Optional custom LLM merge instructions")
+    use_ai: Optional[bool] = Field(default=None, description="Optional explicit toggle for AI synthesis vs deterministic merge")
+
+
+class MemoryOrganizeRequest(BaseModel):
+    instruction: Optional[str] = Field(default=None, description="Optional instruction or goal (e.g. summarize into key takeaways, polish formatting)")
+    use_ai: bool = Field(default=True, description="Whether to use AI for restructuring and organizing")
 
 
 class RevertRequest(BaseModel):

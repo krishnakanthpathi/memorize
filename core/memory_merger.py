@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from config.prompts import MULTI_MEMORY_MERGE_SYSTEM_PROMPT
+from config.prompts import MULTI_MEMORY_MERGE_SYSTEM_PROMPT, ORGANIZE_MEMORY_SYSTEM_PROMPT
 from config.settings import get_setting
 from core.hashing import compute_string_hash
 from core.logger import handle_errors, logger
@@ -125,6 +125,7 @@ def merge_memories_service(
     target_tags: Optional[List[str]] = None,
     delete_sources: bool = True,
     instruction: Optional[str] = None,
+    use_ai: Optional[bool] = None,
     max_context_tokens: int = DEFAULT_MAX_MERGE_CONTEXT_TOKENS,
 ) -> Dict[str, Any]:
     """
@@ -191,8 +192,12 @@ def merge_memories_service(
     final_tags = sorted(list({t.strip().lower() for t in all_tags if t and t.strip()}))
 
     # 3. Calculate token requirements and execute context-safe synthesis
-    import config.constants as constants
-    use_llm = bool(constants.USE_LLM) and bool(get_setting("use_llm", True))
+    if use_ai is not None:
+        use_llm = bool(use_ai)
+    else:
+        import config.constants as constants
+        use_llm = bool(constants.USE_LLM) and bool(get_setting("use_llm", True))
+
     total_tokens = sum(count_tokens(m.get("content", "")) for m in valid_memories)
     merged_content = ""
 
@@ -371,3 +376,132 @@ def find_correlated_memories(
 
     candidates.sort(key=lambda x: x["similarity_score"], reverse=True)
     return candidates[:top_k]
+
+
+@handle_errors
+def organize_single_memory_service(
+    memory_id: str,
+    instruction: Optional[str] = None,
+    use_ai: bool = True,
+) -> Dict[str, Any]:
+    """
+    Polishes, restructures, organizes, or summarizes a single memory using AI.
+    Automatically creates a version snapshot before updating so the user can easily revert.
+    """
+    target = get_memory_by_id(memory_id)
+    if not target:
+        return {
+            "status": "error",
+            "message": f"Memory '{memory_id}' not found.",
+        }
+
+    title = target.get("title", "Untitled Note")
+    category = target.get("category", "personal")
+    tags = target.get("tags", [])
+    if isinstance(tags, str):
+        try:
+            import json
+            tags = json.loads(tags)
+        except Exception:
+            tags = []
+    
+    file_path = target.get("file_path", "")
+    content = target.get("content", "")
+    if not content and file_path and Path(file_path).exists():
+        try:
+            _, content = read_markdown_file(Path(file_path))
+        except Exception:
+            content = ""
+
+    if not content:
+        return {
+            "status": "error",
+            "message": f"Memory '{memory_id}' has no content to organize.",
+        }
+
+    # 1. Take a version snapshot prior to modification
+    create_version_snapshot(memory_id=memory_id)
+
+    # 2. Process content using AI (or fallback formatting)
+    organized_content = ""
+    if use_ai:
+        instruction_note = f"\nUser Instruction / Goal: {instruction.strip()}\n" if instruction else ""
+        prompt = (
+            f"Document Title: {title}\n"
+            f"Category: {category}\n"
+            f"Tags: {', '.join(tags) if tags else 'none'}\n"
+            f"{instruction_note}\n"
+            f"--- ORIGINAL CONTENT ---\n"
+            f"{content}\n\n"
+            f"Polished, well-structured, clean Markdown document:"
+        )
+
+        try:
+            res = generate_llm_response(
+                prompt=prompt,
+                system_prompt=ORGANIZE_MEMORY_SYSTEM_PROMPT,
+                temperature=0.2,
+            )
+            organized_content = clean_llm_markdown_output(res)
+        except Exception as e:
+            logger.warning(f"AI organization failed: {e}. Keeping existing content.")
+            organized_content = content
+    else:
+        organized_content = content.strip()
+
+    if not organized_content:
+        organized_content = content
+
+    # 3. Save updated Markdown file to disk
+    from storage.markdown_handler import title_to_slug
+    created_path = create_markdown_file(
+        memory_id=memory_id,
+        title=title,
+        category=category,
+        tags=tags,
+        content=organized_content,
+        file_path=file_path if file_path else None,
+        overwrite=True,
+    )
+    slug = title_to_slug(title)
+
+    # 4. Re-index vector embeddings in ChromaDB
+    chunk_count = 0
+    chunk_ids = []
+    try:
+        chunks, chunk_ids = reindex_memory_chunks(memory_id, organized_content)
+        chunk_count = len(chunks)
+    except Exception as e:
+        logger.warning(f"Vector reindexing failed during organization: {e}")
+
+    # 5. Upsert SQLite record
+    content_hash = compute_string_hash(organized_content)
+    snippet = organized_content[:180].replace("\n", " ").strip()
+    memory_entry = {
+        "id": memory_id,
+        "title": title,
+        "category": category,
+        "tags": tags,
+        "file_path": str(created_path),
+        "content": organized_content,
+        "content_hash": content_hash,
+        "created_at": target.get("created_at"),
+        "chunk_ids": chunk_ids,
+        "snippet": snippet,
+    }
+    upsert_memory_index(memory_entry)
+
+    logger.info(f"Successfully organized memory '{memory_id}' ('{title}') with AI.")
+    return {
+        "status": "success",
+        "action": "organized",
+        "memory_id": memory_id,
+        "title": title,
+        "category": category,
+        "tags": tags,
+        "file_path": str(created_path),
+        "chunk_count": chunk_count,
+        "content": organized_content,
+        "content_preview": organized_content[:300],
+    }
+
