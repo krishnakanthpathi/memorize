@@ -6,7 +6,6 @@ import {
   Code,
   Layers,
   Sparkles,
-  Bot,
   Terminal,
   ShieldCheck,
   Zap,
@@ -53,7 +52,7 @@ export const DocsPanel: React.FC = () => {
     { id: 'overview', label: 'Overview & Features', icon: Sparkles },
     { id: 'markdown', label: 'Markdown Syntax Guide', icon: FileCode },
     { id: 'api', label: 'REST API Reference', icon: Terminal },
-    { id: 'mcp', label: 'MCP Tools Ecosystem', icon: Bot },
+    { id: 'mcp', label: 'MCP Tools Ecosystem', icon: Zap },
     { id: 'shortcuts', label: 'Keyboard Shortcuts', icon: Keyboard },
     { id: 'architecture', label: 'Storage & Architecture', icon: Layers },
   ];
@@ -148,11 +147,11 @@ export const DocsPanel: React.FC = () => {
 
                 <div className="p-4 rounded-xl border border-border bg-surface-hover/50 space-y-1.5">
                   <div className="flex items-center gap-2 font-bold text-xs text-foreground">
-                    <Bot className="w-4 h-4 text-foreground" />
-                    <span>Tool-Enabled AI</span>
+                    <Sparkles className="w-4 h-4 text-violet-500" />
+                    <span>AI Synthesis & Polish</span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    AI Companion can directly create, search, summarize, and manage memories through tool calls.
+                    Intelligently synthesize multiple notes, generate smart titles, and polish structured markdown content.
                   </p>
                 </div>
               </div>
@@ -246,11 +245,11 @@ def memorize(title: str, content: str):
                   },
                   {
                     method: 'POST',
-                    path: '/api/chat',
-                    desc: 'Send prompt to AI Companion with automatic RAG retrieval & tool execution',
-                    sample: `curl -X POST http://localhost:6999/api/chat \\
+                    path: '/api/memories/merge',
+                    desc: 'Merge & synthesize multiple notes with AI into a unified knowledge note',
+                    sample: `curl -X POST http://localhost:6999/api/memories/merge \\
   -H "Content-Type: application/json" \\
-  -d '{"message": "What did I write about Python?", "provider": "ollama"}'`,
+  -d '{"memory_ids": ["mem_1", "mem_2"], "use_ai": true, "delete_sources": false}'`,
                   },
                 ].map((ep, idx) => (
                   <div key={idx} className="p-4 rounded-xl border border-border bg-surface-hover/30 space-y-2">

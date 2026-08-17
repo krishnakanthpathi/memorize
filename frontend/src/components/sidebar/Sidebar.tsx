@@ -9,7 +9,6 @@ import {
   Plus,
   Search,
   Sparkles,
-  Bot,
   ShieldCheck,
   HardDriveDownload,
   Settings,
@@ -349,24 +348,11 @@ export const Sidebar: React.FC = () => {
                 className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors"
               >
                 <div className="flex items-center gap-2.5">
-                  <Sparkles className="w-4 h-4 text-foreground/80" />
+                  <Sparkles className="w-4 h-4 text-violet-500" />
                   <span>Hybrid AI Search</span>
                 </div>
                 <kbd className="text-[9px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
                   ⌘K
-                </kbd>
-              </button>
-
-              <button
-                onClick={() => setActiveModal('chat')}
-                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors"
-              >
-                <div className="flex items-center gap-2.5">
-                  <Bot className="w-4 h-4 text-foreground/80" />
-                  <span>AI Companion Chat</span>
-                </div>
-                <kbd className="text-[9px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
-                  /chat
                 </kbd>
               </button>
 
@@ -407,7 +393,7 @@ export const Sidebar: React.FC = () => {
               >
                 <div className="flex items-center gap-2.5">
                   {isFullScreen ? (
-                    <Minimize2 className="w-4 h-4 text-amber-500" />
+                    <Minimize2 className="w-4 h-4 text-violet-500" />
                   ) : (
                     <Maximize2 className="w-4 h-4 text-foreground/80" />
                   )}

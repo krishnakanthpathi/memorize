@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from api.schemas import (
     GenerateTitleRequest,
+    MemoryBatchDeleteRequest,
     MemoryCreateRequest,
     MemoryMergeRequest,
     MemoryOrganizeRequest,
@@ -70,6 +71,24 @@ def delete_memory_endpoint(memory_id: str):
     if isinstance(res, dict) and res.get("status") == "error":
         raise HTTPException(status_code=404, detail=res.get("message", "Memory not found."))
     return res
+
+
+@router.post("/batch-delete")
+def batch_delete_memories_endpoint(req: MemoryBatchDeleteRequest):
+    deleted_ids = []
+    failed_ids = []
+    for m_id in req.memory_ids:
+        res = handle_delete_memory(norm_title="", category="", memory_id=m_id)
+        if isinstance(res, dict) and res.get("status") == "success":
+            deleted_ids.append(m_id)
+        else:
+            failed_ids.append(m_id)
+    return {
+        "status": "success",
+        "deleted_count": len(deleted_ids),
+        "deleted_ids": deleted_ids,
+        "failed_ids": failed_ids,
+    }
 
 
 @router.get("/{memory_id}/versions")

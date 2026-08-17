@@ -7,23 +7,6 @@ from rich.table import Table
 from rich.text import Text
 from rich.markdown import Markdown
 
-TOOL_ENDPOINT_MAP = {
-    "create_memory": ("POST", "/api/memories"),
-    "store_memory": ("POST", "/api/memories"),
-    "upsert_memory": ("POST", "/api/memories"),
-    "read_memory": ("GET", "/api/memories/{id}"),
-    "get_memory": ("GET", "/api/memories/{id}"),
-    "read": ("GET", "/api/memories/{id}"),
-    "search_memories": ("POST", "/api/search"),
-    "search": ("POST", "/api/search"),
-    "list_memories": ("GET", "/api/memories"),
-    "delete_memory": ("DELETE", "/api/memories/{id}"),
-    "delete": ("DELETE", "/api/memories/{id}"),
-    "clear_all_memories": ("POST", "/api/audit/sync"),
-    "clear_all": ("POST", "/api/audit/sync"),
-    "reset_memories": ("POST", "/api/audit/sync"),
-}
-
 
 class CLIPrinter:
     def __init__(self):
@@ -58,19 +41,20 @@ class CLIPrinter:
         table.add_column("Title", style="bold white", min_width=20)
         table.add_column("Category", style="orange1", min_width=12)
         table.add_column("Tags", style="yellow")
-        table.add_column("File Path", style="dim white")
-        table.add_column("Updated At", style="green", width=19)
+        table.add_column("Snippet Preview", style="dim white", min_width=30)
 
-        for m in memories:
-            tags_str = ", ".join(m.get("tags", [])) if isinstance(m.get("tags"), list) else str(m.get("tags", ""))
+        for mem in memories:
+            tags = mem.get("tags", [])
+            tags_str = ", ".join(tags) if isinstance(tags, list) else str(tags)
+            snippet = mem.get("snippet") or mem.get("content", "")[:100].replace("\n", " ")
             table.add_row(
-                str(m.get("id", "")),
-                str(m.get("title", "")),
-                str(m.get("category", "")),
+                str(mem.get("id", "")),
+                str(mem.get("title", "")),
+                str(mem.get("category", "")),
                 tags_str,
-                str(m.get("file_path", "")),
-                str(m.get("updated_at", ""))[:19],
+                snippet,
             )
+
         self.console.print(table)
 
     def print_search_results(self, query: str, results: List[Dict[str, Any]]):
@@ -79,28 +63,28 @@ class CLIPrinter:
             return
 
         table = Table(
-            title=f"🔍 Search Results for '{query}' ({len(results)} found)",
+            title=f"Hybrid Search Results for '{query}' ({len(results)} matches)",
             show_header=True,
             header_style="bold bright_white on orange4",
             border_style="orange3",
             box=box.ROUNDED,
-            caption="[dim white]Endpoint: POST http://localhost:6999/api/search[/dim white]",
+            caption="[dim white]Hybrid scoring combines vector cosine similarity & full-text relevance[/dim white]",
             caption_justify="center",
         )
-        table.add_column("Score", justify="center", style="bold green", width=7)
+        table.add_column("Score", justify="right", style="bold yellow", width=8)
+        table.add_column("ID", style="dim orange1", width=16)
         table.add_column("Title", style="bold white", min_width=20)
         table.add_column("Category", style="orange1", width=12)
-        table.add_column("Excerpt / Content Match", style="dim white")
+        table.add_column("Matching Snippet", style="dim white", min_width=32)
 
         for r in results:
-            score = f"{r.get('relevance_score', 0.0):.2f}"
-            snippet = r.get("snippet") or r.get("content", "")
-            snippet_clean = snippet.replace("\n", " ").strip()
-            if len(snippet_clean) > 90:
-                snippet_clean = snippet_clean[:87] + "..."
-
+            score_val = r.get("final_score", 0.0)
+            score_str = f"{score_val:.3f}" if isinstance(score_val, float) else str(score_val)
+            snippet = r.get("snippet") or r.get("content", "")[:120].replace("\n", " ")
+            snippet_clean = snippet[:110] + "..." if len(snippet) > 110 else snippet
             table.add_row(
-                score,
+                score_str,
+                str(r.get("id", "")),
                 str(r.get("title", "")),
                 str(r.get("category", "")),
                 snippet_clean,
@@ -108,114 +92,58 @@ class CLIPrinter:
 
         self.console.print(table)
 
-    def print_chat_reply(
-        self,
-        message: str,
-        reply: str,
-        memories_used: Optional[List[Dict[str, Any]]] = None,
-        tool_executed: Optional[Dict[str, Any]] = None,
-    ):
-        self.console.print(
-            Panel(
-                f"[bold bright_white]{message}[/bold bright_white]",
-                title="💬 Prompt",
-                subtitle="[dim white]POST http://localhost:6999/api/chat[/dim white]",
-                subtitle_align="right",
-                border_style="orange3",
-                box=box.ROUNDED,
-            )
-        )
-
-        if tool_executed:
-            t_name = tool_executed.get("tool", "unknown")
-            t_status = tool_executed.get("status", "success")
-            t_info = TOOL_ENDPOINT_MAP.get(t_name.lower(), ("POST", "/api/chat"))
-            method, path = t_info
-            status_color = "green" if t_status == "success" else "red"
-            self.console.print(
-                f" [bold magenta]⚡ Tool Executed:[/bold magenta] [bold yellow]{t_name}[/bold yellow] "
-                f"([{status_color}]{t_status}[/{status_color}]) [dim]→[/dim] "
-                f"[bold cyan]{method}[/bold cyan] [dim white]http://localhost:6999{path}[/dim white]"
-            )
-
-        rendered_markdown = Markdown(reply)
-        self.console.print(
-            Panel(
-                rendered_markdown,
-                title="🤖 Memorize Companion (Ollama)",
-                subtitle="[dim white]POST http://localhost:6999/api/chat[/dim white]",
-                subtitle_align="right",
-                border_style="orange1",
-                box=box.ROUNDED,
-            )
-        )
-
-        if memories_used:
-            sources = ", ".join([f"{m.get('title')} ({m.get('id')})" for m in memories_used])
-            self.console.print(f"[dim yellow]Memory Context Injected:[/dim yellow] [dim orange1]{sources}[/dim orange1]\n")
-
     def print_memory_details(self, details: Dict[str, Any]):
         if not details or details.get("status") == "error":
             self.print_error(details.get("message", "Invalid memory details."))
             return
 
-        title = details.get("title", "Untitled")
-        memory_id = details.get("memory_id", "N/A")
-        category = details.get("category", "N/A")
-        tags_raw = details.get("tags", [])
-        tags_str = ", ".join(tags_raw) if isinstance(tags_raw, list) else str(tags_raw or "")
-        file_path = details.get("file_path", "N/A")
-        created_at = str(details.get("created_at") or "N/A")
-        updated_at = str(details.get("updated_at") or "N/A")
-        file_size = details.get("file_size_bytes", 0)
-        est_tokens = details.get("estimated_tokens", 0)
-        is_indexed = "Yes" if details.get("is_indexed") else "No"
-        content_hash = details.get("content_hash", "N/A")
-        content = details.get("content", "")
+        mem = details.get("memory", details)
+        m_id = mem.get("id", "Unknown")
+        title = mem.get("title", "Untitled")
+        category = mem.get("category", "personal")
+        tags = mem.get("tags", [])
+        tags_str = ", ".join(tags) if isinstance(tags, list) else str(tags)
+        created_at = mem.get("created_at", "N/A")
+        file_path = mem.get("file_path", "N/A")
+        content = mem.get("content", "")
+        versions_count = details.get("versions_count", 1)
 
-        meta_table = Table(show_header=False, box=box.SIMPLE, padding=(0, 1))
-        meta_table.add_column("Field", style="bold orange1", width=14)
-        meta_table.add_column("Value", style="white")
+        meta_table = Table(box=None, show_header=False)
+        meta_table.add_column("Field", style="bold orange1", width=16)
+        meta_table.add_column("Value", style="bold white")
 
-        meta_table.add_row("Memory ID", f"[bold cyan]{memory_id}[/bold cyan]")
-        meta_table.add_row("Category", f"[yellow]{category}[/yellow]")
-        meta_table.add_row("Tags", f"[dim yellow]{tags_str or 'None'}[/dim yellow]")
-        meta_table.add_row("File Path", f"[dim white]{file_path}[/dim white]")
-        meta_table.add_row("Timestamps", f"[green]Created: {created_at}[/green] | [green]Updated: {updated_at}[/green]")
-        meta_table.add_row("Diagnostics", f"[dim white]Size: {file_size} B | Est Tokens: ~{est_tokens} | Indexed: {is_indexed} | Hash: {str(content_hash)[:12]}...[/dim white]")
+        meta_table.add_row("Memory ID", m_id)
+        meta_table.add_row("Title", title)
+        meta_table.add_row("Category", category)
+        meta_table.add_row("Tags", f"[yellow]{tags_str}[/yellow]")
+        meta_table.add_row("Versions Saved", str(versions_count))
+        meta_table.add_row("Created At", str(created_at))
+        meta_table.add_row("File Path", str(file_path))
 
         self.console.print(
             Panel(
                 meta_table,
-                title=f"📖 Memory Metadata — {title}",
-                subtitle=f"[dim white]Endpoint: GET http://localhost:6999/api/memories/{memory_id}[/dim white]",
+                title=f"📁 Memory Metadata — {m_id}",
+                subtitle=f"[dim white]Category: {category}[/dim white]",
                 border_style="orange3",
                 box=box.ROUNDED,
             )
         )
 
-        if content.strip():
+        if content:
+            rendered_content = Markdown(content)
             self.console.print(
                 Panel(
-                    Markdown(content),
-                    title="📝 Document Content",
+                    rendered_content,
+                    title="📖 Document Markdown Body",
                     border_style="orange1",
-                    box=box.ROUNDED,
-                )
-            )
-        else:
-            self.console.print(
-                Panel(
-                    "[dim italic yellow]No text content recorded for this memory.[/dim italic yellow]",
-                    title="📝 Document Content",
-                    border_style="dim orange1",
                     box=box.ROUNDED,
                 )
             )
 
     def print_endpoints_panel(self):
         table = Table(
-            title="🌐 Memorize REST API Endpoints (FastAPI Backend :6999)",
+            title="🌐 Memorize Backend REST API Routing Table",
             show_header=True,
             header_style="bold bright_white on orange4",
             border_style="orange3",
@@ -228,9 +156,9 @@ class CLIPrinter:
         table.add_column("Functionality", style="dim white", min_width=36)
         table.add_column("CLI Command", style="bold orange1", width=14)
 
-        table.add_row("POST", "/api/chat", "Conversational AI companion & tool execution", "chat <msg>")
         table.add_row("GET", "/api/memories", "List all stored memory records", "/list")
         table.add_row("POST", "/api/memories", "Create or update memory file & vector index", "/create")
+        table.add_row("POST", "/api/memories/merge", "Merge and synthesize multiple notes", "N/A")
         table.add_row("GET", "/api/memories/{id}", "Get full memory document & metadata", "/read <id>")
         table.add_row("DELETE", "/api/memories/{id}", "Delete memory from disk and databases", "/delete <id>")
         table.add_row("POST", "/api/memories/{id}/revert", "Revert memory to earlier version", "/revert <id>")
@@ -239,6 +167,7 @@ class CLIPrinter:
         table.add_row("POST", "/api/audit/sync", "Auto-reconcile & fix storage systems", "/sync")
         table.add_row("POST", "/api/audit/purge", "Purge dead DB records & orphan chunks", "/purge")
         table.add_row("GET", "/api/models", "List available LLMs & embedding models", "/settings")
+        table.add_row("POST", "/api/settings/test-llm", "Test LLM connectivity", "N/A")
         self.console.print(table)
 
     def print_settings_panel(self, settings: Dict[str, Any]):
@@ -256,11 +185,10 @@ class CLIPrinter:
         descriptions = {
             "llm_provider": "Active LLM engine provider ('ollama', 'openai', or 'auto')",
             "ollama_base_url": "REST API URL for local/remote Ollama instance",
-            "ollama_model": "Generative/chat LLM model name for Ollama",
-            "search_top_k": "Number of top retrieved memories attached to chat context",
-            "auto_context": "Automatically attach relevant stored memory context to chat prompts",
-            "tool_execution": "Allow LLM to execute tools (e.g. search_memories, create_memory)",
+            "ollama_model": "Generative LLM model name for Ollama",
+            "search_top_k": "Number of top retrieved memories for hybrid search",
             "temperature": "Sampling temperature for model generations",
+            "use_llm": "Toggle AI augmentation vs offline fast deterministic mode",
         }
 
         for key, val in settings.items():
@@ -352,7 +280,7 @@ class CLIPrinter:
             header_style="bold bright_white on orange4",
             border_style="orange3",
             box=box.ROUNDED,
-            caption="[dim white]Inspect any prompt body with: [bold orange1]/prompts <key>[/bold orange1] (e.g. /prompts companion)[/dim white]",
+            caption="[dim white]Inspect any prompt body with: [bold orange1]/prompts <key>[/bold orange1][/dim white]",
             caption_justify="center",
         )
         table.add_column("Prompt Key", style="bold cyan", width=16)

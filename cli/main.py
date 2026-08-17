@@ -8,9 +8,7 @@ if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
 from cli.commands import (
-
     handle_audit,
-    handle_chat,
     handle_clean_orphans,
     handle_create,
     handle_delete,
@@ -35,7 +33,7 @@ def main():
     args = parser.parse_args()
 
     has_action_flag = any([
-        args.list, args.search, args.chat, args.create, args.settings, args.set_key,
+        args.list, args.search, args.create, args.settings, args.set_key,
         args.read, args.delete, args.revert, args.audit, args.clean_orphans, args.recover_orphans
     ])
 
@@ -54,8 +52,6 @@ def main():
             handle_list(category=args.category, tag=args.tag)
         elif args.search:
             handle_search(query=args.search, category=args.category)
-        elif args.chat:
-            handle_chat(message=args.chat)
         elif args.read:
             handle_read(memory_id_or_path=args.read)
         elif args.delete:
@@ -76,4 +72,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -2,7 +2,9 @@ from typing import Any, Dict
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from api.schemas import TestLLMRequest
 from config.settings import get_all_settings, reset_settings, set_setting
+from utils.llm_client import test_llm_connection
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -42,6 +44,19 @@ def update_settings_endpoint(payload: Dict[str, Any]):
         "updated": updated,
         "settings": get_all_settings(),
     }
+
+
+@router.post("/test-llm")
+def test_llm_endpoint(payload: TestLLMRequest):
+    """Test connectivity to configured LLM endpoint without chatbot."""
+    res = test_llm_connection(
+        model=payload.model,
+        provider=payload.provider,
+        base_url=payload.base_url,
+    )
+    if res.get("status") == "error":
+        raise HTTPException(status_code=502, detail=res.get("error", "LLM connection test failed."))
+    return res
 
 
 @router.post("/reset")

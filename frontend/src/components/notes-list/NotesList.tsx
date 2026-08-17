@@ -39,13 +39,17 @@ export const NotesList: React.FC = () => {
     selectNote,
     createNewNote,
     requestDeleteNote,
+    requestDeleteBatch,
+    requestEmptyTrash,
     restoreNote,
+    restoreBatchNotes,
     togglePin,
     toggleFavorite,
     setSearchQuery,
     setActiveModal,
     selectedNoteIds,
     toggleNoteSelection,
+    selectAllNotes,
     clearNoteSelection,
     openMergeModal,
     organizeNote,
@@ -135,6 +139,16 @@ export const NotesList: React.FC = () => {
     return 'All Notes';
   }, [activeView, selectedCategory, selectedTag]);
 
+  const areAllFilteredSelected = filteredNotes.length > 0 && filteredNotes.every((n) => selectedNoteIds.includes(n.id));
+
+  const handleToggleSelectAll = () => {
+    if (areAllFilteredSelected) {
+      clearNoteSelection();
+    } else {
+      selectAllNotes(filteredNotes.map((n) => n.id));
+    }
+  };
+
   return (
     <div className="h-full w-full flex flex-col bg-surface-list border-r border-border select-none text-foreground">
       {/* Top Header & Search */}
@@ -162,22 +176,49 @@ export const NotesList: React.FC = () => {
             title="Open Deep Hybrid AI Vector Search"
             className="absolute right-1.5 p-1 rounded hover:bg-surface-selected text-muted-foreground hover:text-foreground transition-colors"
           >
-            <Sparkles className="w-3.5 h-3.5" />
+            <Sparkles className="w-3.5 h-3.5 text-violet-500" />
           </button>
         </div>
 
-        {/* View title, sort menu, and new note button */}
+        {/* View title, sort menu, empty trash button and new note button */}
         <div className="flex items-center justify-between">
-          <div className="flex items-baseline gap-1.5">
-            <span className="font-semibold text-xs tracking-tight capitalize">
-              {viewTitle}
-            </span>
-            <span className="text-[10px] text-muted-foreground font-mono">
-              ({filteredNotes.length})
-            </span>
+          <div className="flex items-center gap-2">
+            {filteredNotes.length > 0 && (
+              <button
+                onClick={handleToggleSelectAll}
+                title={areAllFilteredSelected ? "Deselect all notes" : "Select all notes"}
+                className="p-1 rounded hover:bg-surface-hover text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+              >
+                {areAllFilteredSelected ? (
+                  <CheckSquare className="w-3.5 h-3.5 text-foreground fill-surface-selected" />
+                ) : (
+                  <Square className="w-3.5 h-3.5 opacity-60 hover:opacity-100" />
+                )}
+              </button>
+            )}
+            <div className="flex items-baseline gap-1.5">
+              <span className="font-semibold text-xs tracking-tight capitalize">
+                {viewTitle}
+              </span>
+              <span className="text-[10px] text-muted-foreground font-mono">
+                ({filteredNotes.length})
+              </span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
+            {/* Empty Trash Button (when viewing trash) */}
+            {activeView === 'trash' && trashNotes.length > 0 && (
+              <button
+                onClick={() => requestEmptyTrash()}
+                title="Empty all notes permanently from Trash"
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold text-destructive hover:bg-destructive/10 border border-destructive/20 transition-colors cursor-pointer shadow-2xs"
+              >
+                <Trash2 className="w-3 h-3" />
+                <span>Empty Trash</span>
+              </button>
+            )}
+
             {/* Sort Menu */}
             <DropdownMenu.Root>
               <DropdownMenu.Trigger asChild>
@@ -299,63 +340,67 @@ export const NotesList: React.FC = () => {
                           {isChecked ? (
                             <CheckSquare className="w-3.5 h-3.5 text-foreground fill-surface-selected" />
                           ) : (
-                            <Square className="w-3.5 h-3.5" />
+                            <Square className="w-3.5 h-3.5 opacity-60" />
                           )}
                         </button>
 
-                        {note.isPinned && (
-                          <Pin className="w-3 h-3 text-foreground shrink-0 fill-current" />
-                        )}
-                        {note.isFavorite && (
-                          <Star className="w-3 h-3 text-amber-500 shrink-0 fill-amber-500" />
-                        )}
                         <h4
                           className={cn(
-                            'text-xs font-bold truncate leading-snug',
+                            'font-semibold text-xs tracking-tight truncate leading-tight',
                             isSelected ? 'text-foreground' : 'text-foreground/90'
                           )}
                         >
                           {note.title || 'Untitled Note'}
                         </h4>
                       </div>
-                      <span className="text-[10px] text-muted-foreground shrink-0 font-mono">
-                        {formatDateRelative(note.updatedAt)}
-                      </span>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {note.isPinned && activeView !== 'trash' && (
+                          <Pin className="w-3 h-3 text-muted-foreground fill-current" />
+                        )}
+                        {note.isFavorite && activeView !== 'trash' && (
+                          <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                        )}
+                        <span className="text-[10px] text-muted-foreground/70 font-mono">
+                          {formatDateRelative(note.updatedAt || note.createdAt)}
+                        </span>
+                      </div>
                     </div>
 
-                    {/* Clean markdown snippet preview */}
-                    <p className="text-[11px] text-muted-foreground line-clamp-1 mt-1 font-normal pl-5">
-                      {snippet || <span className="italic opacity-60">No additional text</span>}
+                    {/* Preview Snippet */}
+                    <p className="text-[11px] text-muted-foreground/80 line-clamp-2 mt-1 leading-snug">
+                      {snippet || <span className="italic opacity-50">No additional text</span>}
                     </p>
 
-                    {/* Badges footer (Category + Tags) */}
-                    <div className="flex items-center gap-1.5 mt-2 flex-wrap pl-5">
-                      <span className="inline-flex items-center gap-0.5 text-[9px] font-mono px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground capitalize">
-                        <Folder className="w-2.5 h-2.5 opacity-70" />
-                        {note.category || 'personal'}
+                    {/* Footer: Category Pill + Tags Chips */}
+                    <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface-badge text-muted-foreground text-[10px] font-medium border border-border/40">
+                        <Folder className="w-2.5 h-2.5" />
+                        <span>{note.category || 'personal'}</span>
                       </span>
 
                       {Array.isArray(note.tags) &&
-                        note.tags.slice(0, 2).map((tag) => (
+                        note.tags.slice(0, 3).map((tag, idx) => (
                           <span
-                            key={tag}
-                            className="inline-flex items-center gap-0.5 text-[9px] font-mono px-1 py-0.2 rounded bg-surface-hover text-muted-foreground"
+                            key={idx}
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-surface-badge text-muted-foreground/90 text-[10px] border border-border/40"
                           >
-                            #{tag.replace(/^#/, '')}
+                            <Tag className="w-2 h-2" />
+                            <span>{tag.replace(/^#/, '')}</span>
                           </span>
                         ))}
-                      {Array.isArray(note.tags) && note.tags.length > 2 && (
+                      {Array.isArray(note.tags) && note.tags.length > 3 && (
                         <span className="text-[9px] text-muted-foreground font-mono">
-                          +{note.tags.length - 2}
+                          +{note.tags.length - 3}
                         </span>
                       )}
                     </div>
                   </div>
                 </ContextMenu.Trigger>
 
-                {/* Right Click Context Menu */}
+                {/* Right-click Context Menu */}
                 <ContextMenu.Portal>
-                  <ContextMenu.Content className="z-50 min-w-[190px] bg-popover text-popover-foreground rounded-md p-1 border border-border shadow-xl text-xs animate-in fade-in zoom-in-95">
+                  <ContextMenu.Content className="z-50 min-w-[190px] bg-popover text-popover-foreground rounded-lg p-1.5 border border-border shadow-xl text-xs animate-in fade-in zoom-in-95 space-y-0.5">
                     {activeView !== 'trash' ? (
                       <>
                         <ContextMenu.Item
@@ -385,17 +430,21 @@ export const NotesList: React.FC = () => {
                           }}
                           className="px-2.5 py-1.5 rounded cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2 font-medium text-foreground"
                         >
-                          <Wand2 className="w-3.5 h-3.5 text-amber-500" />
+                          <Wand2 className="w-3.5 h-3.5 text-violet-500" />
                           <span>AI Organize & Polish</span>
                         </ContextMenu.Item>
 
                         {/* Merge Actions */}
                         <ContextMenu.Item
-                          onClick={() => openMergeModal([note.id])}
+                          onClick={() => openMergeModal(selectedNoteIds.includes(note.id) && selectedNoteIds.length > 1 ? selectedNoteIds : [note.id])}
                           className="px-2.5 py-1.5 rounded cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2 font-medium text-foreground"
                         >
                           <Combine className="w-3.5 h-3.5" />
-                          <span>Merge with Related Notes...</span>
+                          <span>
+                            {selectedNoteIds.includes(note.id) && selectedNoteIds.length > 1
+                              ? `Merge ${selectedNoteIds.length} Selected Notes...`
+                              : 'Merge with Related Notes...'}
+                          </span>
                         </ContextMenu.Item>
 
                         <ContextMenu.Item
@@ -410,7 +459,7 @@ export const NotesList: React.FC = () => {
                           ) : (
                             <>
                               <Square className="w-3.5 h-3.5" />
-                              <span>Select for Multi-Merge</span>
+                              <span>Select for Multi-Action</span>
                             </>
                           )}
                         </ContextMenu.Item>
@@ -446,13 +495,23 @@ export const NotesList: React.FC = () => {
 
                         <ContextMenu.Separator className="h-px bg-border my-1" />
 
-                        <ContextMenu.Item
-                          onClick={() => requestDeleteNote(note.id, false)}
-                          className="px-2.5 py-1.5 rounded cursor-pointer outline-none hover:bg-destructive/10 text-destructive flex items-center gap-2"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Move to Trash</span>
-                        </ContextMenu.Item>
+                        {selectedNoteIds.includes(note.id) && selectedNoteIds.length > 1 ? (
+                          <ContextMenu.Item
+                            onClick={() => requestDeleteBatch(selectedNoteIds, false)}
+                            className="px-2.5 py-1.5 rounded cursor-pointer outline-none hover:bg-destructive/10 text-destructive flex items-center gap-2 font-semibold"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Move {selectedNoteIds.length} Selected to Trash</span>
+                          </ContextMenu.Item>
+                        ) : (
+                          <ContextMenu.Item
+                            onClick={() => requestDeleteNote(note.id, false)}
+                            className="px-2.5 py-1.5 rounded cursor-pointer outline-none hover:bg-destructive/10 text-destructive flex items-center gap-2"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Move to Trash</span>
+                          </ContextMenu.Item>
+                        )}
                       </>
                     ) : (
                       <>
@@ -475,21 +534,43 @@ export const NotesList: React.FC = () => {
 
                         <ContextMenu.Separator className="h-px bg-border my-1" />
 
-                        <ContextMenu.Item
-                          onClick={() => restoreNote(note.id)}
-                          className="px-2.5 py-1.5 rounded cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2"
-                        >
-                          <RotateCcw className="w-3.5 h-3.5" />
-                          <span>Restore Note</span>
-                        </ContextMenu.Item>
+                        {selectedNoteIds.includes(note.id) && selectedNoteIds.length > 1 ? (
+                          <>
+                            <ContextMenu.Item
+                              onClick={() => restoreBatchNotes(selectedNoteIds)}
+                              className="px-2.5 py-1.5 rounded cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2 font-medium"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              <span>Restore {selectedNoteIds.length} Selected Notes</span>
+                            </ContextMenu.Item>
 
-                        <ContextMenu.Item
-                          onClick={() => requestDeleteNote(note.id, true)}
-                          className="px-2.5 py-1.5 rounded cursor-pointer outline-none hover:bg-destructive/10 text-destructive flex items-center gap-2 font-semibold"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Delete Permanently</span>
-                        </ContextMenu.Item>
+                            <ContextMenu.Item
+                              onClick={() => requestDeleteBatch(selectedNoteIds, true)}
+                              className="px-2.5 py-1.5 rounded cursor-pointer outline-none hover:bg-destructive/10 text-destructive flex items-center gap-2 font-semibold"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Delete {selectedNoteIds.length} Permanently</span>
+                            </ContextMenu.Item>
+                          </>
+                        ) : (
+                          <>
+                            <ContextMenu.Item
+                              onClick={() => restoreNote(note.id)}
+                              className="px-2.5 py-1.5 rounded cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              <span>Restore Note</span>
+                            </ContextMenu.Item>
+
+                            <ContextMenu.Item
+                              onClick={() => requestDeleteNote(note.id, true)}
+                              className="px-2.5 py-1.5 rounded cursor-pointer outline-none hover:bg-destructive/10 text-destructive flex items-center gap-2 font-semibold"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Delete Permanently</span>
+                            </ContextMenu.Item>
+                          </>
+                        )}
                       </>
                     )}
                   </ContextMenu.Content>
@@ -501,27 +582,63 @@ export const NotesList: React.FC = () => {
       </div>
 
       {/* Floating Multi-Selection Action Bar */}
-      {selectedNoteIds.length > 0 && activeView !== 'trash' && (
-        <div className="p-2.5 bg-surface-sidebar border-t border-border flex items-center justify-between animate-in slide-in-from-bottom-2 select-none shrink-0 shadow-lg">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-            <Combine className="w-4 h-4 text-foreground" />
-            <span>{selectedNoteIds.length} notes selected</span>
+      {selectedNoteIds.length > 0 && (
+        <div className="p-2.5 bg-surface-sidebar border-t border-border flex items-center justify-between animate-in slide-in-from-bottom-2 select-none shrink-0 shadow-lg gap-2">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground truncate">
+            <Combine className="w-4 h-4 text-foreground shrink-0" />
+            <span className="truncate">{selectedNoteIds.length} {activeView === 'trash' ? 'trashed' : ''} note{selectedNoteIds.length > 1 ? 's' : ''} selected</span>
           </div>
-          <div className="flex items-center gap-1.5">
+
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               onClick={() => clearNoteSelection()}
-              className="px-2.5 py-1 rounded text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors"
+              className="px-2 py-1 rounded text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors cursor-pointer"
             >
               Clear
             </button>
-            <button
-              onClick={() => openMergeModal()}
-              disabled={selectedNoteIds.length < 2}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-foreground text-background text-xs font-bold hover:opacity-90 transition-opacity disabled:opacity-50 shadow-xs cursor-pointer"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Merge ({selectedNoteIds.length})</span>
-            </button>
+
+            {activeView !== 'trash' ? (
+              <>
+                <button
+                  onClick={() => openMergeModal()}
+                  disabled={selectedNoteIds.length < 2}
+                  title={selectedNoteIds.length < 2 ? "Select at least 2 notes to merge" : "Merge selected notes"}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-foreground text-background text-xs font-bold hover:opacity-90 transition-opacity disabled:opacity-50 shadow-xs cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-violet-300" />
+                  <span>Merge ({selectedNoteIds.length})</span>
+                </button>
+
+                <button
+                  onClick={() => requestDeleteBatch(selectedNoteIds, false)}
+                  title="Move selected notes to Trash"
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-destructive bg-destructive/10 hover:bg-destructive/20 border border-destructive/30 text-xs font-bold transition-colors cursor-pointer shadow-xs"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Move to Trash ({selectedNoteIds.length})</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => restoreBatchNotes(selectedNoteIds)}
+                  title="Restore selected notes to Active Notes"
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-foreground text-background text-xs font-bold hover:opacity-90 transition-opacity shadow-xs cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Restore ({selectedNoteIds.length})</span>
+                </button>
+
+                <button
+                  onClick={() => requestDeleteBatch(selectedNoteIds, true)}
+                  title="Permanently delete selected notes"
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-destructive text-destructive-foreground text-xs font-bold hover:opacity-90 transition-opacity shadow-xs cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete ({selectedNoteIds.length})</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

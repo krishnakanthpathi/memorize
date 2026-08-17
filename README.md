@@ -19,7 +19,7 @@ memorize/
 │       └── memory_tools.py   # Core tools: store, update, delete, fetch, hybrid_fetch, list_memories, get_categories
 ├── ⚙️ api/                    # FastAPI REST Service (port 7777)
 │   ├── server.py             # App factory & CORS setup
-│   └── routes/               # Modular API endpoints (/memories, /search, /chat, /settings, etc.)
+│   └── routes/               # Modular API endpoints (/memories, /search, /settings, etc.)
 ├── 💻 frontend/               # React 19 + TypeScript + Vite Web App (port 8888)
 ├── 🧠 core/                   # Memory services & LLM pipeline
 ├── 🔍 search/                 # Hybrid relevance ranking & BM25
@@ -119,7 +119,7 @@ Open the generated HTTPS URL on any mobile device or external browser.
 - **Master LLM Toggle & Model Config**: Switch between AI-Augmented Mode and 100% Offline Fast Mode directly from the Settings Panel.
 - **Milkdown WYSIWYG Editor**: Live GitHub Flavored Markdown (GFM) editing with headings, task lists, code blocks, tables, and blockquotes.
 - **Hybrid AI Vector Search**: Real-time semantic retrieval using ChromaDB and BM25 relevance scoring (`⌘K`).
-- **AI Companion Chat**: Chat drawer querying local knowledge base using LLM context RAG (`/chat`).
+- **AI Synthesis & Note Enhancement**: Smart auto-title generation, multi-note synthesis merge, and AI content polish & restructuring.
 - **Version History & Rollback**: Browse historical snapshots and restore any previous version.
 - **Storage Integrity & Audit**: Multi-tier health dashboard with 1-click auto-fix for orphan files, indexes, and vector chunks.
 - **Backup & Recovery**: Instant full markdown snapshots and DB backups.

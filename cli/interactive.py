@@ -1,5 +1,4 @@
 from cli.commands import (
-    handle_chat,
     handle_create,
     handle_delete,
     handle_list,
@@ -37,9 +36,7 @@ def show_help():
         "    [bold orange1]/sync[/bold orange1]                     [dim white]- Auto-repair & reconcile all storage systems[/dim white]\n"
         "    [bold orange1]/clear[/bold orange1]                    [dim white]- Clear the terminal screen[/dim white]\n"
         "    [bold orange1]/help[/bold orange1]                     [dim white]- Show this help message[/dim white]\n"
-        "    [bold orange1]/exit[/bold orange1]                     [dim white]- Exit shell[/dim white]\n\n"
-        "  [bold bright_white]🤖 AI Companion[/bold bright_white]\n\n"
-        "    [bold yellow]<type any text>[/bold yellow]           [dim white]- Chat directly with AI Companion (Ollama)[/dim white]\n"
+        "    [bold orange1]/exit[/bold orange1]                     [dim white]- Exit shell[/dim white]\n"
     )
     printer.console.print(help_text)
 
@@ -101,23 +98,14 @@ def run_interactive_mode():
                 handle_create(title=t, content=c, category=cat, tags=tags_list)
                 continue
 
-            if user_input.startswith("/create "):
-                t = user_input[8:].strip()
-                handle_create(title=t)
-                continue
-
-            if user_input.startswith("create "):
-                # If conversational phrase (e.g. 'create a memory about...'), route to AI companion for synthesis
-                text = user_input[7:].strip()
-                words = text.lower().split()
-                is_conversational = (
-                    any(w in words for w in ["a", "an", "the", "about", "for", "on", "how", "why", "what", "explaining", "describing", "note", "memory"])
-                    or len(words) > 3
-                )
-                if is_conversational:
-                    handle_chat(message=user_input)
-                else:
-                    handle_create(title=text)
+            if user_input.startswith(("/create ", "create ")):
+                prefix_len = 8 if user_input.startswith("/create ") else 7
+                title = user_input[prefix_len:].strip()
+                c = printer.console.input("[bold yellow]Content (optional): [/bold yellow]").strip()
+                cat = printer.console.input("[bold yellow]Category (default: personal): [/bold yellow]").strip() or "personal"
+                tg = printer.console.input("[bold yellow]Tags (comma-separated): [/bold yellow]").strip()
+                tags_list = [x.strip() for x in tg.split(",") if x.strip()] if tg else []
+                handle_create(title=title, content=c, category=cat, tags=tags_list)
                 continue
 
             if user_input.lower() in ("/list", "list"):
@@ -136,33 +124,21 @@ def run_interactive_mode():
                 handle_search(query=q)
                 continue
 
-            if user_input.startswith(("/read ", "read ")):
-                prefix_len = 6 if user_input.startswith("/read ") else 5
-                mem_id = user_input[prefix_len:].strip()
-                handle_read(memory_id_or_path=mem_id)
-                continue
-
-            if user_input.lower() in (
-                "/reset", "reset", "/clear-all", "clear-all", "/purge-all", "purge-all",
-                "delete all", "delete all memories", "delete all the memories", "delete all these",
-                "clear all", "clear all memories", "clear all the memories",
-                "purge all", "purge all memories"
-            ):
+            if user_input.lower() in ("/reset", "reset"):
                 from cli.commands import handle_clear_all
                 handle_clear_all()
                 continue
 
+            if user_input.startswith(("/read ", "read ")):
+                prefix_len = 6 if user_input.startswith("/read ") else 5
+                mid = user_input[prefix_len:].strip()
+                handle_read(memory_id_or_path=mid)
+                continue
+
             if user_input.startswith(("/delete ", "delete ")):
                 prefix_len = 8 if user_input.startswith("/delete ") else 7
-                target = user_input[prefix_len:].strip()
-                words = target.lower().split()
-                if any(w in words for w in ["all", "everything", "these"]):
-                    from cli.commands import handle_clear_all
-                    handle_clear_all()
-                elif any(w in words for w in ["the", "a", "an", "about", "note", "memory"]) or len(words) > 2:
-                    handle_chat(message=user_input)
-                else:
-                    handle_delete(memory_id=target)
+                mid = user_input[prefix_len:].strip()
+                handle_delete(memory_id=mid)
                 continue
 
             if user_input.startswith(("/revert ", "revert ")):
@@ -194,17 +170,11 @@ def run_interactive_mode():
                 handle_sync()
                 continue
 
-            # If user entered an unknown slash command, provide helpful feedback
-            if user_input.startswith("/"):
-                printer.print_error(f"Unknown command '{user_input}'. Type [bold orange1]/help[/bold orange1] to view available commands.")
-                continue
-
-            # Standard conversational chat input with AI Companion
-            handle_chat(message=user_input)
+            # If user entered an unrecognized command or plain text
+            printer.print_error(f"Unrecognized input '{user_input}'. Type [bold orange1]/help[/bold orange1] to view available commands.")
 
         except KeyboardInterrupt:
             printer.print_info("\nSession interrupted. Exiting.")
             break
         except Exception as e:
             printer.print_error(str(e))
-

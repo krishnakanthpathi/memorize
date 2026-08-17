@@ -1,7 +1,7 @@
 import json
 import os
 import re
-from typing import Optional
+from typing import Any, Dict, Optional
 import requests
 
 from config.constants import (
@@ -16,14 +16,26 @@ from config.constants import (
 from core.logger import logger
 
 
+def clean_llm_markdown_output(output: str) -> str:
+    """Strips outer markdown code fences from LLM responses if wrapped."""
+    if not output:
+        return ""
+    cleaned = output.strip()
+    cleaned = re.sub(r"^```(?:markdown|md)?\s*", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"^```\s*", "", cleaned)
+    cleaned = re.sub(r"\s*```$", "", cleaned)
+    return cleaned.strip()
+
+
 def generate_openai_response(
     prompt: str,
     system_prompt: Optional[str] = None,
     model: Optional[str] = None,
     temperature: float = 0.2,
+    json_mode: bool = False,
 ) -> str:
     """
-    Generates text response using the OpenAI client API endpoint.
+    Generates text or JSON response using the OpenAI client API endpoint.
     """
     if not OPENAI_API_KEY:
         raise ValueError("OPENAI_API_KEY is not configured.")
@@ -37,11 +49,15 @@ def generate_openai_response(
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
 
-    response = client.chat.completions.create(
-        model=chosen_model,
-        messages=messages,
-        temperature=temperature,
-    )
+    kwargs: Dict[str, Any] = {
+        "model": chosen_model,
+        "messages": messages,
+        "temperature": temperature,
+    }
+    if json_mode:
+        kwargs["response_format"] = {"type": "json_object"}
+
+    response = client.chat.completions.create(**kwargs)
     if response.choices and len(response.choices) > 0:
         content = response.choices[0].message.content
         if content:
@@ -55,20 +71,24 @@ def generate_ollama_response(
     model: Optional[str] = None,
     temperature: float = 0.2,
     base_url: Optional[str] = None,
+    json_mode: bool = False,
 ) -> str:
     """
-    Generates text response using the Ollama REST API endpoint.
+    Generates text or JSON response using the Ollama REST API endpoint.
     """
     ollama_model = model or OLLAMA_MODEL or LLM_MODEL or "gpt-oss:120b-cloud"
     effective_url = (base_url or OLLAMA_BASE_URL).rstrip("/")
     url = f"{effective_url}/api/generate"
     full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
-    payload = {
+    payload: Dict[str, Any] = {
         "model": ollama_model,
         "prompt": full_prompt,
         "stream": False,
         "options": {"temperature": temperature},
     }
+    if json_mode:
+        payload["format"] = "json"
+
     resp = requests.post(url, json=payload, timeout=30)
     if resp.status_code == 200:
         result = resp.json().get("response", "")
@@ -86,187 +106,91 @@ def generate_llm_response(
     temperature: float = 0.2,
     provider: Optional[str] = None,
     base_url: Optional[str] = None,
+    json_mode: bool = False,
 ) -> str:
     """
-    Generates text response with optional provider routing or automatic fallback between OpenAI and Ollama.
+    Generates text response with provider routing and automatic fallback between OpenAI and Ollama.
     """
     prov_lower = (provider or LLM_PROVIDER or "ollama").strip().lower()
 
     if prov_lower == "openai":
-        return generate_openai_response(prompt, system_prompt, model, temperature)
+        return generate_openai_response(prompt, system_prompt, model, temperature, json_mode=json_mode)
     elif prov_lower == "ollama":
-        return generate_ollama_response(prompt, system_prompt, model, temperature, base_url=base_url)
+        return generate_ollama_response(prompt, system_prompt, model, temperature, base_url=base_url, json_mode=json_mode)
 
     # Automatic fallback: Try OpenAI first if configured, then Ollama
     if OPENAI_API_KEY and OPENAI_BASE_URL:
         try:
-            return generate_openai_response(prompt, system_prompt, model, temperature)
+            return generate_openai_response(prompt, system_prompt, model, temperature, json_mode=json_mode)
         except Exception as e:
             logger.warning(f"OpenAI LLM request failed: {e}. Falling back to Ollama.")
 
     try:
-        return generate_ollama_response(prompt, system_prompt, model, temperature, base_url=base_url)
+        return generate_ollama_response(prompt, system_prompt, model, temperature, base_url=base_url, json_mode=json_mode)
     except Exception as e:
         logger.error(f"Failed to generate LLM response from Ollama: {e}")
-        raise RuntimeError(f"Failed to generate response from all configured LLM providers. Details: {e}")
+        raise RuntimeError(f"Failed to generate response from configured LLM providers. Details: {e}")
 
 
-def execute_tool_call(tool_name: str, params: dict) -> dict:
+def generate_json_response(
+    prompt: str,
+    system_prompt: Optional[str] = None,
+    model: Optional[str] = None,
+    temperature: float = 0.1,
+    provider: Optional[str] = None,
+    base_url: Optional[str] = None,
+) -> Dict[str, Any]:
     """
-    Executes tool calls requested by the LLM (e.g. search_memories, create_memory, read_memory, delete_memory, list_memories).
+    Generates structured JSON output from LLM, parsing response and stripping code fences.
     """
-    from core.memory_service import execute_upsert_memory, handle_delete_memory
-    from search.relevance_scorer import search_hybrid_relevance
-    from storage.db_manager import get_all_memories
-    from storage.sync_manager import get_memory_file_status
-
-    tool_clean = tool_name.strip().lower()
-    if tool_clean in ("store", "create_memory", "store_memory", "upsert_memory"):
-        res = execute_upsert_memory(
-            title=params.get("title", "Untitled Note"),
-            content=params.get("content", ""),
-            category=params.get("category", "personal"),
-            tags=params.get("tags", []),
-            action="auto",
-        )
-        return {"tool": tool_clean, "status": "success", "result": res}
-    elif tool_clean in ("update", "update_memory", "append_memory"):
-        res = execute_upsert_memory(
-            title=params.get("title", "Untitled Note"),
-            content=params.get("content", ""),
-            category=params.get("category", "personal"),
-            tags=params.get("tags", []),
-            action="append" if params.get("append") else "update",
-            memory_id=params.get("memory_id"),
-        )
-        return {"tool": tool_clean, "status": "success", "result": res}
-    elif tool_clean in ("hybrid_fetch", "search_memories", "search", "search_memory"):
-        results = search_hybrid_relevance(
-            query=params.get("query", ""),
-            category_filter=params.get("category") or params.get("category_filter"),
-            top_k=params.get("top_k", 4),
-        )
-        return {"tool": tool_clean, "status": "success", "result": results}
-    elif tool_clean in ("fetch", "read_memory", "get_memory", "read"):
-        mem_id = params.get("memory_id") or params.get("id") or params.get("title", "")
-        if mem_id:
-            res = get_memory_file_status(mem_id)
-            return {"tool": tool_clean, "status": "success" if res.get("status") != "error" else "error", "result": res}
-        else:
-            cat = params.get("category") or params.get("category_filter")
-            tag = params.get("tag") or params.get("tag_filter")
-            mems = get_all_memories(category_filter=cat, tag_filter=tag)
-            return {"tool": tool_clean, "status": "success", "result": mems}
-    elif tool_clean in ("delete", "delete_memory"):
-        mem_id = params.get("memory_id") or params.get("id", "")
-        title = params.get("title", "")
-        res = handle_delete_memory(norm_title=title, category=params.get("category", "personal"), memory_id=mem_id or None)
-        return {"tool": tool_clean, "status": "success" if res.get("status") == "success" else "error", "result": res}
-    elif tool_clean in ("list_memories", "list"):
-        cat = params.get("category") or params.get("category_filter")
-        tag = params.get("tag") or params.get("tag_filter")
-        mems = get_all_memories(category_filter=cat, tag_filter=tag)
-        return {"tool": tool_clean, "status": "success", "result": mems}
-    elif tool_clean in ("get_categories", "categories", "list_categories"):
-        from mcp.tools.memory_tools import get_categories as fetch_categories
-        res = fetch_categories()
-        return {"tool": tool_clean, "status": "success", "result": res}
-    elif tool_clean in ("merge_memories", "llm_merge", "merge"):
-        from core.memory_merger import merge_memories_service
-        res = merge_memories_service(
-            memory_ids=params.get("memory_ids", []),
-            target_title=params.get("target_title"),
-            target_category=params.get("target_category"),
-            target_tags=params.get("target_tags"),
-            delete_sources=params.get("delete_sources", True),
-            instruction=params.get("instruction"),
-            use_ai=params.get("use_ai"),
-        )
-        return {"tool": tool_clean, "status": "success" if res.get("status") == "success" else "error", "result": res}
-    elif tool_clean in ("find_correlated_memories", "correlations", "find_related_memories"):
-        from core.memory_merger import find_correlated_memories
-        res = find_correlated_memories(
-            memory_id=params.get("memory_id", ""),
-            top_k=params.get("top_k", 5),
-        )
-        return {"tool": tool_clean, "status": "success", "result": res}
-    elif tool_clean in ("organize_memory", "organize", "ai_organize", "polish_memory", "summarize_memory"):
-        from core.memory_merger import organize_single_memory_service
-        res = organize_single_memory_service(
-            memory_id=params.get("memory_id", ""),
-            instruction=params.get("instruction"),
-            use_ai=params.get("use_ai", True),
-            generate_title=params.get("generate_title", False),
-        )
-        return {"tool": tool_clean, "status": "success" if res.get("status") == "success" else "error", "result": res}
-    elif tool_clean in ("generate_title", "create_title", "title_generator"):
-        from core.memory_merger import generate_title_service
-        res_title = generate_title_service(
-            content=params.get("content", ""),
-            current_title=params.get("current_title"),
-            instruction=params.get("instruction"),
-            use_ai=True,
-        )
-        return {"tool": tool_clean, "status": "success", "result": {"title": res_title}}
-    elif tool_clean in ("organize_selection", "transform_selection", "polish_selection"):
-        from core.memory_merger import organize_selection_service
-        res = organize_selection_service(
-            selected_text=params.get("selected_text", params.get("text", "")),
-            instruction=params.get("instruction"),
-            mode=params.get("mode", "polish"),
-            full_context=params.get("full_context"),
-            use_ai=True,
-        )
-        return {"tool": tool_clean, "status": "success" if res.get("status") == "success" else "error", "result": res}
-    elif tool_clean in ("clear_all_memories", "clear_all", "reset_memories", "purge_all", "delete_all"):
-        from storage.sync_manager import clear_all_memories
-        res = clear_all_memories()
-        return {"tool": "clear_all_memories", "status": "success", "result": res}
+    raw = generate_llm_response(
+        prompt=prompt,
+        system_prompt=system_prompt,
+        model=model,
+        temperature=temperature,
+        provider=provider,
+        base_url=base_url,
+        json_mode=True,
+    )
+    cleaned = raw.strip()
+    # Strip json markdown code fence if present
+    match = re.search(r"```(?:json)?\s*(\{.*\}|\[.*\])\s*```", cleaned, re.DOTALL)
+    if match:
+        cleaned = match.group(1)
     else:
-        return {"tool": tool_clean, "status": "error", "message": f"Unknown tool: {tool_name}"}
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+
+    return json.loads(cleaned.strip())
 
 
-
-
-def parse_and_execute_tool(raw_response: str) -> tuple[Optional[dict], str]:
+def test_llm_connection(
+    model: Optional[str] = None,
+    provider: Optional[str] = None,
+    base_url: Optional[str] = None,
+) -> Dict[str, Any]:
     """
-    Parses LLM output for structured JSON tool invocation.
-    Robustly extracts embedded JSON objects even if accompanied by explanation text.
-    Returns (tool_execution_result, final_or_raw_response).
+    Tests connectivity to the specified LLM provider with a fast lightweight ping prompt.
     """
-    cleaned = raw_response.strip()
-
-    # 1. Try stripping markdown code fences
-    fence_pattern = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, re.DOTALL)
-    if fence_pattern:
-        try:
-            data = json.loads(fence_pattern.group(1))
-            if isinstance(data, dict) and "tool" in data:
-                tool_name = data.get("tool")
-                params = data.get("parameters") or data.get("args") or {}
-                exec_result = execute_tool_call(tool_name, params)
-                return exec_result, raw_response
-        except Exception:
-            pass
-
-    # 2. Try streaming raw JSON decoding from any opening '{'
-    idx = 0
-    while True:
-        start_idx = cleaned.find("{", idx)
-        if start_idx == -1:
-            break
-        try:
-            decoder = json.JSONDecoder()
-            data, end_pos = decoder.raw_decode(cleaned[start_idx:])
-            if isinstance(data, dict) and "tool" in data:
-                tool_name = data.get("tool")
-                params = data.get("parameters") or data.get("args") or {}
-                exec_result = execute_tool_call(tool_name, params)
-                return exec_result, raw_response
-        except Exception:
-            pass
-        idx = start_idx + 1
-
-    return None, raw_response
-
-
+    try:
+        reply = generate_llm_response(
+            prompt="Respond in 5 words or fewer confirming you are online.",
+            system_prompt="You are a health check assistant.",
+            model=model,
+            temperature=0.1,
+            provider=provider,
+            base_url=base_url,
+        )
+        return {
+            "status": "success",
+            "provider": provider or LLM_PROVIDER or "ollama",
+            "model": model or LLM_MODEL or "default",
+            "reply": reply,
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "provider": provider or LLM_PROVIDER or "ollama",
+            "model": model or LLM_MODEL or "default",
+            "error": str(e),
+        }

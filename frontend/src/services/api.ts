@@ -1,7 +1,6 @@
 import {
   AuditSummary,
   CategoryStat,
-  ChatMessage,
   CorrelationItem,
   GenerateTitleResponse,
   MemoryOrganizeResponse,
@@ -103,6 +102,16 @@ export const api = {
       method: "DELETE",
     });
     if (!res.ok) throw new Error(`Delete failed: ${res.statusText}`);
+    return res.json();
+  },
+
+  async deleteBatchMemories(memoryIds: string[]): Promise<any> {
+    const res = await fetch(`${API_BASE}/memories/batch-delete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ memory_ids: memoryIds }),
+    });
+    if (!res.ok) throw new Error(`Batch delete failed: ${res.statusText}`);
     return res.json();
   },
 
@@ -233,28 +242,24 @@ export const api = {
     return data.results || [];
   },
 
-  // Chat
-  async sendChatMessage(message: string, model?: string, provider?: string): Promise<{
-    reply: string;
-    tool_executed?: {
-      tool: string;
-      status: string;
-      result?: any;
-    };
-    memories_used: { id: string; title: string; category: string; score?: number }[];
+  // Test LLM Connection
+  async testLlmConnection(model?: string, provider?: string, baseUrl?: string): Promise<{
+    status: string;
+    provider: string;
+    model: string;
+    reply?: string;
+    error?: string;
   }> {
-    const res = await fetch(`${API_BASE}/chat`, {
+    const res = await fetch(`${API_BASE}/settings/test-llm`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, model, provider }),
+      body: JSON.stringify({ model, provider, base_url: baseUrl }),
     });
-    if (!res.ok) throw new Error(`Chat request failed: ${res.statusText}`);
-    const data = await res.json();
-    return {
-      reply: data.reply || "",
-      tool_executed: data.tool_executed,
-      memories_used: data.memories_used || [],
-    };
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || `LLM test failed: ${res.statusText}`);
+    }
+    return await res.json();
   },
 
   // Categories

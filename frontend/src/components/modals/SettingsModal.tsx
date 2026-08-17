@@ -68,12 +68,11 @@ export const SettingsModal: React.FC = () => {
     setTestLoading(true);
     setTestStatus(null);
     try {
-      const res = await api.sendChatMessage(
-        "Ping! Confirm connection in 5 words.",
+      const res = await api.testLlmConnection(
         selectedModel || undefined,
         selectedProvider || undefined
       );
-      setTestStatus(`Connected! Model replied: "${res.reply.slice(0, 80)}..."`);
+      setTestStatus(`Connected! Model (${res.model}) replied: "${(res.reply || 'OK').slice(0, 80)}..."`);
     } catch (err: any) {
       setTestStatus(`Connection error: ${err.message}`);
     } finally {

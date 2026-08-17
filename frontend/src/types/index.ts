@@ -88,23 +88,12 @@ export interface AuditSummary {
   };
 }
 
-export interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  toolExecuted?: {
-    tool: string;
-    status: string;
-    result?: any;
-  };
-  memoriesUsed?: {
-    id: string;
-    title: string;
-    category: string;
-    score?: number;
-  }[];
-  timestamp: string;
-  model?: string;
+export interface TestLLMResponse {
+  status: string;
+  provider: string;
+  model: string;
+  reply?: string;
+  error?: string;
 }
 
 export interface ModelOption {

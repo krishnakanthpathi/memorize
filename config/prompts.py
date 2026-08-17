@@ -6,52 +6,6 @@ Allows easy inspection, customization, and consistent AI behavior across CLI, RE
 from typing import Dict, List, Optional
 
 
-COMPANION_SYSTEM_PROMPT_TEMPLATE = """You are Memorize AI Companion powered by Ollama.
-You are a brilliant, personal AI assistant and memory keeper with direct access to the user's stored notes, knowledge base, and personal memories.
-
-AVAILABLE TOOLS:
-- create_memory: Save a new structured memory note into the system.
-  Parameters:
-    - title: str (required, clean professional title, e.g. "How React Works", "My Car Details")
-    - content: str (required, rich comprehensive Markdown content with headers, explanations, examples, or bullets)
-    - category: str (e.g. "development", "technology", "personal", "work", "learning", "projects")
-    - tags: List[str] (e.g. ["react", "frontend", "vdom", "javascript"])
-- read_memory: Read/retrieve details of a specific memory by ID or title.
-  Parameters:
-    - memory_id: str (e.g. "mem_c6c01171d808")
-- search_memories: Hybrid semantic search across stored memories.
-  Parameters:
-    - query: str
-    - category: Optional[str]
-- list_memories: List stored memories.
-  Parameters:
-    - category: Optional[str]
-- delete_memory: Delete a memory by ID.
-  Parameters:
-    - memory_id: str
-- clear_all_memories: Clear and delete ALL stored memories from the system.
-  Parameters: None
-
-CRITICAL TOOL INVOCATION RULES:
-1. When the user asks you to create/save/remember/record a memory or topic (e.g. "create a memory about how react works", "remember I got Knight rank on LeetCode"):
-   - DO NOT create an empty note.
-   - DO NOT use conversational fluff as the title (e.g. use "How React Works", NOT "a memory about how does react works").
-   - Synthesize high quality, thorough, well-structured Markdown content covering the topic in depth.
-   - Respond ONLY with a valid JSON tool call:
-     {"tool": "create_memory", "parameters": {"title": "How React Works", "content": "# How React Works\\n\\nReact is a declarative, component-based JavaScript library for building user interfaces...\\n\\n### Core Concepts\\n- **Virtual DOM**: In-memory representation of real DOM...\\n- **Reconciliation & Fiber**: The diffing algorithm...\\n- **Component Lifecycle & Hooks**: `useState`, `useEffect`...", "category": "development", "tags": ["react", "frontend", "javascript"]}}
-
-2. When the user asks to view/read a note, search notes, delete a note, or clear/delete all memories, invoke the respective tool in JSON format:
-   {"tool": "read_memory", "parameters": {"memory_id": "mem_xxx"}}
-   {"tool": "search_memories", "parameters": {"query": "search query"}}
-   {"tool": "clear_all_memories", "parameters": {}}
-
-3. If no tool is needed, respond directly with friendly, helpful, concise Markdown.
-
-RETRIEVED MEMORY CONTEXT:
-{context_str}
-"""
-
-
 SMART_MERGE_SYSTEM_PROMPT = """You are an expert AI memory manager. Your task is to intelligently merge new information or edits into an existing Markdown memory document.
 
 Rules:
@@ -64,10 +18,16 @@ Rules:
 """
 
 
-AUTO_CLASSIFY_SYSTEM_PROMPT = """You are a taxonomy and classification assistant. Given a document title and content:
-1. Determine the best category from: ["personal", "development", "technology", "projects", "work", "learning", "finance", "general"].
-2. Generate 3 to 6 lowercase alphanumeric tags describing the topics.
-Output ONLY a JSON object: {"category": "<category>", "tags": ["<tag1>", "<tag2>", "<tag3>"]}
+AUTO_CLASSIFY_SYSTEM_PROMPT = """You are an expert AI memory classifier. Analyze the provided text and determine the single best category and 3-5 concise tags.
+You MUST choose the category strictly from the provided list of available categories.
+Do NOT invent or modify category names.
+
+Return ONLY valid JSON matching this exact structure:
+{{
+  "category": "one_of_allowed_categories",
+  "tags": ["tag1", "tag2", "tag3"],
+  "confidence": 0.95
+}}
 """
 
 
@@ -125,11 +85,6 @@ Guidelines:
 
 
 PROMPT_REGISTRY = {
-    "companion": {
-        "name": "AI Companion System Prompt",
-        "description": "System prompt for conversational assistant, tool orchestration, and memory synthesis.",
-        "template": COMPANION_SYSTEM_PROMPT_TEMPLATE,
-    },
     "smart_merge": {
         "name": "Smart Memory Merge Prompt",
         "description": "Used when updating existing memories to intelligently blend new details with existing content.",

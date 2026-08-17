@@ -1,12 +1,8 @@
-import re
 from typing import Optional
 
-from config.prompts import SMART_MERGE_SYSTEM_PROMPT
 from config.settings import get_setting
+from core.llm_tasks import llm_smart_update
 from core.logger import handle_errors, logger
-from utils.llm_client import generate_llm_response
-
-SMART_UPDATE_SYSTEM_PROMPT = SMART_MERGE_SYSTEM_PROMPT
 
 
 @handle_errors
@@ -32,32 +28,11 @@ def smart_merge_memory_content(
             return existing_content.strip()
         return f"{existing_content.strip()}\n\n{new_input.strip()}"
 
-    prompt = (
-        f"Title: {title}\n\n"
-        f"--- EXISTING MEMORY CONTENT ---\n"
-        f"{existing_content.strip()}\n\n"
-        f"--- NEW INFORMATION / EDIT REQUEST ---\n"
-        f"{new_input.strip()}\n\n"
-        f"Generate the updated Markdown body integrating all changes cleanly:"
-    )
-
-
     try:
-        merged_output = generate_llm_response(
-            prompt=prompt,
-            system_prompt=SMART_UPDATE_SYSTEM_PROMPT,
-            temperature=0.2,
-        )
-
-        if merged_output:
-            # Clean up markdown code fence if LLM wrapped output
-            cleaned = re.sub(r"^```markdown\s*", "", merged_output.strip(), flags=re.IGNORECASE)
-            cleaned = re.sub(r"^```\s*", "", cleaned)
-            cleaned = re.sub(r"\s*```$", "", cleaned)
-            if cleaned:
-                logger.info(f"Successfully performed LLM smart memory merge for '{title}'.")
-                return cleaned.strip()
-
+        cleaned = llm_smart_update(existing_content=existing_content, new_input=new_input, title=title)
+        if cleaned:
+            logger.info(f"Successfully performed LLM smart memory merge for '{title}'.")
+            return cleaned.strip()
     except Exception as e:
         logger.warning(f"Smart memory LLM merge failed for '{title}': {e}. Falling back to standard merge.")
 

@@ -1,16 +1,11 @@
-import json
 import re
 from typing import Any, Dict, List, Tuple
-import requests
 
-from config.constants import (
-    CLASSIFIER_MODE,
-    MEMORIES_DIR,
-    OLLAMA_BASE_URL,
-    OLLAMA_CLASSIFICATION_MODEL,
-)
+from config.constants import CLASSIFIER_MODE
+from config.settings import get_setting
+from core.llm_tasks import llm_classify_text
 from core.logger import handle_errors, logger, time_execution
-from utils import get_available_categories, get_category_dir
+from utils import get_available_categories
 
 
 # Enhanced keyword mapping for fast, highly accurate offline rule classification
@@ -27,7 +22,6 @@ RULE_CATEGORY_KEYWORDS = {
     "personal": ["phone", "email", "contact", "journal", "preference", "sleep", "family", "friend", "home", "diary", "woke", "waking", "habit", "food", "lifestyle"],
     "others": ["misc", "miscellaneous", "note", "temporary", "random", "other", "general"],
 }
-
 
 
 def rule_based_classify(text: str) -> Tuple[str, List[str]]:
@@ -56,50 +50,14 @@ def rule_based_classify(text: str) -> Tuple[str, List[str]]:
     return "personal", list(words)[:5]
 
 
-from config.settings import get_setting
-
-
 def classify_text_llm(text: str) -> Dict[str, Any]:
     """
-    Sends zero-shot prompt to Ollama endpoint to classify text strictly into available predefined categories.
+    Sends prompt to LLM to classify text strictly into available predefined categories.
+    Falls back to rule-based classification on failure.
     """
     available_categories = get_available_categories()
-    prompt = f"""You are an expert AI memory classifier. Analyze the following text and determine the single best category and 3-5 concise tags.
-
-CRITICAL INSTRUCTION: You MUST choose the category strictly from this predefined list of available categories:
-{available_categories}
-
-Do NOT invent, generate, or modify category names under any circumstances. If the text does not fit a specific category cleanly, select 'personal'.
-
-Text:
-"{text}"
-
-Return ONLY valid JSON matching this exact structure:
-{{
-  "category": "one_of_allowed_categories",
-  "tags": ["tag1", "tag2", "tag3"],
-  "confidence": 0.95
-}}
-"""
-    model_name = str(get_setting("classification_model", OLLAMA_CLASSIFICATION_MODEL))
-    base_url = str(get_setting("ollama_base_url", OLLAMA_BASE_URL))
     try:
-        url = f"{base_url}/api/generate"
-        payload = {
-            "model": model_name,
-            "prompt": prompt,
-            "stream": False,
-            "format": "json"
-        }
-        response = requests.post(url, json=payload, timeout=8)
-        if response.status_code == 200:
-            result_json = json.loads(response.json().get("response", "{}"))
-            cat = str(result_json.get("category", "personal")).strip().lower()
-            if cat not in available_categories:
-                cat = "personal"
-            tags = [str(t).strip().lower() for t in result_json.get("tags", [])]
-            conf = float(result_json.get("confidence", 0.8))
-            return {"category": cat, "tags": tags, "confidence": conf, "method": "llm"}
+        return llm_classify_text(text, available_categories)
     except Exception as e:
         logger.warning(f"LLM classification failed ({e}), falling back to rule-based classifier.")
 
@@ -137,4 +95,3 @@ def classify_memory(text: str) -> Dict[str, Any]:
 
     result["is_new_category"] = False
     return result
-

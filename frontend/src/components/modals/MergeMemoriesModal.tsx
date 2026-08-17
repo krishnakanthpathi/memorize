@@ -233,7 +233,7 @@ export const MergeMemoriesModal: React.FC = () => {
                       value="suggested"
                       className="px-2 py-1 rounded-md text-[11px] font-semibold data-[state=active]:bg-card data-[state=active]:text-foreground text-muted-foreground transition-all flex items-center justify-center gap-1"
                     >
-                      <Sparkles className="w-3 h-3 text-amber-500" />
+                      <Sparkles className="w-3 h-3 text-violet-500" />
                       <span>Related ({correlatedList.length})</span>
                     </Tabs.Trigger>
                   </Tabs.List>
@@ -461,7 +461,7 @@ export const MergeMemoriesModal: React.FC = () => {
                     <div className="p-3.5 rounded-xl bg-surface-hover/50 border border-border/80 flex items-center justify-between">
                       <div>
                         <div className="flex items-center gap-1.5">
-                          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                          <Sparkles className="w-3.5 h-3.5 text-violet-500" />
                           <span className="text-xs font-bold text-foreground">Synthesize with AI</span>
                         </div>
                         <p className="text-[11px] text-muted-foreground">
@@ -516,7 +516,7 @@ export const MergeMemoriesModal: React.FC = () => {
                         </>
                       ) : (
                         <>
-                          {useAi ? <Sparkles className="w-4 h-4 text-amber-300" /> : <Combine className="w-4 h-4" />}
+                          {useAi ? <Sparkles className="w-4 h-4 text-violet-300 dark:text-violet-200" /> : <Combine className="w-4 h-4" />}
                           <span>{useAi ? `Merge ${selectedNotes.length} Notes with AI` : `Merge ${selectedNotes.length} Notes (Direct)`}</span>
                         </>
                       )}

@@ -13,10 +13,10 @@ class TestSmartUpdate(unittest.TestCase):
         self.assertEqual(res2, "Existing Info")
 
     @patch("core.smart_updater.get_setting")
-    @patch("core.smart_updater.generate_llm_response")
+    @patch("core.smart_updater.llm_smart_update")
     def test_smart_merge_with_mocked_llm(self, mock_llm, mock_setting):
         mock_setting.return_value = True
-        mock_llm.return_value = "```markdown\n# User Profile\n\n- Name: Krishnakanth\n- Preferences: Dark Mode (Night), Light Mode (Day)\n```"
+        mock_llm.return_value = "# User Profile\n\n- Name: Krishnakanth\n- Preferences: Dark Mode (Night), Light Mode (Day)"
 
         merged = smart_merge_memory_content(
             existing_content="Name: Krishnakanth\nPreferences: Dark Mode",
@@ -44,4 +44,3 @@ class TestSmartUpdate(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -6,7 +6,6 @@ import { EditorCanvas } from '@/components/editor/EditorCanvas';
 import { SettingsPanel } from '@/components/settings/SettingsPanel';
 import { DocsPanel } from '@/components/docs/DocsPanel';
 import { SearchModal } from '@/components/modals/SearchModal';
-import { CompanionChatDrawer } from '@/components/modals/CompanionChatDrawer';
 import { VersionHistoryModal } from '@/components/modals/VersionHistoryModal';
 import { AuditModal } from '@/components/modals/AuditModal';
 import { BackupModal } from '@/components/modals/BackupModal';
@@ -121,13 +120,6 @@ export const AppLayout: React.FC = () => {
       ) {
         e.preventDefault();
         setActiveView(activeView === 'docs' ? 'all' : 'docs');
-        return;
-      }
-
-      // ⌘⇧A or Ctrl+Shift+A for AI Companion Drawer
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'a' || e.key === 'A')) {
-        e.preventDefault();
-        setActiveModal(activeModal === 'chat' ? null : 'chat');
         return;
       }
 
@@ -251,9 +243,8 @@ export const AppLayout: React.FC = () => {
       {activeView === 'settings' && <SettingsPanel />}
       {activeView === 'docs' && <DocsPanel />}
 
-      {/* Global Modals & Drawers */}
+      {/* Global Modals */}
       <SearchModal />
-      <CompanionChatDrawer />
       <VersionHistoryModal />
       <AuditModal />
       <BackupModal />

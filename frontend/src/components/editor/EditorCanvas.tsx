@@ -4,7 +4,6 @@ import {
   Download,
   Trash2,
   History,
-  Bot,
   Plus,
   X,
   Folder,
@@ -56,6 +55,7 @@ export const EditorCanvas: React.FC = () => {
     generateNoteTitle,
     transformSelectedText,
     requestDeleteNote,
+    requestEmptyTrash,
     restoreNote,
     exportActiveNote,
     setActiveModal,
@@ -93,15 +93,16 @@ export const EditorCanvas: React.FC = () => {
   const [selectionActionSuccess, setSelectionActionSuccess] = useState<string | null>(null);
   const selectionToolbarRef = useRef<HTMLDivElement>(null);
 
-  // Find active note in regular notes OR trash notes
+  // Find active note in regular notes OR trash notes based on active view
   const activeNote = useMemo(() => {
     if (!activeNoteId) return null;
+    if (activeView === 'trash') {
+      return trashNotes.find((n) => n.id === activeNoteId) || null;
+    }
     const fromNotes = notes.find((n) => n.id === activeNoteId);
     if (fromNotes) return fromNotes;
-    const fromTrash = trashNotes.find((n) => n.id === activeNoteId);
-    if (fromTrash) return fromTrash;
     return null;
-  }, [notes, trashNotes, activeNoteId]);
+  }, [notes, trashNotes, activeNoteId, activeView]);
 
   const isTrashed = useMemo(() => {
     if (!activeNote) return false;
@@ -296,14 +297,24 @@ export const EditorCanvas: React.FC = () => {
     return (
       <div className="h-full w-full flex flex-col items-center justify-center bg-surface-editor text-muted-foreground p-8 text-center select-none">
         <div className="w-16 h-16 rounded-2xl bg-surface-hover flex items-center justify-center mb-4 border border-border">
-          <FileText className="w-8 h-8 opacity-40" />
+          {activeView === 'trash' ? (
+            <Trash2 className="w-8 h-8 opacity-40 text-destructive" />
+          ) : (
+            <FileText className="w-8 h-8 opacity-40" />
+          )}
         </div>
         <h3 className="text-base font-semibold text-foreground mb-1">
-          {activeView === 'trash' ? 'No Trashed Note Selected' : 'No Note Selected'}
+          {activeView === 'trash'
+            ? trashNotes.length === 0
+              ? 'Trash is Empty'
+              : 'No Trashed Note Selected'
+            : 'No Note Selected'}
         </h3>
         <p className="text-xs max-w-sm mb-5 text-muted-foreground">
           {activeView === 'trash'
-            ? 'Select a deleted note from the list to preview or restore it.'
+            ? trashNotes.length === 0
+              ? 'Notes you delete will appear here until permanently deleted.'
+              : 'Select a deleted note from the list to preview or restore it.'
             : 'Select an existing note from the sidebar or create a fresh markdown note to start writing.'}
         </p>
         {activeView !== 'trash' && (
@@ -505,17 +516,17 @@ export const EditorCanvas: React.FC = () => {
                   >
                     {isOrganizingNote ? (
                       <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-500" />
                         <span className="text-[11px] hidden md:inline">Organizing...</span>
                       </>
                     ) : isGeneratingTitle ? (
                       <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-500" />
                         <span className="text-[11px] hidden md:inline">Generating Title...</span>
                       </>
                     ) : (
                       <>
-                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                        <Sparkles className="w-3.5 h-3.5 text-violet-500" />
                         <span className="text-[11px] hidden md:inline">AI Organize</span>
                       </>
                     )}
@@ -534,7 +545,7 @@ export const EditorCanvas: React.FC = () => {
                       onClick={() => organizeNote(activeNote.id, undefined, true, true)}
                       className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2"
                     >
-                      <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                      <Sparkles className="w-3.5 h-3.5 text-violet-500 shrink-0" />
                       <div>
                         <span className="font-semibold block">Polish & Auto-Generate Title</span>
                         <span className="text-[10px] text-muted-foreground">Restructure content and generate smart title</span>
@@ -558,7 +569,7 @@ export const EditorCanvas: React.FC = () => {
                       onClick={() => organizeNote(activeNote.id)}
                       className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2"
                     >
-                      <Wand2 className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                      <Wand2 className="w-3.5 h-3.5 text-violet-500 shrink-0" />
                       <div>
                         <span className="font-semibold block">Polish & Restructure</span>
                         <span className="text-[10px] text-muted-foreground">Fix formatting, headers & remove fluff</span>
@@ -607,7 +618,7 @@ export const EditorCanvas: React.FC = () => {
                 className={cn(
                   "p-1.5 rounded-md transition-colors",
                   isFullScreen
-                    ? "text-amber-500 bg-amber-500/10 hover:bg-amber-500/20"
+                    ? "text-violet-500 bg-violet-500/10 hover:bg-violet-500/20"
                     : "text-muted-foreground hover:text-foreground hover:bg-surface-hover"
                 )}
               >
@@ -626,15 +637,6 @@ export const EditorCanvas: React.FC = () => {
                 )}
               >
                 {isFocusMode ? <Shrink className="w-4 h-4" /> : <Expand className="w-4 h-4" />}
-              </button>
-
-              {/* AI Companion Chat Trigger */}
-              <button
-                onClick={() => setActiveModal('chat')}
-                title="Ask AI Companion about this Note"
-                className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors"
-              >
-                <Bot className="w-4 h-4" />
               </button>
 
               {/* Version History Modal Trigger */}
@@ -667,13 +669,35 @@ export const EditorCanvas: React.FC = () => {
           )}
 
           {isTrashed && (
-            <button
-              onClick={() => restoreNote(activeNote.id)}
-              className="flex items-center gap-1 px-2.5 py-1 rounded bg-foreground text-background font-semibold text-xs hover:opacity-90"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Restore</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => restoreNote(activeNote.id)}
+                title="Restore this note to Active Notes"
+                className="flex items-center gap-1 px-2.5 py-1 rounded bg-foreground text-background font-semibold text-xs hover:opacity-90 transition-opacity cursor-pointer shadow-2xs"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Restore</span>
+              </button>
+
+              <button
+                onClick={() => requestDeleteNote(activeNote.id, true)}
+                title="Permanently delete this note"
+                className="flex items-center gap-1 px-2.5 py-1 rounded bg-destructive text-destructive-foreground font-semibold text-xs hover:opacity-90 transition-opacity cursor-pointer shadow-2xs"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete Permanently</span>
+              </button>
+
+              {trashNotes.length > 1 && (
+                <button
+                  onClick={() => requestEmptyTrash()}
+                  title="Empty all notes from Trash"
+                  className="flex items-center gap-1 px-2 py-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 text-xs transition-colors cursor-pointer"
+                >
+                  <span>Empty Trash</span>
+                </button>
+              )}
+            </div>
           )}
         </div>
       </header>
@@ -681,7 +705,7 @@ export const EditorCanvas: React.FC = () => {
       {/* Custom AI Instruction Banner */}
       {showCustomPromptInput && (
         <div className="px-6 sm:px-12 py-2.5 bg-surface-sidebar border-b border-border flex items-center gap-2 animate-in slide-in-from-top-1 text-xs">
-          <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+          <Sparkles className="w-4 h-4 text-violet-500 shrink-0" />
           <input
             type="text"
             value={customAiPrompt}
@@ -724,7 +748,7 @@ export const EditorCanvas: React.FC = () => {
         <div className="px-6 sm:px-12 py-2 bg-card/95 backdrop-blur-md border-b border-border flex items-center justify-between text-xs animate-in slide-in-from-top-1 select-none shadow-xs">
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1.5 font-semibold text-primary">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <Sparkles className="w-3.5 h-3.5 text-violet-500" />
               <span>Zen Focus Mode</span>
             </span>
             <span className="text-muted-foreground/60">•</span>
@@ -739,7 +763,7 @@ export const EditorCanvas: React.FC = () => {
               title={isFullScreen ? "Exit Native Full Screen (F11)" : "Enter Native Full Screen (F11)"}
               className="px-2 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors flex items-center gap-1"
             >
-              {isFullScreen ? <Minimize2 className="w-3.5 h-3.5 text-amber-500" /> : <Maximize2 className="w-3.5 h-3.5" />}
+              {isFullScreen ? <Minimize2 className="w-3.5 h-3.5 text-violet-500" /> : <Maximize2 className="w-3.5 h-3.5" />}
               <span className="hidden sm:inline">{isFullScreen ? 'Windowed' : 'Full Screen'}</span>
             </button>
 
@@ -780,18 +804,18 @@ export const EditorCanvas: React.FC = () => {
               className={cn(
                 "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all select-none shadow-xs shrink-0 cursor-pointer",
                 isGeneratingTitle
-                  ? "bg-amber-500/10 text-amber-500 border-amber-500/30 cursor-wait animate-pulse"
+                  ? "bg-violet-500/10 text-violet-500 border-violet-500/30 cursor-wait animate-pulse"
                   : "bg-surface-hover hover:bg-surface-hover/80 text-muted-foreground hover:text-foreground border-border/80 active:scale-95"
               )}
             >
               {isGeneratingTitle ? (
                 <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-500" />
                   <span className="hidden sm:inline">Generating Title...</span>
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  <Sparkles className="w-3.5 h-3.5 text-violet-500" />
                   <span className="hidden sm:inline">Generate Title</span>
                 </>
               )}
@@ -1009,7 +1033,7 @@ export const EditorCanvas: React.FC = () => {
         >
           {isTransformingSelection ? (
             <div className="flex items-center gap-2 px-2.5 py-1 text-xs text-foreground font-medium select-none">
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-500" />
               <span>Organizing selection with AI...</span>
             </div>
           ) : selectionActionSuccess ? (
@@ -1019,7 +1043,7 @@ export const EditorCanvas: React.FC = () => {
             </div>
           ) : showSelectionPromptInput ? (
             <div className="flex items-center gap-1.5 min-w-[280px]">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <Sparkles className="w-3.5 h-3.5 text-violet-500 shrink-0" />
               <input
                 type="text"
                 value={selectionPrompt}
@@ -1060,7 +1084,7 @@ export const EditorCanvas: React.FC = () => {
           ) : (
             <>
               <div className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground px-1 border-r border-border select-none">
-                <Sparkles className="w-3 h-3 text-amber-500" />
+                <Sparkles className="w-3 h-3 text-violet-500" />
                 <span>AI Selection</span>
               </div>
 
@@ -1069,7 +1093,7 @@ export const EditorCanvas: React.FC = () => {
                 title="Polish and clean grammar, typography, and formatting"
                 className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-surface-hover hover:bg-surface-hover/80 text-foreground transition-colors cursor-pointer"
               >
-                <Wand2 className="w-3 h-3 text-amber-500" />
+                <Wand2 className="w-3 h-3 text-violet-500" />
                 <span>Polish</span>
               </button>
 

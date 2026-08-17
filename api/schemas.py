@@ -52,10 +52,14 @@ class SearchRequest(BaseModel):
     top_k: int = Field(default=5, description="Number of results to return")
 
 
-class ChatRequest(BaseModel):
-    message: str = Field(..., description="User message to companion")
-    model: Optional[str] = Field(default=None, description="Model override")
+class TestLLMRequest(BaseModel):
+    model: Optional[str] = Field(default=None, description="Model identifier to test")
     provider: Optional[str] = Field(default=None, description="LLM provider: openai or ollama")
+    base_url: Optional[str] = Field(default=None, description="Custom base URL for the LLM endpoint")
+
+
+class MemoryBatchDeleteRequest(BaseModel):
+    memory_ids: List[str] = Field(..., min_length=1, description="List of memory IDs to delete")
 
 
 class AuditActionRequest(BaseModel):

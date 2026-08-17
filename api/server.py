@@ -5,7 +5,6 @@ from fastapi.responses import JSONResponse
 
 from api.routes import (
     audit_router,
-    chat_router,
     memories_router,
     models_router,
     search_router,
@@ -55,7 +54,6 @@ app.add_middleware(AcceptHeaderMiddleware)
 app.include_router(memories_router)
 app.include_router(audit_router)
 app.include_router(search_router)
-app.include_router(chat_router)
 app.include_router(system_router)
 app.include_router(models_router)
 app.include_router(settings_router)
@@ -73,42 +71,32 @@ def oauth_probe():
 
 
 @app.get("/info")
-def mcp_info():
-    return {
+@app.head("/info")
+def mcp_server_info_probe():
+    return JSONResponse({
         "name": SERVER_NAME,
         "version": "2.0.0",
-        "status": "active",
-        "mcp_version": "1.0",
-        "tools": [t.name for t in mcp._tool_manager.list_tools()],
-    }
-
-
-@app.api_route("/sse", methods=["GET", "POST", "HEAD", "OPTIONS"])
-@app.api_route("/sse/{path:path}", methods=["GET", "POST", "HEAD", "OPTIONS"])
-@app.api_route("/mcp", methods=["GET", "POST", "HEAD", "OPTIONS"])
-@app.api_route("/mcp/{path:path}", methods=["GET", "POST", "HEAD", "OPTIONS"])
-async def mcp_endpoint(request: Request):
-    """Directly route Streamable HTTP and SSE requests to the FastMCP ASGI app."""
-    return await streamable_app(request.scope, request.receive, request._send)
+        "description": "FastMCP Personal Memory & Knowledge Base Server",
+        "status": "online",
+    })
 
 
 @app.get("/")
-def read_root():
+def root_endpoint():
     return {
         "service": "Memorize REST API Service",
-        "status": "online",
         "version": "2.0.0",
-        "mcp_endpoint": "/sse",
-        "tools": [t.name for t in mcp._tool_manager.list_tools()],
+        "status": "healthy",
+        "endpoints": {
+            "memories": "/api/memories",
+            "search": "/api/search",
+            "audit": "/api/audit",
+            "models": "/api/models",
+            "settings": "/api/settings",
+            "mcp": "/mcp",
+        },
     }
 
 
-
-if __name__ == "__main__":
-    import uvicorn
-    from config.constants import BACKEND_PORT
-
-    uvicorn.run("api.server:app", host="0.0.0.0", port=BACKEND_PORT, reload=True)
-
-
-
+# Mount streamable HTTP MCP App at /mcp root
+app.mount("/mcp", streamable_app)

@@ -50,6 +50,19 @@ class TestAPIRoutes(unittest.TestCase):
         reset_resp = client.post("/api/settings/reset")
         self.assertEqual(reset_resp.status_code, 200)
 
+    def test_test_llm_endpoint(self):
+        from unittest.mock import patch
+        with patch("api.routes.settings.test_llm_connection") as mock_test:
+            mock_test.return_value = {
+                "status": "connected",
+                "provider": "ollama",
+                "model": "qwen2.5:7b",
+                "reply": "pong",
+            }
+            resp = client.post("/api/settings/test-llm", json={"provider": "ollama", "model": "qwen2.5:7b"})
+            self.assertEqual(resp.status_code, 200)
+            self.assertEqual(resp.json()["status"], "connected")
+
 
 if __name__ == "__main__":
     unittest.main()

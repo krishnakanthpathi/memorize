@@ -7,7 +7,6 @@ def build_cli_parser() -> argparse.ArgumentParser:
     parser.add_argument("--category", "-c", type=str, help="Category filter for list/search/create")
     parser.add_argument("--tag", "-t", type=str, help="Tag filter for list")
     parser.add_argument("--search", "-s", type=str, help="Search query string")
-    parser.add_argument("--chat", type=str, help="Chat message to AI companion (Ollama)")
     parser.add_argument("--create", "-crt", action="store_true", help="Create a new memory (parameters: title: str, content: str = '', category: str = 'personal', tags: Optional[List[str]] = None)")
     parser.add_argument("--title", type=str, help="Title for memory creation (title: str)")
     parser.add_argument("--content", type=str, help="Content for memory creation (content: str = '')")
@@ -24,4 +23,3 @@ def build_cli_parser() -> argparse.ArgumentParser:
     parser.add_argument("--recover-orphans", action="store_true", help="Recover unindexed files & chunks, generating unique IDs")
     parser.add_argument("--interactive", "-i", action="store_true", help="Launch interactive shell mode")
     return parser
-

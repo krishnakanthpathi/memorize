@@ -32,7 +32,7 @@ interface NotesState {
   sidebarCollapsed: boolean;
   isFullScreen: boolean;
   isFocusMode: boolean;
-  activeModal: 'search' | 'chat' | 'versions' | 'audit' | 'backup' | 'models' | 'settings' | 'new-category' | 'shortcuts' | 'merge' | null;
+  activeModal: 'search' | 'versions' | 'audit' | 'backup' | 'models' | 'settings' | 'new-category' | 'shortcuts' | 'merge' | null;
 
   // Multi-selection & Merge State
   selectedNoteIds: string[];
@@ -52,8 +52,17 @@ interface NotesState {
   favoriteIds: string[];
 
   // Delete Confirmation State
-  notePendingDelete: { id: string; title: string; permanent: boolean } | null;
+  notePendingDelete: {
+    id?: string;
+    ids?: string[];
+    title: string;
+    count?: number;
+    permanent: boolean;
+    isEmptyTrash?: boolean;
+  } | null;
   requestDeleteNote: (id: string, permanent?: boolean) => void;
+  requestDeleteBatch: (ids: string[], permanent?: boolean) => void;
+  requestEmptyTrash: () => void;
   cancelDeleteNote: () => void;
   confirmDeleteNote: () => Promise<void>;
 
@@ -68,7 +77,10 @@ interface NotesState {
   generateNoteTitle: (memoryId: string, customContent?: string, instruction?: string) => Promise<string | undefined>;
   transformSelectedText: (selectedText: string, instruction?: string, mode?: string, fullContext?: string) => Promise<string | undefined>;
   deleteNote: (id: string, permanent?: boolean) => Promise<void>;
+  deleteBatchNotes: (ids: string[], permanent?: boolean) => Promise<void>;
+  emptyTrash: () => void;
   restoreNote: (id: string) => void;
+  restoreBatchNotes: (ids: string[]) => Promise<void>;
   togglePin: (id: string) => void;
   toggleFavorite: (id: string) => void;
   setActiveView: (view: SystemView) => void;
@@ -193,10 +205,16 @@ export const useNotesStore = create<NotesState>((set, get) => {
 
         set((state) => {
           let activeNoteId = state.activeNoteId;
-          if (!activeNoteId && notes.length > 0) {
-            activeNoteId = notes[0].id;
-          } else if (activeNoteId && !notes.some((n) => n.id === activeNoteId)) {
-            activeNoteId = notes.length > 0 ? notes[0].id : null;
+          if (state.activeView === 'trash') {
+            if (!state.trashNotes.some((n) => n.id === activeNoteId)) {
+              activeNoteId = state.trashNotes.length > 0 ? state.trashNotes[0].id : null;
+            }
+          } else {
+            if (!activeNoteId && notes.length > 0) {
+              activeNoteId = notes[0].id;
+            } else if (activeNoteId && !notes.some((n) => n.id === activeNoteId)) {
+              activeNoteId = notes.length > 0 ? notes[0].id : null;
+            }
           }
           return {
             notes,
@@ -439,21 +457,46 @@ export const useNotesStore = create<NotesState>((set, get) => {
       const { notes, trashNotes } = get();
       const target = notes.find((n) => n.id === id) || trashNotes.find((n) => n.id === id);
       const title = target?.title || 'Untitled Note';
-      set({ notePendingDelete: { id, title, permanent } });
+      set({ notePendingDelete: { id, title, permanent, count: 1 } });
+    },
+    requestDeleteBatch: (ids, permanent = false) => {
+      if (!ids || ids.length === 0) return;
+      const count = ids.length;
+      const title = `${count} selected note${count > 1 ? 's' : ''}`;
+      set({ notePendingDelete: { ids, title, permanent, count } });
+    },
+    requestEmptyTrash: () => {
+      const { trashNotes } = get();
+      if (trashNotes.length === 0) return;
+      set({
+        notePendingDelete: {
+          isEmptyTrash: true,
+          title: `all ${trashNotes.length} trashed notes`,
+          permanent: true,
+          count: trashNotes.length,
+        },
+      });
     },
     cancelDeleteNote: () => {
       set({ notePendingDelete: null });
     },
     confirmDeleteNote: async () => {
-      const { notePendingDelete, deleteNote } = get();
+      const { notePendingDelete, deleteNote, deleteBatchNotes, emptyTrash } = get();
       if (!notePendingDelete) return;
-      const { id, permanent } = notePendingDelete;
+      const { id, ids, permanent, isEmptyTrash } = notePendingDelete;
       set({ notePendingDelete: null });
-      await deleteNote(id, permanent);
+
+      if (isEmptyTrash) {
+        emptyTrash();
+      } else if (ids && ids.length > 0) {
+        await deleteBatchNotes(ids, permanent);
+      } else if (id) {
+        await deleteNote(id, permanent);
+      }
     },
 
     deleteNote: async (id, permanent = false) => {
-      const { notes, trashNotes, activeNoteId } = get();
+      const { notes, trashNotes, activeNoteId, selectedNoteIds } = get();
       const target = notes.find((n) => n.id === id);
 
       if (!target && !permanent) return;
@@ -473,6 +516,7 @@ export const useNotesStore = create<NotesState>((set, get) => {
           notes: updatedNotes,
           trashNotes: updatedTrash,
           activeNoteId: nextActiveId,
+          selectedNoteIds: selectedNoteIds.filter((x) => x !== id),
         });
 
         // Remote deletion
@@ -489,8 +533,83 @@ export const useNotesStore = create<NotesState>((set, get) => {
         const nextActiveId = activeNoteId === id
           ? (updatedTrash.length > 0 ? updatedTrash[0].id : null)
           : activeNoteId;
-        set({ trashNotes: updatedTrash, activeNoteId: nextActiveId });
+        set({
+          trashNotes: updatedTrash,
+          activeNoteId: nextActiveId,
+          selectedNoteIds: selectedNoteIds.filter((x) => x !== id),
+        });
       }
+    },
+
+    deleteBatchNotes: async (ids, permanent = false) => {
+      const { notes, trashNotes, activeNoteId, selectedNoteIds } = get();
+      if (!ids || ids.length === 0) return;
+      const idsSet = new Set(ids);
+
+      if (!permanent) {
+        // Move batch to trash
+        const trashedBatch: Note[] = [];
+        const remainingNotes = notes.filter((n) => {
+          if (idsSet.has(n.id)) {
+            trashedBatch.push({ ...n, isDeleted: true });
+            return false;
+          }
+          return true;
+        });
+
+        const updatedTrash = [...trashedBatch, ...trashNotes.filter((n) => !idsSet.has(n.id))];
+        localStorage.setItem(TRASH_KEY, JSON.stringify(updatedTrash));
+
+        const nextActiveId = activeNoteId && idsSet.has(activeNoteId)
+          ? (remainingNotes.length > 0 ? remainingNotes[0].id : null)
+          : activeNoteId;
+
+        set({
+          notes: remainingNotes,
+          trashNotes: updatedTrash,
+          activeNoteId: nextActiveId,
+          selectedNoteIds: selectedNoteIds.filter((x) => !idsSet.has(x)),
+        });
+
+        // Batch delete from backend
+        try {
+          await api.deleteBatchMemories(ids);
+          get().fetchCategories();
+        } catch (err) {
+          console.error('Backend batch delete error:', err);
+        }
+      } else {
+        // Permanent batch delete from trash
+        const updatedTrash = trashNotes.filter((n) => !idsSet.has(n.id));
+        localStorage.setItem(TRASH_KEY, JSON.stringify(updatedTrash));
+
+        const nextActiveId = activeNoteId && idsSet.has(activeNoteId)
+          ? (updatedTrash.length > 0 ? updatedTrash[0].id : null)
+          : activeNoteId;
+
+        set({
+          trashNotes: updatedTrash,
+          activeNoteId: nextActiveId,
+          selectedNoteIds: selectedNoteIds.filter((x) => !idsSet.has(x)),
+        });
+      }
+    },
+
+    emptyTrash: () => {
+      const { trashNotes, activeNoteId, activeView } = get();
+      if (trashNotes.length === 0) return;
+
+      localStorage.removeItem(TRASH_KEY);
+      const isViewingTrashActiveNote = trashNotes.some((n) => n.id === activeNoteId);
+
+      set({
+        trashNotes: [],
+        activeNoteId: isViewingTrashActiveNote ? null : activeNoteId,
+        selectedNoteIds: activeView === 'trash' ? [] : get().selectedNoteIds,
+      });
+
+      // Clear any remote backend memories if needed
+      get().fetchCategories();
     },
 
     restoreNote: (id) => {
@@ -520,6 +639,46 @@ export const useNotesStore = create<NotesState>((set, get) => {
       }).then(() => {
         get().fetchCategories();
       }).catch((e) => console.error('Failed to re-insert restored note:', e));
+    },
+
+    restoreBatchNotes: async (ids) => {
+      const { trashNotes, notes, selectedNoteIds } = get();
+      if (!ids || ids.length === 0) return;
+      const idsSet = new Set(ids);
+
+      const restoredBatch: Note[] = [];
+      const remainingTrash = trashNotes.filter((n) => {
+        if (idsSet.has(n.id)) {
+          restoredBatch.push({ ...n, isDeleted: false });
+          return false;
+        }
+        return true;
+      });
+
+      localStorage.setItem(TRASH_KEY, JSON.stringify(remainingTrash));
+
+      set({
+        notes: [...restoredBatch, ...notes],
+        trashNotes: remainingTrash,
+        activeNoteId: restoredBatch.length > 0 ? restoredBatch[0].id : get().activeNoteId,
+        selectedNoteIds: selectedNoteIds.filter((x) => !idsSet.has(x)),
+        activeView: 'all',
+      });
+
+      // Save all restored notes back to backend in parallel
+      await Promise.allSettled(
+        restoredBatch.map((item) =>
+          api.saveMemory({
+            title: item.title,
+            content: item.content,
+            category: item.category,
+            tags: item.tags,
+            action: 'insert',
+            memory_id: item.id,
+          })
+        )
+      );
+      get().fetchCategories();
     },
 
     togglePin: (id) => {
@@ -570,6 +729,7 @@ export const useNotesStore = create<NotesState>((set, get) => {
         selectedCategory: null,
         selectedTag: null,
         activeNoteId: nextActiveId,
+        selectedNoteIds: [],
       });
     },
 
