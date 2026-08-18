@@ -15,21 +15,23 @@ import {
   Server,
   ShieldCheck,
   HardDriveDownload,
-  Trash2,
   RefreshCw,
   ArrowLeft,
-  Check,
   Database,
   FileCode,
   Keyboard,
   BookOpen,
   Sliders,
   Save,
+  Check,
+  Layers,
+  Code2,
 } from 'lucide-react';
 import { useNotesStore } from '@/store/useNotesStore';
 import { api } from '@/services/api';
 import { ModelsResponse, AuditSummary, CodeTheme, AppIconType } from '@/types';
 import { cn } from '@/lib/utils';
+import { PromptsViewer } from './PromptsViewer';
 
 export const SettingsPanel: React.FC = () => {
   const {
@@ -173,13 +175,12 @@ export const SettingsPanel: React.FC = () => {
         llm_provider: selectedProvider,
         ollama_model: selectedModel,
       });
-      setSaveStatus('Configuration & MCP Settings Saved Successfully!');
+      setSaveStatus('Configuration & Preferences Saved Successfully!');
     } catch (err: any) {
       setSaveStatus(`Saved locally (backend sync: ${err.message})`);
     }
     setTimeout(() => setSaveStatus(null), 3000);
   };
-
 
   const handleTestChat = async () => {
     setTestLoading(true);
@@ -216,7 +217,7 @@ export const SettingsPanel: React.FC = () => {
     setBackupMsg(null);
     try {
       await api.createBackup();
-      setBackupMsg("Backup created successfully in data/backups!");
+      setBackupMsg('Backup created successfully in data/backups!');
     } catch (err: any) {
       setBackupMsg(`Backup failed: ${err.message}`);
     } finally {
@@ -226,7 +227,7 @@ export const SettingsPanel: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background text-foreground overflow-hidden select-none animate-in fade-in duration-150">
-      {/* Header */}
+      {/* Top Navigation Header */}
       <header className="h-14 px-6 border-b border-border flex items-center justify-between gap-4 shrink-0 bg-surface-sidebar">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-surface-hover border border-border/80 text-foreground">
@@ -235,17 +236,17 @@ export const SettingsPanel: React.FC = () => {
           <div>
             <h2 className="text-sm font-bold leading-tight">Settings & Engine Control</h2>
             <p className="text-[11px] text-muted-foreground font-mono">
-              Appearance, Unified LLMs, Shortcuts, and System Health
+              Appearance, Unified LLM Hub, Prompts Viewer, and Storage Dashboard
             </p>
           </div>
         </div>
 
-        {/* Action Buttons: Save + Docs + Back to Notes */}
+        {/* Action Controls: Save + Docs + Back to Notes */}
         <div className="flex items-center gap-2">
           {/* Save Button */}
           <button
             onClick={handleSaveSettings}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-foreground text-background text-xs font-semibold hover:opacity-90 transition-all shadow-xs"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-foreground text-background text-xs font-semibold hover:opacity-90 transition-all shadow-xs cursor-pointer"
           >
             {saveStatus ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Save className="w-3.5 h-3.5" />}
             <span>{saveStatus ? 'Saved!' : 'Save Settings'}</span>
@@ -253,7 +254,7 @@ export const SettingsPanel: React.FC = () => {
 
           <button
             onClick={() => setActiveView('docs')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-hover border border-border/80 text-xs font-semibold text-foreground hover:bg-surface-selected transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-hover border border-border/80 text-xs font-semibold text-foreground hover:bg-surface-selected transition-colors cursor-pointer"
           >
             <BookOpen className="w-3.5 h-3.5" />
             <span>Documentation</span>
@@ -261,7 +262,7 @@ export const SettingsPanel: React.FC = () => {
 
           <button
             onClick={() => setActiveView('all')}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-hover border border-border/80 text-xs font-semibold hover:bg-surface-selected transition-colors"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-hover border border-border/80 text-xs font-semibold hover:bg-surface-selected transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Back to Notes</span>
@@ -270,9 +271,9 @@ export const SettingsPanel: React.FC = () => {
         </div>
       </header>
 
-      {/* Save Success Banner */}
+      {/* Save Notification Banner */}
       {saveStatus && (
-        <div className="bg-emerald-500/10 border-b border-emerald-500/20 px-6 py-2 flex items-center justify-between text-xs text-emerald-500 font-medium animate-in fade-in">
+        <div className="bg-emerald-500/10 border-b border-emerald-500/20 px-6 py-2 flex items-center justify-between text-xs text-emerald-500 font-medium animate-in fade-in shrink-0">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4" />
             <span>{saveStatus}</span>
@@ -281,320 +282,241 @@ export const SettingsPanel: React.FC = () => {
         </div>
       )}
 
-      {/* Main Settings Content */}
-      <div className="flex-1 overflow-y-auto p-6 sm:p-10 max-w-4xl mx-auto w-full space-y-8 text-xs">
-        {/* Section 1: Appearance & Brand Icon */}
-        <section className="space-y-4">
-          <div className="flex items-center gap-2 border-b border-border/60 pb-2">
-            <Palette className="w-4 h-4 text-foreground" />
-            <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
-              Monochrome Appearance Modes
-            </h3>
+      {/* Main Settings Content: Balanced Multi-Column Responsive Grid */}
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto w-full space-y-6 text-xs">
+        
+        {/* =========================================================================
+            GRID ROW 1: Appearance Modes & Code Syntax Highlighting (2-Column Grid)
+           ========================================================================= */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          
+          {/* Card 1: Theme & Brand Icon */}
+          <div className="p-5 rounded-2xl bg-card border border-border shadow-xs flex flex-col justify-between space-y-4">
+            <div>
+              <div className="flex items-center gap-2 pb-2.5 border-b border-border/60">
+                <Palette className="w-4 h-4 text-foreground" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                  Monochrome Appearance & Icons
+                </h3>
+              </div>
+
+              {/* 3-Way Monochrome Theme Selector */}
+              <div className="grid grid-cols-3 gap-2.5 pt-3">
+                <div
+                  onClick={() => setTheme('light')}
+                  className={cn(
+                    'p-3 rounded-xl border cursor-pointer transition-all flex flex-col items-center justify-center text-center gap-1.5',
+                    theme === 'light'
+                      ? 'border-foreground bg-white text-zinc-900 shadow-md font-bold ring-1 ring-foreground/20'
+                      : 'border-border bg-surface-hover/70 text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  <Sun className="w-4 h-4 text-amber-600" />
+                  <div>
+                    <span className="block text-xs font-semibold">Light</span>
+                    <span className="text-[9px] opacity-70">Pure White</span>
+                  </div>
+                </div>
+
+                <div
+                  onClick={() => setTheme('dark')}
+                  className={cn(
+                    'p-3 rounded-xl border cursor-pointer transition-all flex flex-col items-center justify-center text-center gap-1.5',
+                    theme === 'dark'
+                      ? 'border-foreground bg-zinc-900 text-white shadow-md font-bold ring-1 ring-zinc-700'
+                      : 'border-border bg-surface-hover/70 text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  <Moon className="w-4 h-4 text-zinc-300" />
+                  <div>
+                    <span className="block text-xs font-semibold">Dark</span>
+                    <span className="text-[9px] opacity-70">Slate Zinc</span>
+                  </div>
+                </div>
+
+                <div
+                  onClick={() => setTheme('black')}
+                  className={cn(
+                    'p-3 rounded-xl border cursor-pointer transition-all flex flex-col items-center justify-center text-center gap-1.5',
+                    theme === 'black'
+                      ? 'border-zinc-500 bg-black text-white shadow-md font-bold ring-1 ring-zinc-700'
+                      : 'border-border bg-surface-hover/70 text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  <Zap className="w-4 h-4 text-white" />
+                  <div>
+                    <span className="block text-xs font-semibold">OLED</span>
+                    <span className="text-[9px] opacity-70">Pitch Black</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Sidebar Brand Monogram/Icon Selector */}
+            <div className="pt-2 border-t border-border/50">
+              <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-2 flex items-center gap-1.5 font-mono">
+                <Sliders className="w-3 h-3 text-foreground" />
+                Sidebar Brand Icon:
+              </label>
+              <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5">
+                {[
+                  { id: 'monogram' as const, label: 'Monogram', icon: () => <span className="font-bold text-xs">M</span> },
+                  { id: 'brain' as const, label: 'Brain', icon: () => <Brain className="w-3.5 h-3.5" /> },
+                  { id: 'terminal' as const, label: 'Terminal', icon: () => <Terminal className="w-3.5 h-3.5" /> },
+                  { id: 'book' as const, label: 'Notebook', icon: () => <BookOpen className="w-3.5 h-3.5" /> },
+                  { id: 'zap' as const, label: 'Zap', icon: () => <Zap className="w-3.5 h-3.5" /> },
+                  { id: 'database' as const, label: 'Vault', icon: () => <Database className="w-3.5 h-3.5" /> },
+                  { id: 'sparkles' as const, label: 'Sparkles', icon: () => <Sparkles className="w-3.5 h-3.5" /> },
+                ].map((ic) => {
+                  const IconComponent = ic.icon;
+                  const isSelected = appIcon === ic.id;
+                  return (
+                    <div
+                      key={ic.id}
+                      onClick={() => setAppIcon(ic.id)}
+                      className={cn(
+                        'p-2 rounded-lg border cursor-pointer transition-all flex flex-col items-center justify-center text-center gap-1',
+                        isSelected
+                          ? 'border-foreground bg-surface-selected text-foreground font-bold shadow-2xs ring-1 ring-foreground/20'
+                          : 'border-border bg-surface-hover/50 text-muted-foreground hover:text-foreground hover:bg-surface-hover'
+                      )}
+                    >
+                      <div className="w-6 h-6 rounded-md bg-foreground text-background flex items-center justify-center">
+                        <IconComponent />
+                      </div>
+                      <span className="text-[9px] truncate">{ic.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-            <div
-              onClick={() => setTheme('light')}
-              className={cn(
-                'p-4 rounded-xl border cursor-pointer transition-all flex flex-col items-center justify-center text-center gap-2',
-                theme === 'light'
-                  ? 'border-foreground bg-white text-zinc-900 shadow-md font-bold ring-1 ring-foreground/20'
-                  : 'border-border bg-surface-hover text-muted-foreground hover:text-foreground'
-              )}
-            >
-              <Sun className="w-5 h-5 text-amber-600" />
-              <div>
-                <span className="block text-xs font-semibold">Light Mode</span>
-                <span className="text-[10px] opacity-70">Crisp Pure White</span>
+          {/* Card 2: Code Syntax Themes */}
+          <div className="p-5 rounded-2xl bg-card border border-border shadow-xs flex flex-col justify-between space-y-4">
+            <div>
+              <div className="flex items-center justify-between pb-2.5 border-b border-border/60">
+                <div className="flex items-center gap-2">
+                  <FileCode className="w-4 h-4 text-foreground" />
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                    Code Block Syntax Themes
+                  </h3>
+                </div>
+                <span className="text-[10px] font-mono text-muted-foreground">
+                  Active: {codeTheme.toUpperCase()}
+                </span>
               </div>
-            </div>
 
-            <div
-              onClick={() => setTheme('dark')}
-              className={cn(
-                'p-4 rounded-xl border cursor-pointer transition-all flex flex-col items-center justify-center text-center gap-2',
-                theme === 'dark'
-                  ? 'border-foreground bg-zinc-900 text-white shadow-md font-bold ring-1 ring-zinc-700'
-                  : 'border-border bg-surface-hover text-muted-foreground hover:text-foreground'
-              )}
-            >
-              <Moon className="w-5 h-5 text-zinc-300" />
-              <div>
-                <span className="block text-xs font-semibold">Dark Mode</span>
-                <span className="text-[10px] opacity-70">Slate Zinc (Default)</span>
-              </div>
-            </div>
-
-            <div
-              onClick={() => setTheme('black')}
-              className={cn(
-                'p-4 rounded-xl border cursor-pointer transition-all flex flex-col items-center justify-center text-center gap-2',
-                theme === 'black'
-                  ? 'border-zinc-500 bg-black text-white shadow-md font-bold ring-1 ring-zinc-700'
-                  : 'border-border bg-surface-hover text-muted-foreground hover:text-foreground'
-              )}
-            >
-              <Zap className="w-5 h-5 text-white" />
-              <div>
-                <span className="block text-xs font-semibold">Pitch Black</span>
-                <span className="text-[10px] opacity-70">OLED High Contrast</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Panel App Icon Selector */}
-          <div className="pt-2">
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-2.5 flex items-center gap-1.5">
-              <Sliders className="w-3.5 h-3.5 text-foreground" />
-              Sidebar Brand & Panel Icon
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
-              {[
-                { id: 'monogram' as const, label: 'Monogram', icon: () => <span className="font-bold text-xs">M</span> },
-                { id: 'brain' as const, label: 'Brain', icon: () => <Brain className="w-4 h-4" /> },
-                { id: 'terminal' as const, label: 'Terminal', icon: () => <Terminal className="w-4 h-4" /> },
-                { id: 'book' as const, label: 'Notebook', icon: () => <BookOpen className="w-4 h-4" /> },
-                { id: 'zap' as const, label: 'Zap', icon: () => <Zap className="w-4 h-4" /> },
-                { id: 'database' as const, label: 'Vault', icon: () => <Database className="w-4 h-4" /> },
-                { id: 'sparkles' as const, label: 'Sparkles', icon: () => <Sparkles className="w-4 h-4" /> },
-              ].map((ic) => {
-                const IconComponent = ic.icon;
-                const isSelected = appIcon === ic.id;
-                return (
+              {/* 8 Themes Selector */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3">
+                {[
+                  { id: 'monokai' as const, name: 'Monokai', accent: 'bg-[#f92672]' },
+                  { id: 'monokai-fire' as const, name: 'Fire', accent: 'bg-[#ff3366]' },
+                  { id: 'monokai-solenoid' as const, name: 'Solenoid', accent: 'bg-[#bad761]' },
+                  { id: 'vscode-dark' as const, name: 'VS Code', accent: 'bg-[#569cd6]' },
+                  { id: 'github-dark' as const, name: 'GitHub', accent: 'bg-[#ff7b72]' },
+                  { id: 'dracula' as const, name: 'Dracula', accent: 'bg-[#bd93f9]' },
+                  { id: 'tokyo-night' as const, name: 'Tokyo', accent: 'bg-[#bb9af7]' },
+                  { id: 'nord' as const, name: 'Nord', accent: 'bg-[#88c0d0]' },
+                ].map((ct) => (
                   <div
-                    key={ic.id}
-                    onClick={() => setAppIcon(ic.id)}
+                    key={ct.id}
+                    onClick={() => setCodeTheme(ct.id)}
                     className={cn(
-                      'p-2.5 rounded-xl border cursor-pointer transition-all flex flex-col items-center justify-center text-center gap-1.5',
-                      isSelected
-                        ? 'border-foreground bg-surface-selected text-foreground font-bold shadow-xs ring-1 ring-foreground/20'
+                      'p-2.5 rounded-lg border cursor-pointer transition-all flex items-center justify-between gap-1.5',
+                      codeTheme === ct.id
+                        ? 'border-foreground bg-surface-selected text-foreground font-bold shadow-2xs ring-1 ring-foreground/20'
                         : 'border-border bg-surface-hover/50 text-muted-foreground hover:text-foreground hover:bg-surface-hover'
                     )}
                   >
-                    <div className="w-7 h-7 rounded-lg bg-foreground text-background flex items-center justify-center">
-                      <IconComponent />
-                    </div>
-                    <span className="text-[10px] truncate">{ic.label}</span>
+                    <span className="text-[11px] truncate font-medium">{ct.name}</span>
+                    <div className={cn('w-2 h-2 rounded-full shrink-0', ct.accent)} />
                   </div>
-                );
-              })}
+                ))}
+              </div>
+            </div>
+
+            {/* Live Syntax Preview */}
+            <div className={cn('p-3 rounded-xl border border-border/70 transition-colors', `code-theme-${codeTheme}`)}>
+              <div className="flex items-center justify-between mb-1.5 text-[9px] font-mono text-muted-foreground">
+                <span>PREVIEW (Python & Rust)</span>
+                <span>theme: {codeTheme}</span>
+              </div>
+              <pre className="p-2.5 rounded-lg font-mono text-[11px] overflow-x-auto leading-relaxed border border-border/40 space-y-0.5">
+                <div><span className="token comment"># Hybrid Vector + Text Recall</span></div>
+                <div><span className="token keyword">async def</span> <span className="token function">search</span>(query: <span className="token class-name">str</span>) -&gt; <span className="token class-name">List</span>[Memory]:</div>
+                <div>    <span className="token keyword">return</span> <span className="token keyword">await</span> engine.<span className="token function">hybrid_fetch</span>(query, top_k=<span className="token number">5</span>)</div>
+              </pre>
             </div>
           </div>
-        </section>
+        </div>
 
-        {/* Section 2: Code Syntax Highlighting Theme */}
-        <section className="space-y-4">
-          <div className="flex items-center justify-between border-b border-border/60 pb-2">
-            <div className="flex items-center gap-2">
-              <FileCode className="w-4 h-4 text-foreground" />
-              <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                Code Block Syntax Themes (Python, Java, Rust, TypeScript)
-              </h3>
+        {/* =========================================================================
+            GRID ROW 2: LLM Engine & Provider Hub + Discovered Models (2-Column Grid)
+           ========================================================================= */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          
+          {/* Card 3: LLM Engine & Provider Controls */}
+          <div className="p-5 rounded-2xl bg-card border border-border shadow-xs space-y-4">
+            <div className="flex items-center justify-between pb-2.5 border-b border-border/60">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-foreground" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                  LLM AI Engine & Provider Hub
+                </h3>
+              </div>
+              <button
+                onClick={loadAllModels}
+                className="text-[10px] font-mono text-muted-foreground hover:text-foreground underline"
+              >
+                Re-scan Models
+              </button>
             </div>
-            <span className="text-[10px] font-mono text-muted-foreground">
-              Active: {codeTheme.toUpperCase()}
-            </span>
-          </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            {[
-              { id: 'monokai' as const, name: 'Monokai Classic', badge: 'Vibrant Lime/Pink', accent: 'bg-[#f92672]' },
-              { id: 'monokai-fire' as const, name: 'Monokai Fire', badge: 'Volcano Red/Orange', accent: 'bg-[#ff3366]' },
-              { id: 'monokai-solenoid' as const, name: 'Monokai Solenoid', badge: 'Octagon Emerald', accent: 'bg-[#bad761]' },
-              { id: 'vscode-dark' as const, name: 'VS Code Dark+', badge: 'Official Microsoft', accent: 'bg-[#569cd6]' },
-              { id: 'github-dark' as const, name: 'GitHub Dark', badge: 'Coral & Sky Blue', accent: 'bg-[#ff7b72]' },
-              { id: 'dracula' as const, name: 'Dracula', badge: 'Purple & Pink', accent: 'bg-[#bd93f9]' },
-              { id: 'tokyo-night' as const, name: 'Tokyo Night', badge: 'Cyberpunk Neon', accent: 'bg-[#bb9af7]' },
-              { id: 'nord' as const, name: 'Nord Frost', badge: 'Arctic Blue', accent: 'bg-[#88c0d0]' },
-            ].map((ct) => (
-              <div
-                key={ct.id}
-                onClick={() => setCodeTheme(ct.id)}
+            {/* Master LLM Augmentation Switch */}
+            <div className="p-3.5 rounded-xl border border-border bg-surface-hover/50 flex items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-xs text-foreground">LLM Augmentation Mode</span>
+                  <span
+                    className={cn(
+                      'px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase',
+                      useLlm
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        : 'bg-muted text-muted-foreground border border-border'
+                    )}
+                  >
+                    {useLlm ? 'Enabled' : 'Offline / Fast'}
+                  </span>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  {useLlm
+                    ? 'AI active for smart context merging, auto-classification, and note restructuring.'
+                    : 'Deterministic fast mode: rule-based tagging, direct storage, zero API latency.'}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleToggleLlm}
                 className={cn(
-                  'p-3 rounded-xl border cursor-pointer transition-all flex flex-col justify-between gap-2',
-                  codeTheme === ct.id
-                    ? 'border-foreground bg-surface-selected text-foreground font-bold shadow-xs ring-1 ring-foreground/20'
-                    : 'border-border bg-surface-hover/50 text-muted-foreground hover:text-foreground hover:bg-surface-hover'
+                  'relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                  useLlm ? 'bg-foreground' : 'bg-border'
                 )}
               >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold">{ct.name}</span>
-                  <div className={cn("w-2.5 h-2.5 rounded-full", ct.accent)} />
-                </div>
-                <span className="text-[10px] opacity-70">{ct.badge}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Live Syntax Preview */}
-          <div className={cn("p-4 rounded-xl border border-border transition-colors", `code-theme-${codeTheme}`)}>
-            <div className="flex items-center justify-between mb-2">
-              <span className="font-mono text-[10px] text-muted-foreground uppercase font-bold">
-                Live Preview (Python & Java):
-              </span>
-              <span className="px-2 py-0.5 rounded bg-surface-hover font-mono text-[10px] text-foreground font-semibold">
-                theme: {codeTheme}
-              </span>
-            </div>
-            <pre className="p-3.5 rounded-lg font-mono text-xs overflow-x-auto leading-relaxed border border-border/40 space-y-1">
-              <div><span className="token comment"># Python Knowledge Engine</span></div>
-              <div><span className="token keyword">import</span> asyncio</div>
-              <div><span className="token keyword">from</span> typing <span className="token keyword">import</span> <span className="token class-name">List</span>, <span className="token class-name">Optional</span></div>
-              <div><span className="token keyword">class</span> <span className="token class-name">MemoryEngine</span>:</div>
-              <div>    <span className="token keyword">def</span> <span className="token function">recall</span>(<span className="token builtin">self</span>, query: <span className="token class-name">str</span>) -&gt; <span className="token class-name">Optional</span>[<span className="token class-name">dict</span>]:</div>
-              <div>        <span className="token function">print</span>(<span className="token string">f"Querying vector database: "</span> + query)</div>
-              <div>        <span className="token keyword">return</span> &#123;<span className="token string">"status"</span>: <span className="token string">"success"</span>, <span className="token string">"chunks"</span>: <span className="token number">42</span>, <span className="token string">"synced"</span>: <span className="token boolean">True</span>&#125;</div>
-              <div className="pt-2"><span className="token comment">// Java Memory Service</span></div>
-              <div><span className="token keyword">public class</span> <span className="token class-name">MemorizeApp</span> &#123;</div>
-              <div>    <span className="token keyword">public static void</span> <span className="token function">main</span>(<span className="token class-name">String</span>[] args) &#123;</div>
-              <div>        <span className="token class-name">System</span>.out.<span className="token function">println</span>(<span className="token string">"Monokai Fire &amp; VS Code Dark active!"</span>);</div>
-              <div>    &#125;</div>
-              <div>&#125;</div>
-            </pre>
-          </div>
-        </section>
-
-        {/* Section 3: MCP & UNIFIED MODEL CONFIGURATION */}
-        <section className="space-y-4">
-          <div className="flex items-center justify-between border-b border-border/60 pb-2">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-foreground" />
-              <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                MCP Model Parameters & LLM Engine Control
-              </h3>
-            </div>
-            <button
-              onClick={loadAllModels}
-              className="text-[11px] text-muted-foreground hover:text-foreground underline"
-            >
-              Re-scan Providers
-            </button>
-          </div>
-
-          {/* Master LLM Toggle Switch Card */}
-          <div className="p-4 rounded-xl border border-border bg-surface-hover/60 flex items-center justify-between gap-4">
-            <div className="space-y-0.5">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-xs text-foreground">
-                  LLM AI Augmentation Mode
-                </span>
-                <span className={cn(
-                  "px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase",
-                  useLlm ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-muted text-muted-foreground border border-border"
-                )}>
-                  {useLlm ? "Enabled" : "Offline / Disabled"}
-                </span>
-              </div>
-              <p className="text-[11px] text-muted-foreground">
-                {useLlm
-                  ? "LLM is active for smart context merging, auto-classification, and AI chat."
-                  : "LLM is disabled. Fast deterministic mode: rule-based classification, direct memory storage, zero latency."}
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleToggleLlm}
-              className={cn(
-                "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
-                useLlm ? "bg-foreground" : "bg-border"
-              )}
-            >
-              <span
-                className={cn(
-                  "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-background shadow-lg ring-0 transition duration-200 ease-in-out",
-                  useLlm ? "translate-x-5" : "translate-x-0"
-                )}
-              />
-            </button>
-          </div>
-
-          {/* MCP Model Parameters: Embedding, Classification, Fallback */}
-          <div className="p-4 rounded-xl bg-surface-hover/40 border border-border space-y-4">
-            <div className="flex items-center gap-2 pb-2 border-b border-border/40">
-              <Sliders className="w-3.5 h-3.5 text-muted-foreground" />
-              <span className="text-xs font-semibold text-foreground">MCP Model Parameters</span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {/* Active Embedding Model */}
-              <div className="space-y-1">
-                <label className="text-[10px] font-mono font-medium text-muted-foreground uppercase">
-                  Embedding Model
-                </label>
-                <input
-                  type="text"
-                  value={embeddingModel}
-                  onChange={(e) => setEmbeddingModel(e.target.value)}
-                  placeholder="all-MiniLM-L6-v2"
-                  className="w-full bg-surface-list border border-border rounded-lg px-2.5 py-1.5 text-xs font-mono text-foreground focus:ring-1 focus:ring-ring outline-none"
+                <span
+                  className={cn(
+                    'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-background shadow-md ring-0 transition duration-200 ease-in-out',
+                    useLlm ? 'translate-x-5' : 'translate-x-0'
+                  )}
                 />
-                <span className="text-[10px] text-muted-foreground block font-mono">e.g. nomic-embed-text, bge-m3</span>
-              </div>
-
-              {/* Classification Model */}
-              <div className="space-y-1">
-                <label className="text-[10px] font-mono font-medium text-muted-foreground uppercase">
-                  Classification Model
-                </label>
-                <input
-                  type="text"
-                  value={classificationModel}
-                  onChange={(e) => setClassificationModel(e.target.value)}
-                  placeholder="gpt-oss:120b-cloud"
-                  className="w-full bg-surface-list border border-border rounded-lg px-2.5 py-1.5 text-xs font-mono text-foreground focus:ring-1 focus:ring-ring outline-none"
-                />
-                <span className="text-[10px] text-muted-foreground block font-mono">Used when LLM is enabled</span>
-              </div>
-
-              {/* Fallback Model */}
-              <div className="space-y-1">
-                <label className="text-[10px] font-mono font-medium text-muted-foreground uppercase">
-                  Fallback Model
-                </label>
-                <input
-                  type="text"
-                  value={fallbackModel}
-                  onChange={(e) => setFallbackModel(e.target.value)}
-                  placeholder="all-MiniLM-L6-v2"
-                  className="w-full bg-surface-list border border-border rounded-lg px-2.5 py-1.5 text-xs font-mono text-foreground focus:ring-1 focus:ring-ring outline-none"
-                />
-                <span className="text-[10px] text-muted-foreground block font-mono">Offline local fallback</span>
-              </div>
+              </button>
             </div>
-          </div>
 
-          {/* Active MCP Core Tools Status Card */}
-          <div className="p-4 rounded-xl bg-surface-hover/30 border border-border space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-foreground">Registered MCP Tools (7 Active Tools)</span>
-              <span className="px-2 py-0.5 rounded bg-surface-selected font-mono text-[10px] font-bold text-foreground">
-                Active &amp; Ready
-              </span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 md:grid-cols-7 gap-2 pt-1">
-              {[
-                { name: 'store', desc: 'Auto-categorizes & creates/appends' },
-                { name: 'update', desc: 'Updates or merges note content' },
-                { name: 'delete', desc: 'Deletes note from DB & vector' },
-                { name: 'fetch', desc: 'Retrieves full note by ID/title' },
-                { name: 'hybrid_fetch', desc: '50/30/20 weighted RAG search' },
-                { name: 'list_memories', desc: 'Lists memory summaries & filter' },
-                { name: 'get_categories', desc: 'Lists 11 categories & note counts' },
-              ].map((t) => (
-                <div key={t.name} className="p-2 rounded-lg bg-surface-list border border-border/60 space-y-0.5">
-                  <span className="font-mono font-bold text-[11px] text-foreground block">⚡ {t.name}</span>
-                  <span className="text-[10px] text-muted-foreground block leading-tight">{t.desc}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="p-4 rounded-xl bg-surface-hover/60 border border-border space-y-4">
-
-            <div>
-              <label className="text-[11px] text-muted-foreground block mb-1.5 font-medium">
-                Active Chat Model (Ollama Local & OpenAI Remote):
+            {/* Active Model Selector */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] text-muted-foreground block font-medium uppercase font-mono">
+                Active Provider & Model:
               </label>
               <select
                 value={`${selectedProvider}::${selectedModel}`}
@@ -627,15 +549,15 @@ export const SettingsPanel: React.FC = () => {
               </select>
             </div>
 
-            {/* Test Model Connection */}
-            <div className="flex items-center justify-between pt-3 border-t border-border/60">
-              <div className="text-[11px] text-muted-foreground font-mono truncate max-w-sm">
+            {/* Connection Tester */}
+            <div className="flex items-center justify-between pt-2 border-t border-border/50">
+              <div className="text-[10px] text-muted-foreground font-mono truncate max-w-[240px]">
                 {testStatus ? (
                   <span className={cn(testStatus.startsWith('Connected') ? 'text-emerald-500 font-semibold' : 'text-rose-500')}>
                     {testStatus}
                   </span>
                 ) : (
-                  <span>Active: <strong>{selectedModel || 'Default'}</strong> ({selectedProvider === 'ollama' ? 'Ollama Local' : 'OpenAI Remote'})</span>
+                  <span>Active: <strong>{selectedModel || 'Default'}</strong> ({selectedProvider === 'ollama' ? 'Ollama' : 'OpenAI'})</span>
                 )}
               </div>
 
@@ -643,96 +565,263 @@ export const SettingsPanel: React.FC = () => {
                 type="button"
                 onClick={handleTestChat}
                 disabled={testLoading}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-foreground text-background text-xs font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 shadow-xs shrink-0"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-foreground text-background text-xs font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 shadow-xs shrink-0 cursor-pointer"
               >
-                {testLoading ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Server className="w-3.5 h-3.5" />
-                )}
+                {testLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Server className="w-3.5 h-3.5" />}
                 <span>Test Connection</span>
               </button>
             </div>
           </div>
 
-          {/* Discovered Models Side-by-Side Unified View */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Ollama Local Models */}
-            <div className="p-3.5 rounded-xl bg-surface-hover/60 border border-border space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 font-bold text-foreground">
-                  <Cpu className="w-4 h-4 text-foreground" />
-                  <span>Ollama Local ({ollamaData?.total_count || 0})</span>
-                </div>
-                <span className="text-[10px] font-mono text-muted-foreground">localhost:11434</span>
+          {/* Card 4: Discovered Models Inventory Side-by-Side Dual-Pane */}
+          <div className="p-5 rounded-2xl bg-card border border-border shadow-xs space-y-3.5">
+            <div className="flex items-center justify-between pb-2.5 border-b border-border/60">
+              <div className="flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-foreground" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                  Discovered Models Inventory
+                </h3>
               </div>
-              <div className="space-y-1 max-h-40 overflow-y-auto">
-                {(ollamaData?.all_models || []).length > 0 ? (
-                  ollamaData!.all_models.map((m) => (
-                    <div
-                      key={m}
-                      onClick={() => {
-                        setSelectedProvider('ollama');
-                        setSelectedModel(m);
-                      }}
-                      className={cn(
-                        "px-2.5 py-1 rounded bg-surface-list font-mono text-[11px] border cursor-pointer hover:border-foreground transition-all flex items-center justify-between",
-                        selectedProvider === 'ollama' && selectedModel === m ? "border-foreground font-bold shadow-xs" : "border-border/50 text-foreground"
-                      )}
-                    >
-                      <span className="truncate">{m}</span>
-                      {selectedProvider === 'ollama' && selectedModel === m && <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />}
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-muted-foreground italic text-[11px]">No Ollama models found</p>
-                )}
-              </div>
+              <span className="text-[10px] font-mono text-muted-foreground">
+                {(ollamaData?.total_count || 0) + (openaiData?.total_count || 0)} Models Available
+              </span>
             </div>
 
-            {/* OpenAI Remote Models */}
-            <div className="p-3.5 rounded-xl bg-surface-hover/60 border border-border space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 font-bold text-foreground">
-                  <Sparkles className="w-4 h-4 text-foreground" />
-                  <span>OpenAI Remote ({openaiData?.total_count || 0})</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              {/* Ollama Local Models */}
+              <div className="p-3 rounded-xl bg-surface-hover/40 border border-border space-y-2">
+                <div className="flex items-center justify-between text-[11px] font-bold text-foreground">
+                  <div className="flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>Ollama ({ollamaData?.total_count || 0})</span>
+                  </div>
+                  <span className="text-[9px] font-mono text-muted-foreground font-normal">Local</span>
                 </div>
-                <span className="text-[10px] font-mono text-muted-foreground">Remote API</span>
+                <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
+                  {(ollamaData?.all_models || []).length > 0 ? (
+                    ollamaData!.all_models.map((m) => (
+                      <div
+                        key={m}
+                        onClick={() => {
+                          setSelectedProvider('ollama');
+                          setSelectedModel(m);
+                        }}
+                        className={cn(
+                          'px-2 py-1 rounded bg-surface-list font-mono text-[10px] border cursor-pointer hover:border-foreground transition-all flex items-center justify-between',
+                          selectedProvider === 'ollama' && selectedModel === m ? 'border-foreground font-bold shadow-2xs' : 'border-border/50 text-foreground'
+                        )}
+                      >
+                        <span className="truncate">{m}</span>
+                        {selectedProvider === 'ollama' && selectedModel === m && <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />}
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-muted-foreground italic text-[10px]">No Ollama models found</p>
+                  )}
+                </div>
               </div>
-              <div className="space-y-1 max-h-40 overflow-y-auto">
-                {(openaiData?.all_models || []).length > 0 ? (
-                  openaiData!.all_models.map((m) => (
-                    <div
-                      key={m}
-                      onClick={() => {
-                        setSelectedProvider('openai');
-                        setSelectedModel(m);
-                      }}
-                      className={cn(
-                        "px-2.5 py-1 rounded bg-surface-list font-mono text-[11px] border cursor-pointer hover:border-foreground transition-all flex items-center justify-between",
-                        selectedProvider === 'openai' && selectedModel === m ? "border-foreground font-bold shadow-xs" : "border-border/50 text-foreground"
-                      )}
-                    >
-                      <span className="truncate">{m}</span>
-                      {selectedProvider === 'openai' && selectedModel === m && <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />}
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-muted-foreground italic text-[11px]">No remote models found</p>
-                )}
+
+              {/* OpenAI Remote Models */}
+              <div className="p-3 rounded-xl bg-surface-hover/40 border border-border space-y-2">
+                <div className="flex items-center justify-between text-[11px] font-bold text-foreground">
+                  <div className="flex items-center gap-1.5">
+                    <Brain className="w-3.5 h-3.5" />
+                    <span>OpenAI ({openaiData?.total_count || 0})</span>
+                  </div>
+                  <span className="text-[9px] font-mono text-muted-foreground font-normal">Remote API</span>
+                </div>
+                <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
+                  {(openaiData?.all_models || []).length > 0 ? (
+                    openaiData!.all_models.map((m) => (
+                      <div
+                        key={m}
+                        onClick={() => {
+                          setSelectedProvider('openai');
+                          setSelectedModel(m);
+                        }}
+                        className={cn(
+                          'px-2 py-1 rounded bg-surface-list font-mono text-[10px] border cursor-pointer hover:border-foreground transition-all flex items-center justify-between',
+                          selectedProvider === 'openai' && selectedModel === m ? 'border-foreground font-bold shadow-2xs' : 'border-border/50 text-foreground'
+                        )}
+                      >
+                        <span className="truncate">{m}</span>
+                        {selectedProvider === 'openai' && selectedModel === m && <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />}
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-muted-foreground italic text-[10px]">No remote models found</p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </section>
+        </div>
 
+        {/* =========================================================================
+            GRID ROW 3: Dedicated Prompts Viewer (Full-Width Card)
+           ========================================================================= */}
+        <div className="p-5 rounded-2xl bg-card border border-border shadow-xs">
+          <PromptsViewer />
+        </div>
 
-        {/* Section 4: Keyboard Shortcuts Customization & Presets */}
-        <section className="space-y-3">
-          <div className="flex items-center justify-between border-b border-border/60 pb-2">
+        {/* =========================================================================
+            GRID ROW 4: Storage Health & Snapshots + MCP Tool Suite (2-Column Grid)
+           ========================================================================= */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          
+          {/* Card 5: Storage Integrity & Snapshots */}
+          <div className="p-5 rounded-2xl bg-card border border-border shadow-xs space-y-4">
+            <div className="flex items-center justify-between pb-2.5 border-b border-border/60">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-foreground" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                  Storage Integrity & Snapshots
+                </h3>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={handleRunAuditFix}
+                  disabled={fixLoading}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-foreground text-background text-[10px] font-semibold hover:opacity-90 disabled:opacity-50 cursor-pointer shadow-2xs"
+                >
+                  {fixLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                  <span>Auto-Fix</span>
+                </button>
+                <button
+                  onClick={handleCreateBackup}
+                  disabled={backupLoading}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface-hover border border-border text-[10px] font-semibold hover:text-foreground cursor-pointer"
+                >
+                  {backupLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <HardDriveDownload className="w-3 h-3" />}
+                  <span>Backup</span>
+                </button>
+              </div>
+            </div>
+
+            {backupMsg && (
+              <p className={cn('text-[11px] font-mono', backupMsg.includes('success') ? 'text-emerald-500' : 'text-rose-500')}>
+                {backupMsg}
+              </p>
+            )}
+
+            {/* 4 Stat Metric Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+              <div className="p-2.5 rounded-xl bg-surface-hover/60 border border-border">
+                <span className="text-[9px] text-muted-foreground uppercase font-mono block">Files</span>
+                <span className="text-base font-bold font-mono">{auditData?.total_files || 0}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-surface-hover/60 border border-border">
+                <span className="text-[9px] text-muted-foreground uppercase font-mono block">SQLite</span>
+                <span className="text-base font-bold font-mono">{auditData?.total_db_records || 0}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-surface-hover/60 border border-border">
+                <span className="text-[9px] text-muted-foreground uppercase font-mono block">Vectors</span>
+                <span className="text-base font-bold font-mono">{auditData?.total_vector_chunks || 0}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-surface-hover/60 border border-border">
+                <span className="text-[9px] text-muted-foreground uppercase font-mono block">Status</span>
+                <span className={cn('text-base font-bold font-mono', (auditData?.orphan_files_count || 0) === 0 ? 'text-emerald-500' : 'text-amber-500')}>
+                  {(auditData?.orphan_files_count || 0) === 0 ? 'Healthy' : `${auditData?.orphan_files_count} Issues`}
+                </span>
+              </div>
+            </div>
+
+            {/* System Specs Box */}
+            <div className="p-3 rounded-xl bg-surface-hover/30 border border-border/70 text-[10px] text-muted-foreground font-mono space-y-1">
+              <div className="flex items-center gap-1.5 text-foreground font-semibold">
+                <Terminal className="w-3 h-3" />
+                <span>Backend Specifications</span>
+              </div>
+              <p>• FastAPI Service: <code>http://localhost:6999</code></p>
+              <p>• Database: <code>data/memorize.db</code></p>
+              <p>• Vector Engine: <code>data/chroma_db</code> (persisted)</p>
+            </div>
+          </div>
+
+          {/* Card 6: MCP Architecture & Parameters */}
+          <div className="p-5 rounded-2xl bg-card border border-border shadow-xs space-y-4">
+            <div className="flex items-center justify-between pb-2.5 border-b border-border/60">
+              <div className="flex items-center gap-2">
+                <Layers className="w-4 h-4 text-foreground" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                  MCP Parameters & Tools
+                </h3>
+              </div>
+              <span className="px-2 py-0.5 rounded bg-surface-selected font-mono text-[9px] font-bold text-foreground">
+                7 Tools Active
+              </span>
+            </div>
+
+            {/* MCP Model Inputs */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              <div className="space-y-1">
+                <label className="text-[9px] font-mono font-medium text-muted-foreground uppercase">
+                  Embedding
+                </label>
+                <input
+                  type="text"
+                  value={embeddingModel}
+                  onChange={(e) => setEmbeddingModel(e.target.value)}
+                  placeholder="all-MiniLM-L6-v2"
+                  className="w-full bg-surface-list border border-border rounded-lg px-2 py-1 text-[11px] font-mono text-foreground focus:ring-1 focus:ring-ring outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[9px] font-mono font-medium text-muted-foreground uppercase">
+                  Classification
+                </label>
+                <input
+                  type="text"
+                  value={classificationModel}
+                  onChange={(e) => setClassificationModel(e.target.value)}
+                  placeholder="gpt-oss:120b-cloud"
+                  className="w-full bg-surface-list border border-border rounded-lg px-2 py-1 text-[11px] font-mono text-foreground focus:ring-1 focus:ring-ring outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[9px] font-mono font-medium text-muted-foreground uppercase">
+                  Fallback
+                </label>
+                <input
+                  type="text"
+                  value={fallbackModel}
+                  onChange={(e) => setFallbackModel(e.target.value)}
+                  placeholder="all-MiniLM-L6-v2"
+                  className="w-full bg-surface-list border border-border rounded-lg px-2 py-1 text-[11px] font-mono text-foreground focus:ring-1 focus:ring-ring outline-none"
+                />
+              </div>
+            </div>
+
+            {/* 7 MCP Tool Badges */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 pt-1">
+              {[
+                { name: 'store', desc: 'Auto-categorizes & creates note' },
+                { name: 'update', desc: 'Merges & smart-updates' },
+                { name: 'delete', desc: 'Purges note from DB & vector' },
+                { name: 'fetch', desc: 'Retrieves full note by ID' },
+                { name: 'hybrid_fetch', desc: '50/30/20 weighted RAG' },
+                { name: 'list_memories', desc: 'Lists memory summaries' },
+              ].map((t) => (
+                <div key={t.name} className="p-2 rounded-lg bg-surface-list border border-border/60">
+                  <span className="font-mono font-bold text-[10px] text-foreground block">⚡ {t.name}</span>
+                  <span className="text-[9px] text-muted-foreground block truncate">{t.desc}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* =========================================================================
+            GRID ROW 5: Keyboard Shortcuts Reference (Full-Width Card)
+           ========================================================================= */}
+        <div className="p-5 rounded-2xl bg-card border border-border shadow-xs space-y-3.5">
+          <div className="flex items-center justify-between pb-2.5 border-b border-border/60">
             <div className="flex items-center gap-2">
               <Keyboard className="w-4 h-4 text-foreground" />
               <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                Keyboard Shortcuts & Keybindings
+                Keyboard Shortcuts Reference & Presets
               </h3>
             </div>
             <div className="flex items-center gap-1 bg-surface-hover p-0.5 rounded-lg border border-border">
@@ -741,9 +830,9 @@ export const SettingsPanel: React.FC = () => {
                   key={mode}
                   onClick={() => setShortcutPreset(mode)}
                   className={cn(
-                    'px-2.5 py-0.5 rounded capitalize text-[11px] font-medium transition-colors',
+                    'px-2.5 py-0.5 rounded capitalize text-[10px] font-medium transition-colors cursor-pointer',
                     shortcutPreset === mode
-                      ? 'bg-card text-foreground font-semibold shadow-xs'
+                      ? 'bg-card text-foreground font-semibold shadow-2xs'
                       : 'text-muted-foreground hover:text-foreground'
                   )}
                 >
@@ -753,111 +842,34 @@ export const SettingsPanel: React.FC = () => {
             </div>
           </div>
 
-          <div className="divide-y divide-border/60 border border-border rounded-xl bg-surface-hover/30 overflow-hidden">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             {[
-              { action: 'Save Note Immediately', key: '⌘ S', code: 'Cmd/Ctrl + S', enabled: true },
-              { action: 'Create New Note', key: '⌘ N', code: 'Cmd/Ctrl + N', enabled: true },
-              { action: 'Delete / Trash Active Note', key: '⌘ ⌫', code: 'Cmd/Ctrl + Backspace', enabled: true },
-              { action: 'Pin / Unpin Active Note', key: '⌘ ⇧ P', code: 'Cmd/Ctrl + Shift + P', enabled: true },
-              { action: 'Favorite / Star Active Note', key: '⌘ ⇧ S', code: 'Cmd/Ctrl + Shift + S', enabled: true },
-              { action: 'Global Hybrid Search', key: '⌘ K', code: 'Cmd/Ctrl + K', enabled: true },
-              { action: 'Open Full Settings View', key: '⌘ ,', code: 'Cmd/Ctrl + ,', enabled: true },
-              { action: 'Toggle AI Companion Drawer', key: '⌘ ⇧ A', code: 'Cmd/Ctrl + Shift + A', enabled: true },
-              { action: 'Exit View / Back to Notes', key: 'Esc', code: 'Escape', enabled: true },
+              { action: 'Save Note Immediately', key: '⌘ S', code: 'Cmd/Ctrl + S' },
+              { action: 'Create New Note', key: '⌘ N', code: 'Cmd/Ctrl + N' },
+              { action: 'Delete / Trash Active Note', key: '⌘ ⌫', code: 'Cmd/Ctrl + Backspace' },
+              { action: 'Pin / Unpin Active Note', key: '⌘ ⇧ P', code: 'Cmd/Ctrl + Shift + P' },
+              { action: 'Favorite / Star Active Note', key: '⌘ ⇧ S', code: 'Cmd/Ctrl + Shift + S' },
+              { action: 'Global Hybrid Search', key: '⌘ K', code: 'Cmd/Ctrl + K' },
+              { action: 'Open Full Settings View', key: '⌘ ,', code: 'Cmd/Ctrl + ,' },
+              { action: 'Zen Focus Distraction-Free', key: '⌘ ⇧ Z', code: 'Cmd/Ctrl + Shift + Z' },
+              { action: 'Exit View / Back to Notes', key: 'Esc', code: 'Escape' },
             ].map((item, idx) => (
-              <div key={idx} className="px-4 py-2.5 flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-foreground">{item.action}</span>
-                  <span className="text-[11px] text-muted-foreground font-mono">({item.code})</span>
+              <div
+                key={idx}
+                className="px-3 py-2 rounded-lg bg-surface-hover/40 border border-border/70 flex items-center justify-between text-[11px]"
+              >
+                <div className="truncate mr-2">
+                  <span className="font-semibold text-foreground block truncate">{item.action}</span>
+                  <span className="text-[10px] text-muted-foreground font-mono">{item.code}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <kbd className="px-2 py-0.5 rounded bg-surface-selected border border-border font-mono text-[11px] font-bold">
-                    {item.key}
-                  </kbd>
-                  <span className="text-[10px] text-emerald-500 font-mono font-semibold">Active</span>
-                </div>
+                <kbd className="px-2 py-0.5 rounded bg-surface-selected border border-border font-mono text-[10px] font-bold shrink-0">
+                  {item.key}
+                </kbd>
               </div>
             ))}
           </div>
-        </section>
+        </div>
 
-        {/* Section 5: Storage Health & Reconciliation */}
-        <section className="space-y-3">
-          <div className="flex items-center justify-between border-b border-border/60 pb-2">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-foreground" />
-              <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                Storage Integrity & Health
-              </h3>
-            </div>
-            <button
-              onClick={handleRunAuditFix}
-              disabled={fixLoading}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-foreground text-background text-[11px] font-semibold hover:opacity-90 disabled:opacity-50"
-            >
-              {fixLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-              <span>Auto-Fix Storage</span>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="p-3 rounded-xl bg-surface-hover/60 border border-border">
-              <span className="text-[10px] text-muted-foreground uppercase font-mono block">Markdown Files</span>
-              <span className="text-lg font-bold font-mono">{auditData?.total_files || 0}</span>
-            </div>
-            <div className="p-3 rounded-xl bg-surface-hover/60 border border-border">
-              <span className="text-[10px] text-muted-foreground uppercase font-mono block">SQLite Records</span>
-              <span className="text-lg font-bold font-mono">{auditData?.total_db_records || 0}</span>
-            </div>
-            <div className="p-3 rounded-xl bg-surface-hover/60 border border-border">
-              <span className="text-[10px] text-muted-foreground uppercase font-mono block">Vector Chunks</span>
-              <span className="text-lg font-bold font-mono">{auditData?.total_vector_chunks || 0}</span>
-            </div>
-            <div className="p-3 rounded-xl bg-surface-hover/60 border border-border">
-              <span className="text-[10px] text-muted-foreground uppercase font-mono block">Orphan Status</span>
-              <span className={cn("text-lg font-bold font-mono", (auditData?.orphan_files_count || 0) === 0 ? "text-emerald-500" : "text-amber-500")}>
-                {(auditData?.orphan_files_count || 0) === 0 ? 'Healthy' : `${auditData?.orphan_files_count} Issues`}
-              </span>
-            </div>
-          </div>
-        </section>
-
-        {/* Section 6: Backups & Architecture Info */}
-        <section className="space-y-3">
-          <div className="flex items-center justify-between border-b border-border/60 pb-2">
-            <div className="flex items-center gap-2">
-              <HardDriveDownload className="w-4 h-4 text-foreground" />
-              <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                Backup & Snapshots
-              </h3>
-            </div>
-            <button
-              onClick={handleCreateBackup}
-              disabled={backupLoading}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-surface-hover border border-border text-[11px] font-semibold hover:text-foreground"
-            >
-              {backupLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <HardDriveDownload className="w-3 h-3" />}
-              <span>Create Backup Snapshot</span>
-            </button>
-          </div>
-
-          {backupMsg && (
-            <p className={cn("text-xs font-mono", backupMsg.includes('success') ? 'text-emerald-500' : 'text-rose-500')}>
-              {backupMsg}
-            </p>
-          )}
-
-          <div className="p-4 rounded-xl bg-surface-hover/40 border border-border/80 text-[11px] text-muted-foreground font-mono space-y-1.5">
-            <div className="flex items-center gap-1.5 text-foreground font-bold mb-1">
-              <Terminal className="w-3.5 h-3.5" />
-              <span>Backend Architecture & Specifications</span>
-            </div>
-            <p>• FastAPI Local Service: <code>http://localhost:6999</code></p>
-            <p>• SQLite Master Database: <code>data/memorize.db</code></p>
-            <p>• ChromaDB Vector Engine: <code>data/chroma_db</code> (persistent)</p>
-            <p>• Automated Tool Invocation: <code>create_memory, search_memories, read_memory, delete_memory</code></p>
-          </div>
-        </section>
       </div>
     </div>
   );

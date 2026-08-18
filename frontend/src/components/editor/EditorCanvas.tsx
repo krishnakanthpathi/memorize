@@ -22,8 +22,6 @@ import {
   Wand2,
   AlignLeft,
   ListOrdered,
-  Maximize2,
-  Minimize2,
   Expand,
   Shrink,
   Minimize,
@@ -61,9 +59,7 @@ export const EditorCanvas: React.FC = () => {
     setActiveModal,
     createNewNote,
     codeTheme,
-    isFullScreen,
     isFocusMode,
-    toggleFullScreen,
     toggleFocusMode,
     setIsFocusMode,
   } = useNotesStore();
@@ -611,26 +607,12 @@ export const EditorCanvas: React.FC = () => {
                 </DropdownMenu.Portal>
               </DropdownMenu.Root>
 
-              {/* Full Screen Mode Toggle */}
-              <button
-                onClick={toggleFullScreen}
-                title={isFullScreen ? "Exit Full Screen (F11 / ⌘⇧F)" : "Full Screen Mode (F11 / ⌘⇧F)"}
-                className={cn(
-                  "p-1.5 rounded-md transition-colors",
-                  isFullScreen
-                    ? "text-violet-500 bg-violet-500/10 hover:bg-violet-500/20"
-                    : "text-muted-foreground hover:text-foreground hover:bg-surface-hover"
-                )}
-              >
-                {isFullScreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-              </button>
-
               {/* Zen / Focus Mode Toggle */}
               <button
                 onClick={toggleFocusMode}
                 title={isFocusMode ? "Exit Focus Mode (Esc / ⌘⇧Z)" : "Zen Focus Mode (⌘⇧Z)"}
                 className={cn(
-                  "p-1.5 rounded-md transition-colors",
+                  "p-1.5 rounded-md transition-colors cursor-pointer",
                   isFocusMode
                     ? "text-primary bg-primary/10 hover:bg-primary/20 font-semibold"
                     : "text-muted-foreground hover:text-foreground hover:bg-surface-hover"
@@ -759,17 +741,8 @@ export const EditorCanvas: React.FC = () => {
 
           <div className="flex items-center gap-2">
             <button
-              onClick={toggleFullScreen}
-              title={isFullScreen ? "Exit Native Full Screen (F11)" : "Enter Native Full Screen (F11)"}
-              className="px-2 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors flex items-center gap-1"
-            >
-              {isFullScreen ? <Minimize2 className="w-3.5 h-3.5 text-violet-500" /> : <Maximize2 className="w-3.5 h-3.5" />}
-              <span className="hidden sm:inline">{isFullScreen ? 'Windowed' : 'Full Screen'}</span>
-            </button>
-
-            <button
               onClick={() => setIsFocusMode(false)}
-              title="Exit Zen Focus Mode (Esc)"
+              title="Exit Zen Focus Mode (Esc / ⌘⇧Z)"
               className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-surface-hover hover:bg-surface-hover/80 text-foreground border border-border transition-all active:scale-95 cursor-pointer"
             >
               <Shrink className="w-3.5 h-3.5" />
@@ -781,7 +754,14 @@ export const EditorCanvas: React.FC = () => {
       )}
 
       {/* Editor Main Canvas Body */}
-      <div className="flex-1 overflow-y-auto px-6 sm:px-12 py-8 max-w-5xl mx-auto w-full flex flex-col">
+      <div
+        className={cn(
+          "flex-1 overflow-y-auto py-8 w-full flex flex-col transition-all duration-200",
+          isFocusMode
+            ? "px-8 sm:px-16 lg:px-24 max-w-7xl mx-auto"
+            : "px-6 sm:px-12 max-w-5xl mx-auto"
+        )}
+      >
         {/* Note Title Input with AI Title Generation Button */}
         <div className="flex items-center justify-between gap-3 group relative pb-2">
           <input
@@ -791,7 +771,8 @@ export const EditorCanvas: React.FC = () => {
             readOnly={isTrashed}
             placeholder="Note Title"
             className={cn(
-              'flex-1 bg-transparent text-3xl font-bold tracking-tight text-foreground placeholder:text-muted-foreground/40 border-none outline-none focus:ring-0 leading-tight',
+              'flex-1 bg-transparent font-bold tracking-tight text-foreground placeholder:text-muted-foreground/40 border-none outline-none focus:ring-0 leading-tight transition-all',
+              isFocusMode ? 'text-4xl sm:text-5xl font-extrabold pb-1' : 'text-3xl',
               isTrashed && 'opacity-80 cursor-default'
             )}
           />
@@ -904,9 +885,14 @@ export const EditorCanvas: React.FC = () => {
         <div className={cn("flex-1 pt-6 pb-12 flex flex-col", `code-theme-${codeTheme}`)}>
           {/* MODE 1: MARKDOWN VIEWER / SOURCE (Default) */}
           {viewMode === 'markdown' && (
-            <div className="flex-1 flex gap-2 min-h-[450px]">
+            <div className={cn("flex-1 flex gap-3 min-h-[500px]", isFocusMode && "min-h-[650px]")}>
               {/* Line Numbers Gutter */}
-              <div className="markdown-line-numbers select-none">
+              <div
+                className={cn(
+                  "markdown-line-numbers select-none transition-all",
+                  isFocusMode ? "text-[13px] sm:text-[14px] !leading-[1.85rem]" : "text-[13px] !leading-[1.625rem]"
+                )}
+              >
                 {lineNumbers.map((num) => (
                   <div key={num}>{num}</div>
                 ))}
@@ -923,7 +909,12 @@ export const EditorCanvas: React.FC = () => {
                 onKeyUp={handleTextareaSelect}
                 readOnly={isTrashed}
                 placeholder="Write markdown here (# Heading, - List, ```code)..."
-                className="markdown-textarea flex-1 w-full min-h-[450px] resize-none outline-none border-none focus:ring-0 p-0 overflow-hidden"
+                className={cn(
+                  "markdown-textarea flex-1 w-full min-h-[500px] resize-none outline-none border-none focus:ring-0 p-0 overflow-hidden transition-all",
+                  isFocusMode
+                    ? "text-[14px] sm:text-[15px] lg:text-[16px] !leading-[1.85rem] tracking-wide"
+                    : "text-[13px] !leading-[1.625rem]"
+                )}
                 spellCheck={false}
               />
             </div>
@@ -931,7 +922,7 @@ export const EditorCanvas: React.FC = () => {
 
           {/* MODE 2: NORMAL (MILKDOWN WYSIWYG) */}
           {viewMode === 'rich' && (
-            <div className="pt-2 prose dark:prose-invert max-w-none text-foreground">
+            <div className={cn("pt-2 max-w-none text-foreground transition-all", isFocusMode ? "prose prose-lg dark:prose-invert max-w-none text-base sm:text-lg leading-relaxed" : "prose dark:prose-invert max-w-none")}>
               <MilkdownEditor
                 key={activeNote.id}
                 noteId={activeNote.id}
@@ -944,10 +935,15 @@ export const EditorCanvas: React.FC = () => {
 
           {/* MODE 3: SPLIT VIEW (Source on Left, Rendered on Right) */}
           {viewMode === 'split' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 min-h-[450px]">
+            <div className={cn("grid grid-cols-1 md:grid-cols-2 gap-6 min-h-[450px] transition-all", isFocusMode ? "gap-8 min-h-[650px]" : "min-h-[450px]")}>
               {/* Left: Raw Markdown Editor */}
-              <div className="flex gap-2 p-3 bg-surface-hover/40 rounded-xl border border-border/70 overflow-hidden">
-                <div className="markdown-line-numbers select-none">
+              <div className={cn("flex gap-2 p-3 bg-surface-hover/40 rounded-xl border border-border/70 overflow-hidden", isFocusMode && "p-4")}>
+                <div
+                  className={cn(
+                    "markdown-line-numbers select-none",
+                    isFocusMode ? "text-[13px] sm:text-[14px] !leading-[1.85rem]" : "text-[13px] !leading-[1.625rem]"
+                  )}
+                >
                   {lineNumbers.map((num) => (
                     <div key={num}>{num}</div>
                   ))}
@@ -962,13 +958,18 @@ export const EditorCanvas: React.FC = () => {
                   onKeyUp={handleTextareaSelect}
                   readOnly={isTrashed}
                   placeholder="Markdown source..."
-                  className="markdown-textarea flex-1 w-full min-h-[400px] resize-none outline-none border-none focus:ring-0 p-0 overflow-hidden"
+                  className={cn(
+                    "markdown-textarea flex-1 w-full min-h-[400px] resize-none outline-none border-none focus:ring-0 p-0 overflow-hidden",
+                    isFocusMode
+                      ? "text-[14px] sm:text-[15px] !leading-[1.85rem]"
+                      : "text-[13px] !leading-[1.625rem]"
+                  )}
                   spellCheck={false}
                 />
               </div>
 
               {/* Right: WYSIWYG Rendered Preview */}
-              <div className="p-4 bg-surface-hover/20 rounded-xl border border-border/70 overflow-y-auto prose dark:prose-invert max-w-none text-foreground">
+              <div className={cn("p-4 bg-surface-hover/20 rounded-xl border border-border/70 overflow-y-auto max-w-none text-foreground", isFocusMode ? "p-6 prose prose-lg dark:prose-invert max-w-none text-base" : "prose dark:prose-invert max-w-none")}>
                 <MilkdownEditor
                   key={`split_${activeNote.id}`}
                   noteId={`split_${activeNote.id}`}

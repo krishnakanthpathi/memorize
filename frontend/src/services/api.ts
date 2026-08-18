@@ -8,6 +8,7 @@ import {
   MergeMemoriesResponse,
   ModelsResponse,
   Note,
+  PromptsMap,
   SearchResult,
   TextTransformResponse,
   VersionItem,
@@ -396,6 +397,60 @@ export const api = {
     const data = await res.json();
     return data.settings || {};
   },
+
+  // AI Prompt Templates Registry
+  async getPrompts(): Promise<PromptsMap> {
+    try {
+      const res = await fetch(`${API_BASE}/settings/prompts`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.prompts && Object.keys(data.prompts).length > 0) {
+          return data.prompts;
+        }
+      }
+    } catch (e) {
+      console.warn("Using static prompt registry fallback:", e);
+    }
+    // Fallback static prompt registry
+    return {
+      smart_merge: {
+        name: "Smart Memory Merge Prompt",
+        description: "Used when updating existing memories to intelligently blend new details with existing content.",
+        template: `You are an expert AI memory manager. Your task is to intelligently merge new information or edits into an existing Markdown memory document.\n\nRules:\n1. Preserve unchanged context, facts, and structure from the existing memory.\n2. Replace outdated or superseded details with the new facts.\n3. Seamlessly integrate new details into relevant existing sections or add new logical section headers if needed.\n4. Do NOT naively append '### Update' sections at the bottom unless it represents a distinct timeline event.\n5. Do NOT include conversation preambles, intros, or markdown block ticks (e.g. \`\`\`markdown ... \`\`\`).\n6. Output ONLY the complete, cleanly updated Markdown content body.`,
+      },
+      multi_merge: {
+        name: "Multi-Memory Merge Prompt",
+        description: "Used when consolidating multiple related memory notes into a unified knowledge document.",
+        template: `You are an expert AI knowledge curator and technical editor.\nYour task is to merge multiple related Markdown memory notes into a single, cohesive, authoritative, well-structured, and non-redundant document.\n\nCore Merge Guidelines:\n1. Synthesize all unique insights, code snippets, mathematical formulas ($...$, $$...$$), technical details, configurations, and key facts.\n2. Eliminate redundancies, repeated explanations, and duplicate headings.\n3. Structure the consolidated document with clear, logical Markdown hierarchies (# Document Title, ## Major Sections, ### Subsections, bullet points, tables where helpful).\n4. Maintain a professional, clean Markdown style without conversation preambles, introductory filler, or code fence wrappers around the entire document.\n5. If custom merge instructions are provided below, prioritize them.\n6. Output ONLY the unified Markdown content body.`,
+      },
+      organize: {
+        name: "Single Memory AI Organizer Prompt",
+        description: "Used to polish, restructure, clean up, or summarize individual memory notes.",
+        template: `You are an expert AI technical editor and document architect.\nYour task is to take an existing Markdown memory note and polish, restructure, and organize it for maximum clarity, readability, and precision.\n\nGuidelines:\n1. Preserve all factual information, code snippets, mathematical formulas ($...$, $$...$$), and specific technical values. Do NOT invent new facts.\n2. Structure the document with clear, logical Markdown hierarchies (# Document Title, ## Major Sections, ### Subsections, bullet points, key takeaways, tables where applicable).\n3. Fix messy formatting, inconsistent indentation, grammatical errors, and typos.\n4. Remove redundant conversational fluff and repeated phrasing.\n5. If custom instructions or goals are specified below, prioritize them.\n6. Output ONLY the polished, cleanly formatted Markdown content body.`,
+      },
+      generate_title: {
+        name: "Note Title Generation Prompt",
+        description: "Used to generate concise, high-signal, descriptive titles for notes and excerpts.",
+        template: `You are an expert AI editor and document architect.\nYour task is to generate a clear, concise, descriptive, and high-signal title (3 to 7 words) for the provided Markdown note content or excerpt.\n\nRules:\n1. Do NOT enclose the title in quotes, backticks, or markdown bold/italics.\n2. Do NOT add prefixes like "Title:", "Note:", or "Summary:".\n3. Capture the core subject, entity, technical topic, or intent accurately.\n4. Return ONLY the title text on a single line.`,
+      },
+      organize_selection: {
+        name: "Selected Paragraph / Text Organizer Prompt",
+        description: "Used to polish, summarize, or transform selected paragraphs and text excerpts.",
+        template: `You are an expert AI text editor and writing assistant.\nYour task is to rewrite, organize, or transform the user's selected text snippet or paragraph according to their requested goal.\n\nGuidelines:\n1. Maintain context, accurate terminology, and technical fidelity ($...$, $$...$$, code syntax, and key parameters).\n2. Output ONLY the replacement text for the selected passage.\n3. Do NOT include conversational introductory preambles or wrap the entire output in markdown code fences.\n4. Ensure clean, elegant formatting matching standard Markdown.`,
+      },
+      auto_classify: {
+        name: "Auto-Classification & Tagging Prompt",
+        description: "Classifies documents into categories and extracts relevant tags.",
+        template: `You are an expert AI memory classifier. Analyze the provided text and determine the single best category and 3-5 concise tags.\nYou MUST choose the category strictly from the provided list of available categories.\nDo NOT invent or modify category names.\n\nReturn ONLY valid JSON matching this exact structure:\n{\n  "category": "one_of_allowed_categories",\n  "tags": ["tag1", "tag2", "tag3"],\n  "confidence": 0.95\n}`,
+      },
+      summary: {
+        name: "Executive Summary Prompt",
+        description: "Generates concise 2-3 sentence summaries for search snippets and previews.",
+        template: `You are a concise summarizer. Generate a clear 2-3 sentence executive summary of the provided text.\nPreserve key technical terms, dates, metrics, and actionable takeaways. Output ONLY the summary text.`,
+      },
+    };
+  },
 };
+
 
 

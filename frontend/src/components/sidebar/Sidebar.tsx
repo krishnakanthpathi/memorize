@@ -19,19 +19,14 @@ import {
   ChevronRight,
   FolderPlus,
   Cpu,
-  Layers,
-  CircleDot,
   BookOpen,
   Brain,
   Terminal,
   Database,
-  Maximize2,
-  Minimize2,
   Expand,
   Shrink,
 } from 'lucide-react';
 import { useNotesStore } from '@/store/useNotesStore';
-import { ThemeMode } from '@/types';
 import { cn } from '@/lib/utils';
 
 export const Sidebar: React.FC = () => {
@@ -53,12 +48,11 @@ export const Sidebar: React.FC = () => {
     setSelectedTag,
     createNewNote,
     setActiveModal,
-    isFullScreen,
     isFocusMode,
-    toggleFullScreen,
     toggleFocusMode,
   } = useNotesStore();
 
+  // Categories and Tags pre-closed by default
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [tagsOpen, setTagsOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -105,13 +99,13 @@ export const Sidebar: React.FC = () => {
   return (
     <aside className="h-full w-full flex flex-col bg-surface-sidebar border-r border-border select-none text-foreground">
       {/* App Header */}
-      <div className="h-14 px-4 flex items-center justify-between border-b border-border">
+      <div className="h-14 px-3.5 flex items-center justify-between border-b border-border">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-foreground text-background flex items-center justify-center font-bold text-sm tracking-tighter shadow-2xs">
             {renderBrandIcon()}
           </div>
           <div>
-            <span className="font-semibold text-sm tracking-tight">
+            <span className="font-bold text-sm tracking-tight">
               memorize
             </span>
           </div>
@@ -121,14 +115,17 @@ export const Sidebar: React.FC = () => {
           <button
             onClick={() => setActiveModal('new-category')}
             title="Create Category"
-            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors"
+            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors cursor-pointer"
           >
             <FolderPlus className="w-4 h-4" />
           </button>
           <button
-            onClick={() => createNewNote()}
-            title="Quick New Note"
-            className="p-1.5 rounded-md text-foreground bg-surface-selected hover:bg-surface-hover transition-colors"
+            onClick={() => {
+              setActiveView('all');
+              createNewNote();
+            }}
+            title="Quick New Note (⌘N)"
+            className="p-1.5 rounded-md text-foreground bg-surface-selected hover:bg-surface-hover transition-colors cursor-pointer shadow-2xs"
           >
             <Plus className="w-4 h-4" />
           </button>
@@ -136,19 +133,70 @@ export const Sidebar: React.FC = () => {
       </div>
 
       {/* Main Navigation Scroll Area */}
-      <div className="flex-1 overflow-y-auto px-2 py-3 space-y-5">
-        {/* Section 1: System Views */}
-        <div>
-          <div className="px-2 pb-1.5 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
-            Quick Views
+      <div className="flex-1 overflow-y-auto px-2 py-3 space-y-4">
+        
+        {/* Quick Action Strip (Search + Zen Mode) */}
+        <div className="space-y-1.5">
+          <button
+            onClick={() => setActiveModal('search')}
+            className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-surface-hover/60 hover:bg-surface-hover text-muted-foreground hover:text-foreground transition-all cursor-pointer text-xs font-medium border border-border/50"
+          >
+            <div className="flex items-center gap-2">
+              <Search className="w-3.5 h-3.5 text-foreground" />
+              <span>Search Knowledge</span>
+            </div>
+            <kbd className="text-[10px] font-mono bg-surface-list px-1.5 py-0.5 rounded border border-border/70 text-muted-foreground">
+              ⌘K
+            </kbd>
+          </button>
+
+          <button
+            onClick={toggleFocusMode}
+            title="Zen Focus Mode (⌘⇧Z)"
+            className={cn(
+              'w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer border',
+              isFocusMode
+                ? 'bg-foreground text-background border-foreground font-semibold shadow-2xs'
+                : 'bg-surface-hover/40 hover:bg-surface-hover text-muted-foreground hover:text-foreground border-border/50'
+            )}
+          >
+            <div className="flex items-center gap-2">
+              {isFocusMode ? (
+                <Shrink className="w-3.5 h-3.5 text-background" />
+              ) : (
+                <Expand className="w-3.5 h-3.5 text-foreground" />
+              )}
+              <span>{isFocusMode ? 'Exit Zen Mode' : 'Zen Focus Mode'}</span>
+            </div>
+            <kbd
+              className={cn(
+                'text-[10px] font-mono px-1.5 py-0.5 rounded border',
+                isFocusMode
+                  ? 'bg-background/20 border-background/30 text-background'
+                  : 'bg-surface-list border-border/70 text-muted-foreground'
+              )}
+            >
+              ⌘⇧Z
+            </kbd>
+          </button>
+        </div>
+
+        {/* Section 1: Views & Collections */}
+        <div className="pt-1">
+          <div className="px-2 pb-1.5 text-[10px] font-bold tracking-wider text-muted-foreground uppercase font-mono">
+            Views
           </div>
           <div className="space-y-0.5">
             <button
-              onClick={() => setActiveView('all')}
+              onClick={() => {
+                setSelectedCategory(null);
+                setSelectedTag(null);
+                setActiveView('all');
+              }}
               className={cn(
-                'w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors',
+                'w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer',
                 activeView === 'all' && !selectedCategory && !selectedTag
-                  ? 'bg-surface-selected text-foreground font-semibold shadow-xs'
+                  ? 'bg-surface-selected text-foreground font-semibold shadow-2xs'
                   : 'text-muted-foreground hover:text-foreground hover:bg-surface-hover'
               )}
             >
@@ -156,17 +204,21 @@ export const Sidebar: React.FC = () => {
                 <FileText className="w-4 h-4" />
                 <span>All Notes</span>
               </div>
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted font-mono">
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface-hover font-mono">
                 {notes.length}
               </span>
             </button>
 
             <button
-              onClick={() => setActiveView('pinned')}
+              onClick={() => {
+                setSelectedCategory(null);
+                setSelectedTag(null);
+                setActiveView('pinned');
+              }}
               className={cn(
-                'w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors',
+                'w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer',
                 activeView === 'pinned'
-                  ? 'bg-surface-selected text-foreground font-semibold shadow-xs'
+                  ? 'bg-surface-selected text-foreground font-semibold shadow-2xs'
                   : 'text-muted-foreground hover:text-foreground hover:bg-surface-hover'
               )}
             >
@@ -175,18 +227,22 @@ export const Sidebar: React.FC = () => {
                 <span>Pinned</span>
               </div>
               {pinnedCount > 0 && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted font-mono">
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface-hover font-mono">
                   {pinnedCount}
                 </span>
               )}
             </button>
 
             <button
-              onClick={() => setActiveView('favorites')}
+              onClick={() => {
+                setSelectedCategory(null);
+                setSelectedTag(null);
+                setActiveView('favorites');
+              }}
               className={cn(
-                'w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors',
+                'w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer',
                 activeView === 'favorites'
-                  ? 'bg-surface-selected text-foreground font-semibold shadow-xs'
+                  ? 'bg-surface-selected text-foreground font-semibold shadow-2xs'
                   : 'text-muted-foreground hover:text-foreground hover:bg-surface-hover'
               )}
             >
@@ -195,18 +251,22 @@ export const Sidebar: React.FC = () => {
                 <span>Favorites</span>
               </div>
               {favCount > 0 && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted font-mono">
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface-hover font-mono">
                   {favCount}
                 </span>
               )}
             </button>
 
             <button
-              onClick={() => setActiveView('trash')}
+              onClick={() => {
+                setSelectedCategory(null);
+                setSelectedTag(null);
+                setActiveView('trash');
+              }}
               className={cn(
-                'w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors',
+                'w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer',
                 activeView === 'trash'
-                  ? 'bg-surface-selected text-foreground font-semibold shadow-xs'
+                  ? 'bg-surface-selected text-foreground font-semibold shadow-2xs'
                   : 'text-muted-foreground hover:text-foreground hover:bg-surface-hover'
               )}
             >
@@ -223,23 +283,23 @@ export const Sidebar: React.FC = () => {
           </div>
         </div>
 
-        {/* Section 2: Folders & Categories */}
-        <div>
+        {/* Section 2: Folders & Categories (Pre-closed / Collapsed by default) */}
+        <div className="pt-1">
           <div className="flex items-center justify-between px-2 pb-1.5">
             <button
               onClick={() => setCategoriesOpen(!categoriesOpen)}
-              className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase hover:text-foreground transition-colors"
+              className="flex items-center gap-1.5 text-[10px] font-bold tracking-wider text-muted-foreground uppercase font-mono hover:text-foreground transition-colors cursor-pointer"
             >
               {categoriesOpen ? (
-                <ChevronDown className="w-3.5 h-3.5" />
+                <ChevronDown className="w-3 h-3" />
               ) : (
-                <ChevronRight className="w-3.5 h-3.5" />
+                <ChevronRight className="w-3 h-3" />
               )}
-              <span>Categories</span>
+              <span>Categories ({categories.length})</span>
             </button>
             <button
               onClick={() => setActiveModal('new-category')}
-              className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
+              className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors cursor-pointer"
               title="Add Category"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -249,7 +309,7 @@ export const Sidebar: React.FC = () => {
           {categoriesOpen && (
             <div className="space-y-0.5">
               {categories.length === 0 ? (
-                <div className="px-3 py-2 text-xs text-muted-foreground italic">
+                <div className="px-3 py-1.5 text-xs text-muted-foreground italic">
                   No categories found
                 </div>
               ) : (
@@ -258,11 +318,17 @@ export const Sidebar: React.FC = () => {
                   return (
                     <button
                       key={cat.category}
-                      onClick={() => setSelectedCategory(cat.category)}
+                      onClick={() => {
+                        setSelectedTag(null);
+                        setSelectedCategory(cat.category);
+                        if (activeView === 'settings' || activeView === 'docs') {
+                          setActiveView('all');
+                        }
+                      }}
                       className={cn(
-                        'w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors',
+                        'w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer',
                         isSelected
-                          ? 'bg-surface-selected text-foreground font-semibold shadow-xs'
+                          ? 'bg-surface-selected text-foreground font-semibold shadow-2xs'
                           : 'text-muted-foreground hover:text-foreground hover:bg-surface-hover'
                       )}
                     >
@@ -270,7 +336,7 @@ export const Sidebar: React.FC = () => {
                         <FolderIcon className="w-4 h-4 shrink-0" />
                         <span className="truncate capitalize">{cat.category}</span>
                       </div>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted font-mono shrink-0">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface-hover font-mono shrink-0">
                         {cat.count}
                       </span>
                     </button>
@@ -281,37 +347,40 @@ export const Sidebar: React.FC = () => {
           )}
         </div>
 
-        {/* Section 3: Tags */}
+        {/* Section 3: Tags (Pre-closed / Collapsed by default) */}
         {tagCounts.length > 0 && (
-          <div>
+          <div className="pt-1">
             <div className="flex items-center justify-between px-2 pb-1.5">
               <button
                 onClick={() => setTagsOpen(!tagsOpen)}
-                className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase hover:text-foreground transition-colors"
+                className="flex items-center gap-1.5 text-[10px] font-bold tracking-wider text-muted-foreground uppercase font-mono hover:text-foreground transition-colors cursor-pointer"
               >
                 {tagsOpen ? (
-                  <ChevronDown className="w-3.5 h-3.5" />
+                  <ChevronDown className="w-3 h-3" />
                 ) : (
-                  <ChevronRight className="w-3.5 h-3.5" />
+                  <ChevronRight className="w-3 h-3" />
                 )}
-                <span>Tags</span>
+                <span>Tags ({tagCounts.length})</span>
               </button>
             </div>
 
             {tagsOpen && (
-              <div className="flex flex-wrap gap-1 px-1.5">
+              <div className="flex flex-wrap gap-1 px-1.5 pt-0.5">
                 {tagCounts.map(([tag, count]) => {
                   const isSelected = selectedTag === tag;
                   return (
                     <button
                       key={tag}
-                      onClick={() =>
-                        setSelectedTag(isSelected ? null : tag)
-                      }
+                      onClick={() => {
+                        setSelectedTag(isSelected ? null : tag);
+                        if (activeView === 'settings' || activeView === 'docs') {
+                          setActiveView('all');
+                        }
+                      }}
                       className={cn(
-                        'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono transition-all',
+                        'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono transition-all cursor-pointer',
                         isSelected
-                          ? 'bg-foreground text-background font-semibold'
+                          ? 'bg-foreground text-background font-semibold shadow-2xs'
                           : 'bg-surface-hover text-muted-foreground hover:text-foreground hover:bg-surface-selected'
                       )}
                     >
@@ -325,40 +394,27 @@ export const Sidebar: React.FC = () => {
           </div>
         )}
 
-        {/* Section 4: System Tools & Backend Integrations */}
-        <div>
+        {/* Section 4: System Tools & Diagnostics Drawer */}
+        <div className="pt-1">
           <div className="flex items-center justify-between px-2 pb-1.5">
             <button
               onClick={() => setToolsOpen(!toolsOpen)}
-              className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase hover:text-foreground transition-colors"
+              className="flex items-center gap-1.5 text-[10px] font-bold tracking-wider text-muted-foreground uppercase font-mono hover:text-foreground transition-colors cursor-pointer"
             >
               {toolsOpen ? (
-                <ChevronDown className="w-3.5 h-3.5" />
+                <ChevronDown className="w-3 h-3" />
               ) : (
-                <ChevronRight className="w-3.5 h-3.5" />
+                <ChevronRight className="w-3 h-3" />
               )}
-              <span>AI & Storage</span>
+              <span>Diagnostics & Tools</span>
             </button>
           </div>
 
           {toolsOpen && (
             <div className="space-y-0.5">
               <button
-                onClick={() => setActiveModal('search')}
-                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors"
-              >
-                <div className="flex items-center gap-2.5">
-                  <Sparkles className="w-4 h-4 text-violet-500" />
-                  <span>Hybrid AI Search</span>
-                </div>
-                <kbd className="text-[9px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
-                  ⌘K
-                </kbd>
-              </button>
-
-              <button
                 onClick={() => setActiveModal('audit')}
-                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors"
+                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors cursor-pointer"
               >
                 <div className="flex items-center gap-2.5">
                   <ShieldCheck className="w-4 h-4 text-foreground/80" />
@@ -369,159 +425,129 @@ export const Sidebar: React.FC = () => {
 
               <button
                 onClick={() => setActiveModal('backup')}
-                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors"
+                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors cursor-pointer"
               >
                 <div className="flex items-center gap-2.5">
                   <HardDriveDownload className="w-4 h-4 text-foreground/80" />
-                  <span>Backup & Restore</span>
+                  <span>Backup & Snapshots</span>
                 </div>
               </button>
 
               <button
-                onClick={() => setActiveModal('models')}
-                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors"
+                onClick={() => setActiveView('settings')}
+                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors cursor-pointer"
               >
                 <div className="flex items-center gap-2.5">
                   <Cpu className="w-4 h-4 text-foreground/80" />
-                  <span>LLM Models Engine</span>
+                  <span>LLM & Prompts Engine</span>
                 </div>
-              </button>
-
-              <button
-                onClick={toggleFullScreen}
-                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors cursor-pointer"
-              >
-                <div className="flex items-center gap-2.5">
-                  {isFullScreen ? (
-                    <Minimize2 className="w-4 h-4 text-violet-500" />
-                  ) : (
-                    <Maximize2 className="w-4 h-4 text-foreground/80" />
-                  )}
-                  <span>{isFullScreen ? 'Exit Full Screen' : 'Full Screen Mode'}</span>
-                </div>
-                <kbd className="text-[9px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
-                  F11
-                </kbd>
-              </button>
-
-              <button
-                onClick={toggleFocusMode}
-                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors cursor-pointer"
-              >
-                <div className="flex items-center gap-2.5">
-                  {isFocusMode ? (
-                    <Shrink className="w-4 h-4 text-primary" />
-                  ) : (
-                    <Expand className="w-4 h-4 text-foreground/80" />
-                  )}
-                  <span>{isFocusMode ? 'Exit Zen Mode' : 'Zen Focus Mode'}</span>
-                </div>
-                <kbd className="text-[9px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
-                  ⌘⇧Z
-                </kbd>
               </button>
             </div>
           )}
         </div>
       </div>
 
-      {/* Footer: 3-Way Theme Switcher & Status */}
+      {/* Footer: Modernized Status, 3-Way Switcher, Docs, Settings */}
       <div className="p-3 border-t border-border space-y-2.5 bg-surface-sidebar">
         {/* Status Indicator */}
-        <div className="flex items-center justify-between text-[11px] px-1 text-muted-foreground font-mono">
+        <div className="flex items-center justify-between text-[10px] px-1 text-muted-foreground font-mono">
           <div className="flex items-center gap-1.5">
             <span
               className={cn(
                 'w-2 h-2 rounded-full inline-block',
-                isOnline ? 'bg-emerald-500' : 'bg-rose-500 animate-pulse'
+                isOnline ? 'bg-emerald-500 shadow-2xs' : 'bg-rose-500 animate-pulse'
               )}
             />
-            <span>{isOnline ? (isSaving ? 'Saving...' : 'Connected') : 'Offline'}</span>
+            <span className="font-semibold text-foreground/90">
+              {isOnline ? (isSaving ? 'Saving...' : 'Connected') : 'Offline'}
+            </span>
           </div>
           {lastSavedAt && (
-            <span className="text-[10px] text-muted-foreground opacity-70">
+            <span className="text-[9px] opacity-70">
               Synced {lastSavedAt}
             </span>
           )}
         </div>
 
         {/* 3-Way Monochrome Theme Switcher */}
-        <div className="p-1 rounded-lg bg-surface-hover border border-border/60 flex items-center justify-between">
+        <div className="p-0.5 rounded-lg bg-surface-hover border border-border/70 flex items-center justify-between">
           <button
             onClick={() => setTheme('light')}
-            title="Light Mode (Crisp White)"
+            title="Light Mode (Crisp Pure White)"
             className={cn(
-              'flex-1 flex items-center justify-center gap-1 py-1 px-1.5 rounded-md text-xs transition-all',
+              'flex-1 flex items-center justify-center gap-1 py-1 px-1 rounded-md text-xs transition-all cursor-pointer',
               theme === 'light'
-                ? 'bg-white text-zinc-900 font-semibold shadow-xs'
+                ? 'bg-white text-zinc-900 font-semibold shadow-2xs'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >
-            <Sun className="w-3.5 h-3.5" />
+            <Sun className="w-3 h-3 text-amber-600" />
             <span className="text-[10px]">Light</span>
           </button>
 
           <button
             onClick={() => setTheme('dark')}
-            title="Dark Mode (Slate Zinc - Default)"
+            title="Dark Mode (Slate Zinc)"
             className={cn(
-              'flex-1 flex items-center justify-center gap-1 py-1 px-1.5 rounded-md text-xs transition-all',
+              'flex-1 flex items-center justify-center gap-1 py-1 px-1 rounded-md text-xs transition-all cursor-pointer',
               theme === 'dark'
-                ? 'bg-zinc-800 text-zinc-100 font-semibold shadow-xs'
+                ? 'bg-zinc-800 text-zinc-100 font-semibold shadow-2xs'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >
-            <Moon className="w-3.5 h-3.5" />
+            <Moon className="w-3 h-3 text-zinc-300" />
             <span className="text-[10px]">Dark</span>
           </button>
 
           <button
             onClick={() => setTheme('black')}
-            title="Pitch Black OLED Mode (Pure Black)"
+            title="Pitch Black OLED Mode"
             className={cn(
-              'flex-1 flex items-center justify-center gap-1 py-1 px-1.5 rounded-md text-xs transition-all',
+              'flex-1 flex items-center justify-center gap-1 py-1 px-1 rounded-md text-xs transition-all cursor-pointer',
               theme === 'black'
-                ? 'bg-black text-white font-semibold ring-1 ring-zinc-700 shadow-xs'
+                ? 'bg-black text-white font-semibold ring-1 ring-zinc-700 shadow-2xs'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >
-            <Zap className="w-3.5 h-3.5" />
+            <Zap className="w-3 h-3 text-white" />
             <span className="text-[10px]">OLED</span>
           </button>
         </div>
 
-        {/* Documentation link */}
-        <button
-          onClick={() => setActiveView('docs')}
-          className={cn(
-            "w-full flex items-center justify-between py-1.5 px-2.5 rounded-md text-xs font-medium transition-colors mb-1",
-            activeView === 'docs'
-              ? "bg-surface-selected text-foreground font-semibold"
-              : "text-muted-foreground hover:text-foreground hover:bg-surface-hover"
-          )}
-        >
-          <div className="flex items-center gap-2">
-            <BookOpen className="w-3.5 h-3.5" />
-            <span>Documentation</span>
-          </div>
-        </button>
+        {/* Navigation Action Buttons: Documentation & Settings */}
+        <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+          <button
+            onClick={() => setActiveView('docs')}
+            className={cn(
+              'flex items-center justify-between py-1.5 px-2 rounded-lg text-xs font-medium transition-colors cursor-pointer border',
+              activeView === 'docs'
+                ? 'bg-surface-selected text-foreground font-semibold border-border'
+                : 'bg-surface-hover/50 text-muted-foreground hover:text-foreground hover:bg-surface-hover border-border/40'
+            )}
+          >
+            <div className="flex items-center gap-1.5">
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>Docs</span>
+            </div>
+            <kbd className="text-[9px] font-mono opacity-70">⌘⇧D</kbd>
+          </button>
 
-        {/* Settings button */}
-        <button
-          onClick={() => setActiveView('settings')}
-          className={cn(
-            "w-full flex items-center justify-between py-1.5 px-2.5 rounded-md text-xs font-medium transition-colors",
-            activeView === 'settings'
-              ? "bg-surface-selected text-foreground font-semibold"
-              : "text-muted-foreground hover:text-foreground hover:bg-surface-hover"
-          )}
-        >
-          <div className="flex items-center gap-2">
-            <Settings className="w-3.5 h-3.5" />
-            <span>Settings</span>
-          </div>
-          <kbd className="px-1.5 py-0.5 text-[9px] font-mono text-muted-foreground bg-surface-hover border border-border/70 rounded">⌘,</kbd>
-        </button>
+          <button
+            onClick={() => setActiveView('settings')}
+            className={cn(
+              'flex items-center justify-between py-1.5 px-2 rounded-lg text-xs font-medium transition-colors cursor-pointer border',
+              activeView === 'settings'
+                ? 'bg-surface-selected text-foreground font-semibold border-border'
+                : 'bg-surface-hover/50 text-muted-foreground hover:text-foreground hover:bg-surface-hover border-border/40'
+            )}
+          >
+            <div className="flex items-center gap-1.5">
+              <Settings className="w-3.5 h-3.5" />
+              <span>Settings</span>
+            </div>
+            <kbd className="text-[9px] font-mono opacity-70">⌘,</kbd>
+          </button>
+        </div>
       </div>
     </aside>
   );

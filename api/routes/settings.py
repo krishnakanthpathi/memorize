@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from api.schemas import TestLLMRequest
+from config.prompts import list_prompts
 from config.settings import get_all_settings, reset_settings, set_setting
 from utils.llm_client import test_llm_connection
 
@@ -22,6 +23,15 @@ def get_settings_endpoint():
     return {
         "status": "success",
         "settings": get_all_settings(),
+    }
+
+
+@router.get("/prompts")
+def get_prompts_endpoint():
+    """Retrieve all registered AI system prompt templates and metadata."""
+    return {
+        "status": "success",
+        "prompts": list_prompts(),
     }
 
 

@@ -215,3 +215,14 @@ export interface CorrelationItem {
   similarity_percent: number;
   snippet: string;
 }
+
+export interface PromptItem {
+  name: string;
+  description: string;
+  template: string;
+  category?: string;
+  tags?: string[];
+}
+
+export type PromptsMap = Record<string, PromptItem>;
+
