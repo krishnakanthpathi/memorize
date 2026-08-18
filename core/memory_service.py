@@ -105,7 +105,33 @@ def handle_existing_memory(
         )
         content_hash = compute_string_hash(full_content)
         actual_action = "append"
-    else:  # 'update', 'auto', 'smart' -> Smart LLM contextual merge
+    elif action_clean in ("overwrite", "update", "direct", "set", "replace", "save", "manual", "write"):
+        # Direct overwrite without duplicate smart merging (used by frontend editor saves and direct updates)
+        combined_tags = tags if tags else existing.get("tags", [])
+        full_content = content
+        content_hash = compute_string_hash(full_content)
+        
+        old_path = file_path if file_path and file_path.exists() else None
+        
+        updated_path = create_markdown_file(
+            memory_id=target_id,
+            title=norm_title,
+            category=category,
+            tags=combined_tags,
+            content=full_content,
+            content_hash=content_hash,
+            created_at=existing.get("created_at"),
+            file_path=file_path,
+            overwrite=True,
+        )
+        # If the file path changed due to title or category change, clean up old file
+        if old_path and updated_path and old_path.resolve() != updated_path.resolve() and old_path.exists():
+            try:
+                delete_markdown_file(old_path)
+            except Exception:
+                pass
+        actual_action = "update"
+    else:  # 'smart', 'smart_update', 'auto' -> Smart LLM contextual merge
         combined_tags = list(set(existing.get("tags", []) + tags))
         full_content = smart_merge_memory_content(
             existing_content=existing_content,
@@ -224,10 +250,32 @@ def execute_upsert_memory(
             norm_title=norm_title, category=cat_clean, memory_id=memory_id
         )
 
+    # When explicitly inserting/creating a new memory, never hijack an existing note by title!
+    if action_clean in ("insert", "new", "create"):
+        if memory_id:
+            existing_by_id = get_memory_by_id(memory_id)
+            if existing_by_id:
+                return handle_existing_memory(
+                    existing=existing_by_id,
+                    norm_title=norm_title,
+                    content=content,
+                    action_clean="overwrite",
+                    category=cat_clean,
+                    tags=tags,
+                )
+        return handle_new_memory(
+            norm_title=norm_title,
+            content=content,
+            category=cat_clean,
+            tags=tags,
+            memory_id=memory_id,
+        )
+
     existing = None
     if memory_id:
         existing = get_memory_by_id(memory_id)
-    if not existing and norm_title:
+    elif norm_title:
+        # Only fallback to searching by title if NO memory_id was supplied
         existing = find_memory_by_title_or_slug(norm_title, cat_clean)
 
     if existing:

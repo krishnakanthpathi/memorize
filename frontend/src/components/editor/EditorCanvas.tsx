@@ -25,6 +25,7 @@ import {
   Expand,
   Shrink,
   Minimize,
+  Tag,
 } from 'lucide-react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useNotesStore } from '@/store/useNotesStore';
@@ -62,10 +63,13 @@ export const EditorCanvas: React.FC = () => {
     isFocusMode,
     toggleFocusMode,
     setIsFocusMode,
+    isAutoTagging,
+    autoTagActiveNote,
   } = useNotesStore();
 
   const [tagInput, setTagInput] = useState('');
   const [showTagInput, setShowTagInput] = useState(false);
+  const [autoTagMsg, setAutoTagMsg] = useState<string | null>(null);
   const [customAiPrompt, setCustomAiPrompt] = useState('');
   const [showCustomPromptInput, setShowCustomPromptInput] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
@@ -288,6 +292,21 @@ export const EditorCanvas: React.FC = () => {
     if (isTrashed || !activeNote) return;
     updateActiveNote({ category, folderId: category });
   };
+
+  const handleAutoTag = async () => {
+    if (isTrashed || !activeNote || !activeNote.content?.trim()) return;
+    setAutoTagMsg(null);
+    try {
+      const res = await autoTagActiveNote(activeNote.id, activeNote.content, activeNote.title);
+      if (res && res.tags) {
+        setAutoTagMsg(`Auto-tagged ${res.tags.length} item${res.tags.length !== 1 ? 's' : ''}!`);
+        setTimeout(() => setAutoTagMsg(null), 3500);
+      }
+    } catch (e) {
+      console.error('Failed to auto-tag note with AI:', e);
+    }
+  };
+
 
   if (!activeNote) {
     return (
@@ -556,6 +575,18 @@ export const EditorCanvas: React.FC = () => {
                       <div>
                         <span className="font-semibold block">Generate Title Only</span>
                         <span className="text-[10px] text-muted-foreground">Extract concise title from note content</span>
+                      </div>
+                    </DropdownMenu.Item>
+
+                    <DropdownMenu.Item
+                      onClick={handleAutoTag}
+                      disabled={isAutoTagging || !activeNote.content?.trim()}
+                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2"
+                    >
+                      <Tag className="w-3.5 h-3.5 text-pink-500 shrink-0" />
+                      <div>
+                        <span className="font-semibold block">Auto-Tag & Classify with AI</span>
+                        <span className="text-[10px] text-muted-foreground">Extract 3-5 tags and auto-categorize</span>
                       </div>
                     </DropdownMenu.Item>
 
@@ -851,7 +882,7 @@ export const EditorCanvas: React.FC = () => {
               </span>
             ))}
 
-          {/* Add Tag input */}
+          {/* Add Tag input & Auto LLM Tagging */}
           {!isTrashed && (
             showTagInput ? (
               <div className="inline-flex items-center gap-1">
@@ -870,13 +901,46 @@ export const EditorCanvas: React.FC = () => {
                 <span className="text-[10px] text-muted-foreground">↵ to add</span>
               </div>
             ) : (
-              <button
-                onClick={() => setShowTagInput(true)}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-surface-hover border border-dashed border-border transition-colors font-mono"
-              >
-                <Plus className="w-3 h-3" />
-                <span>Add Tag</span>
-              </button>
+              <div className="inline-flex items-center gap-1.5">
+                <button
+                  onClick={() => setShowTagInput(true)}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-surface-hover border border-dashed border-border transition-colors font-mono cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>Add Tag</span>
+                </button>
+
+                {/* Auto LLM Tagging Button */}
+                <button
+                  onClick={handleAutoTag}
+                  disabled={isAutoTagging || !activeNote.content?.trim()}
+                  title="Auto-generate relevant tags and detect category using AI"
+                  className={cn(
+                    "inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-mono border transition-all cursor-pointer shadow-2xs select-none",
+                    isAutoTagging
+                      ? "bg-violet-500/15 text-violet-400 border-violet-500/30 animate-pulse cursor-wait"
+                      : "bg-surface-hover/70 hover:bg-surface-hover text-muted-foreground hover:text-foreground border-border/70 active:scale-95"
+                  )}
+                >
+                  {isAutoTagging ? (
+                    <>
+                      <Loader2 className="w-3 h-3 animate-spin text-violet-400" />
+                      <span>Auto-Tagging...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3 h-3 text-violet-400" />
+                      <span>Auto Tag (AI)</span>
+                    </>
+                  )}
+                </button>
+
+                {autoTagMsg && (
+                  <span className="text-[11px] font-mono text-emerald-500 font-medium animate-in fade-in">
+                    ✓ {autoTagMsg}
+                  </span>
+                )}
+              </div>
             )
           )}
         </div>

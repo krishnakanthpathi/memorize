@@ -42,6 +42,15 @@ class TextTransformRequest(BaseModel):
     full_context: Optional[str] = Field(default=None, description="Optional surrounding document context")
 
 
+class AutoTagRequest(BaseModel):
+    content: str = Field(..., description="Note content to analyze and extract tags from")
+    title: Optional[str] = Field(default="", description="Optional note title")
+    current_tags: Optional[List[str]] = Field(default_factory=list, description="Optional existing tags")
+    memory_id: Optional[str] = Field(default=None, description="Optional existing memory ID to update directly")
+    save_to_memory: bool = Field(default=False, description="Whether to automatically save the new tags/category to the memory")
+
+
+
 class RevertRequest(BaseModel):
     version_number: Optional[int] = Field(default=None, description="Version number to revert to")
 

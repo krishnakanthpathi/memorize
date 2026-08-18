@@ -2,6 +2,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 
 from api.schemas import (
+    AutoTagRequest,
     GenerateTitleRequest,
     MemoryBatchDeleteRequest,
     MemoryCreateRequest,
@@ -10,6 +11,7 @@ from api.schemas import (
     RevertRequest,
     TextTransformRequest,
 )
+from classification.classifier import classify_memory
 from core.memory_merger import (
     find_correlated_memories,
     generate_title_service,
@@ -150,6 +152,66 @@ def generate_title_endpoint(req: GenerateTitleRequest):
         "title": generated_title,
         "memory_id": req.memory_id,
     }
+
+
+@router.post("/auto-tag")
+def auto_tag_endpoint(req: AutoTagRequest):
+    """
+    Analyzes note content and title using LLM classification to auto-generate
+    high-signal tags and detect the single best matching category.
+    """
+    full_text = f"{req.title}\n{req.content}".strip() if req.title else req.content.strip()
+    if not full_text:
+        return {
+            "status": "success",
+            "category": "personal",
+            "tags": [],
+            "confidence": 1.0,
+            "method": "rules",
+            "memory_id": req.memory_id,
+        }
+
+    # Run AI classification (with fallback)
+    result = classify_memory(full_text)
+    category = result.get("category", "personal")
+    raw_tags = result.get("tags", [])
+
+    # Format, clean, and deduplicate tags
+    cleaned_tags = []
+    seen = set()
+    for t in raw_tags:
+        clean = str(t).strip().lower().replace("#", "").replace(" ", "-")
+        if clean and clean not in seen:
+            seen.add(clean)
+            cleaned_tags.append(clean)
+
+    # Optionally persist the tags/category directly to the memory
+    if req.save_to_memory and req.memory_id:
+        target = get_memory_by_id(req.memory_id)
+        if target:
+            existing_tags = target.get("tags", [])
+            merged_tags = list(existing_tags)
+            for ct in cleaned_tags:
+                if ct not in merged_tags:
+                    merged_tags.append(ct)
+            execute_upsert_memory(
+                title=target.get("title", req.title or "Untitled Note"),
+                content=req.content or target.get("content", ""),
+                category=category or target.get("category", "personal"),
+                tags=merged_tags,
+                action="update",
+                memory_id=req.memory_id,
+            )
+
+    return {
+        "status": "success",
+        "category": category,
+        "tags": cleaned_tags,
+        "confidence": result.get("confidence", 0.9),
+        "method": result.get("method", "llm"),
+        "memory_id": req.memory_id,
+    }
+
 
 
 @router.post("/transform-selection")

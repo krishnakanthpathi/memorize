@@ -19,7 +19,7 @@ def smart_merge_memory_content(
     if not existing_content.strip():
         return new_input.strip()
 
-    if not new_input.strip():
+    if not new_input.strip() or existing_content.strip() == new_input.strip():
         return existing_content.strip()
 
     # If LLM is disabled via settings or mcp/config.py, perform fast deterministic merge

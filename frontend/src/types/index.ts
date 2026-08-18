@@ -226,3 +226,21 @@ export interface PromptItem {
 
 export type PromptsMap = Record<string, PromptItem>;
 
+export interface AutoTagRequest {
+  content: string;
+  title?: string;
+  current_tags?: string[];
+  memory_id?: string;
+  save_to_memory?: boolean;
+}
+
+export interface AutoTagResponse {
+  status: string;
+  category: string;
+  tags: string[];
+  confidence?: number;
+  method?: string;
+  memory_id?: string;
+}
+
+

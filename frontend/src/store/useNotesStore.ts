@@ -27,6 +27,7 @@ interface NotesState {
   isOrganizingNote: boolean;
   isGeneratingTitle: boolean;
   isTransformingSelection: boolean;
+  isAutoTagging: boolean;
   isOnline: boolean;
   lastSavedAt: string | null;
   sidebarCollapsed: boolean;
@@ -76,6 +77,7 @@ interface NotesState {
   organizeNote: (memoryId: string, instruction?: string, useAi?: boolean, generateTitle?: boolean) => Promise<any>;
   generateNoteTitle: (memoryId: string, customContent?: string, instruction?: string) => Promise<string | undefined>;
   transformSelectedText: (selectedText: string, instruction?: string, mode?: string, fullContext?: string) => Promise<string | undefined>;
+  autoTagActiveNote: (memoryId: string, customContent?: string, title?: string) => Promise<{ tags: string[]; category?: string } | undefined>;
   deleteNote: (id: string, permanent?: boolean) => Promise<void>;
   deleteBatchNotes: (ids: string[], permanent?: boolean) => Promise<void>;
   emptyTrash: () => void;
@@ -181,6 +183,7 @@ export const useNotesStore = create<NotesState>((set, get) => {
     isOrganizingNote: false,
     isGeneratingTitle: false,
     isTransformingSelection: false,
+    isAutoTagging: false,
     isOnline: true,
     lastSavedAt: null,
     sidebarCollapsed: false,
@@ -269,8 +272,8 @@ export const useNotesStore = create<NotesState>((set, get) => {
     },
 
     createNewNote: (categoryParam) => {
-      const { selectedCategory, notes, pinnedIds, favoriteIds } = get();
-      const cat = categoryParam || selectedCategory || 'personal';
+      const { selectedCategory, notes, activeView } = get();
+      const cat = categoryParam || (selectedCategory && selectedCategory !== 'all' ? selectedCategory : 'personal');
       const newId = `memo_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       const now = new Date().toISOString();
 
@@ -289,12 +292,13 @@ export const useNotesStore = create<NotesState>((set, get) => {
       };
 
       set({
-        notes: [newNote, ...notes],
+        notes: [newNote, ...notes.filter((n) => n.id !== newId)],
         activeNoteId: newId,
+        activeView: (activeView === 'trash' || activeView === 'settings' || activeView === 'docs') ? 'all' : activeView,
         searchQuery: '',
       });
 
-      // Save asynchronously to backend
+      // Save asynchronously to backend with action: 'insert'
       api.saveMemory({
         title: newNote.title,
         content: newNote.content,
@@ -449,6 +453,59 @@ export const useNotesStore = create<NotesState>((set, get) => {
         console.error('Failed to transform selected text:', err);
       } finally {
         set({ isTransformingSelection: false });
+      }
+    },
+
+    autoTagActiveNote: async (memoryId: string, customContent?: string, title?: string) => {
+      const { notes } = get();
+      const target = notes.find((n) => n.id === memoryId);
+      const contentToUse = customContent !== undefined ? customContent : target?.content || '';
+      if (!contentToUse.trim()) return;
+
+      set({ isAutoTagging: true });
+      try {
+        const res = await api.autoTagNote({
+          content: contentToUse,
+          title: title || target?.title,
+          memory_id: memoryId,
+          save_to_memory: true,
+        });
+
+        if (res.status === 'success') {
+          const generatedTags = res.tags || [];
+          const detectedCat = res.category;
+
+          if (target) {
+            // Merge existing tags and new tags without duplicates
+            const currentTags = Array.isArray(target.tags) ? target.tags : [];
+            const mergedTags = [...currentTags];
+            for (const gt of generatedTags) {
+              if (!mergedTags.includes(gt)) {
+                mergedTags.push(gt);
+              }
+            }
+
+            const updatedNote: Note = {
+              ...target,
+              tags: mergedTags,
+              category: detectedCat || target.category,
+              folderId: detectedCat || target.category,
+              updatedAt: new Date().toISOString(),
+            };
+
+            set((state) => ({
+              notes: state.notes.map((n) => (n.id === memoryId ? updatedNote : n)),
+              isAutoTagging: false,
+            }));
+            await get().fetchCategories();
+          }
+
+          return { tags: generatedTags, category: detectedCat };
+        }
+      } catch (err) {
+        console.error('Failed to auto-tag note with AI:', err);
+      } finally {
+        set({ isAutoTagging: false });
       }
     },
 

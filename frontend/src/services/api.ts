@@ -1,5 +1,7 @@
 import {
   AuditSummary,
+  AutoTagRequest,
+  AutoTagResponse,
   CategoryStat,
   CorrelationItem,
   GenerateTitleResponse,
@@ -202,6 +204,20 @@ export const api = {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || `Selection transform failed (${res.status})`);
+    }
+    return res.json();
+  },
+
+  // Auto LLM Tagging & Classification
+  async autoTagNote(data: AutoTagRequest): Promise<AutoTagResponse> {
+    const res = await fetch(`${API_BASE}/memories/auto-tag`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Auto-tagging failed (${res.status})`);
     }
     return res.json();
   },

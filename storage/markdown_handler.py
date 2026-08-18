@@ -132,8 +132,15 @@ def create_markdown_file(
     else:
         filename = title_to_filename(title)
         target_path = category_dir / filename
-        if target_path.exists() and not overwrite:
-            target_path = category_dir / f"{memory_id}_{filename}"
+        if target_path.exists():
+            try:
+                fm, _ = read_markdown_file(target_path)
+                existing_fm_id = fm.get("id")
+                if existing_fm_id and existing_fm_id != memory_id:
+                    target_path = category_dir / f"{memory_id}_{filename}"
+            except Exception:
+                if not overwrite:
+                    target_path = category_dir / f"{memory_id}_{filename}"
 
     frontmatter = {
         "id": memory_id,
