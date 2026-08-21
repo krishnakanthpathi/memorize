@@ -121,10 +121,11 @@ class TestMediaStoreAndOCR(unittest.TestCase):
         self.assertEqual(kwargs["json"]["model"], "glm-ocr")
         self.assertEqual(len(kwargs["json"]["images"]), 1)
 
-    @patch("api.routes.media.extract_text_with_ollama_ocr")
+    @patch("media.image_processor.extract_text_with_ollama_ocr")
     def test_api_upload_and_serve(self, mock_ocr):
         """Verify /api/media/upload and /api/media/{filename} endpoints."""
         mock_ocr.return_value = "Extracted OCR text from sample"
+
 
         # Upload multipart file
         response = self.client.post(

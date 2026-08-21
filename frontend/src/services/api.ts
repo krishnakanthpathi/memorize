@@ -478,7 +478,8 @@ export const api = {
     filename?: string,
     memoryId?: string,
     runOcr: boolean = true,
-    customPrompt?: string
+    customPrompt?: string,
+    signal?: AbortSignal
   ): Promise<MediaUploadResponse> {
     const formData = new FormData();
     formData.append("file", file, filename || (file instanceof File ? file.name : "image.png"));
@@ -490,7 +491,9 @@ export const api = {
     const res = await fetch(`${API_BASE}/media/upload`, {
       method: "POST",
       body: formData,
+      signal,
     });
+
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || `Media upload failed: ${res.statusText}`);

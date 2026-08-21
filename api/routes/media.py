@@ -8,6 +8,7 @@ import requests
 
 import config.constants as constants
 from core.logger import logger
+from media.image_processor import process_image
 from storage.db_manager import (
     get_media_record,
     get_media_record_by_filename,
@@ -15,7 +16,9 @@ from storage.db_manager import (
     update_media_ocr_result,
 )
 from storage.media_store_manager import (
+    delete_all_orphan_media,
     delete_media_item,
+    get_media_download_info,
     get_media_file_path,
     list_orphan_media_files,
     save_raw_image,
@@ -88,57 +91,18 @@ async def upload_media(
             detail=f"Image size exceeds maximum allowed limit of {constants.MAX_MEDIA_UPLOAD_SIZE // (1024 * 1024)}MB.",
         )
 
-    # Save original uncompressed image to disk and index in SQLite
     try:
-        media_record = save_raw_image(
+        return process_image(
             file_bytes=image_bytes,
             filename=original_filename,
             mime_type=mime_type,
             memory_id=memory_id,
+            run_ocr=run_ocr,
+            custom_prompt=custom_prompt,
         )
     except Exception as e:
-        logger.error(f"Failed to save image to media store: {e}")
+        logger.error(f"Failed to process and store image: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to store media: {e}")
-
-    # Run local Ollama GLM-OCR extraction if requested
-    ocr_text = ""
-    ocr_status = "skipped"
-    if run_ocr:
-        try:
-            logger.info(f"Triggering local Ollama GLM-OCR extraction for media {media_record['id']}...")
-            ocr_text = extract_text_with_ollama_ocr(
-                image_bytes=image_bytes,
-                prompt=custom_prompt,
-            )
-            ocr_status = "completed"
-            update_media_ocr_result(
-                media_id=media_record["id"],
-                ocr_text=ocr_text,
-                ocr_status="completed",
-                ocr_model=constants.OLLAMA_OCR_MODEL,
-            )
-            media_record["ocr_text"] = ocr_text
-            media_record["ocr_status"] = "completed"
-        except Exception as e:
-            logger.warning(f"Ollama OCR processing failed for {media_record['id']}: {e}")
-            ocr_status = "failed"
-            update_media_ocr_result(
-                media_id=media_record["id"],
-                ocr_text="",
-                ocr_status="failed",
-                ocr_model=constants.OLLAMA_OCR_MODEL,
-            )
-            media_record["ocr_status"] = "failed"
-
-    return {
-        "status": "success",
-        "media": media_record,
-        "ocr": {
-            "status": ocr_status,
-            "text": ocr_text,
-            "model": constants.OLLAMA_OCR_MODEL,
-        },
-    }
 
 
 def resolve_media_record(identifier: str) -> Optional[Dict[str, Any]]:
@@ -169,6 +133,7 @@ async def get_media_item_details(media_id: str):
     if not record:
         raise HTTPException(status_code=404, detail="Media item not found.")
     record["url"] = f"/api/media/{record['filename']}"
+    record["download_url"] = f"/api/media/download/{record['filename']}"
     return {"status": "success", "media": record}
 
 
@@ -223,6 +188,7 @@ async def list_media():
     records = list_all_media_records()
     for r in records:
         r["url"] = f"/api/media/{r['filename']}"
+        r["download_url"] = f"/api/media/download/{r['filename']}"
     return {"status": "success", "total": len(records), "media": records}
 
 
@@ -235,17 +201,64 @@ async def delete_media(media_id: str):
     return {"status": "success", "media_id": media_id, "deleted": success}
 
 
+@router.get("/orphans")
+async def get_orphan_media():
+    """Returns list and disk space of all unreferenced media and document files."""
+    orphans = list_orphan_media_files()
+    total_bytes = sum(o.get("file_size", 0) for o in orphans)
+    return {
+        "status": "success",
+        "total_orphans": len(orphans),
+        "total_bytes": total_bytes,
+        "orphans": orphans,
+    }
+
+
+@router.post("/cleanup-orphans")
+async def cleanup_orphan_media_endpoint():
+    """Safely removes all unreferenced media files from disk and SQLite index."""
+    result = delete_all_orphan_media()
+    return {
+        "status": "success",
+        **result,
+    }
+
+
+@router.get("/download/{filename_or_id}")
+async def download_media_file(filename_or_id: str):
+    """
+    Direct download endpoint with Content-Disposition attachment header for file sharing.
+    """
+    info = get_media_download_info(filename_or_id)
+    if not info:
+        raise HTTPException(status_code=404, detail="Media file not found.")
+
+    file_path = Path(info["file_path"])
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Physical file missing from disk.")
+
+    orig_name = info.get("original_filename") or file_path.name
+    return FileResponse(
+        path=str(file_path),
+        media_type=info.get("mime_type", "application/octet-stream"),
+        filename=orig_name,
+        headers={
+            "Content-Disposition": f'attachment; filename="{orig_name}"',
+            "Cache-Control": "private, no-cache",
+        },
+    )
+
 
 @router.get("/{filename}")
 async def serve_media_file(filename: str):
     """
-    Streams original uncompressed image file directly from data/media/ with aggressive caching headers.
+    Streams original uncompressed file directly from data/media/ with caching headers.
     """
     path = get_media_file_path(filename)
     if not path or not path.exists() or not path.is_file():
         raise HTTPException(status_code=404, detail="Media file not found.")
 
-    # Determine MIME type
+    # Extended MIME type map
     ext = path.suffix.lower()
     mime_map = {
         ".png": "image/png",
@@ -255,6 +268,16 @@ async def serve_media_file(filename: str):
         ".gif": "image/gif",
         ".svg": "image/svg+xml",
         ".bmp": "image/bmp",
+        ".pdf": "application/pdf",
+        ".mp3": "audio/mpeg",
+        ".wav": "audio/wav",
+        ".m4a": "audio/mp4",
+        ".mp4": "video/mp4",
+        ".mov": "video/quicktime",
+        ".webm": "video/webm",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".txt": "text/plain",
+        ".md": "text/markdown",
     }
     media_type = mime_map.get(ext, "application/octet-stream")
 

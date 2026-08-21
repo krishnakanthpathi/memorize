@@ -32,13 +32,26 @@ const getMediaIdentifier = (img?: { url?: string; filename?: string; mediaId?: s
 };
 
 export const ImageLightboxModal: React.FC = () => {
-  const { activeLightboxImage, setActiveLightboxImage, startTask, completeTask, failTask } = useNotesStore();
+  const {
+    activeLightboxImage,
+    setActiveLightboxImage,
+    notes,
+    activeNoteId,
+    updateActiveNote,
+    startTask,
+    completeTask,
+    failTask,
+  } = useNotesStore();
+  const activeNote = notes.find((n) => n.id === activeNoteId);
+
   const [ocrText, setOcrText] = useState<string>('');
   const [isOcrRunning, setIsOcrRunning] = useState<boolean>(false);
   const [isCopied, setIsCopied] = useState<boolean>(false);
+  const [insertedToNote, setInsertedToNote] = useState<boolean>(false);
   const [zoom, setZoom] = useState<number>(1);
   const [activeTab, setActiveTab] = useState<'preview' | 'ocr'>('preview');
   const [mediaDetails, setMediaDetails] = useState<any>(null);
+
 
   useEffect(() => {
     if (!activeLightboxImage) return;
@@ -249,23 +262,30 @@ export const ImageLightboxModal: React.FC = () => {
                   <p className="text-xs">Processing visual tokens with local Ollama GLM-OCR...</p>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center h-full text-center space-y-2 text-zinc-500">
-                  <Info className="w-6 h-6 text-zinc-600" />
-                  <p className="text-xs font-medium">No OCR text extracted yet.</p>
-                  <p className="text-[11px] text-zinc-600">Click "Re-run OCR" to scan this image.</p>
+                <div className="flex flex-col items-center justify-center h-full text-center p-4 space-y-3 text-zinc-400">
+                  <Sparkles className="w-8 h-8 text-zinc-300 opacity-80" />
+                  <div>
+                    <p className="text-xs font-semibold text-zinc-200">No OCR text extracted yet</p>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">Extract text with local Ollama GLM-OCR model</p>
+                  </div>
+                  <button
+                    onClick={handleRerunOcr}
+                    disabled={isOcrRunning}
+                    className="flex items-center space-x-1.5 px-3 py-2 text-xs font-semibold bg-zinc-100 text-zinc-900 hover:bg-white rounded-lg transition disabled:opacity-50 cursor-pointer shadow-sm"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Extract Text (GLM-OCR)</span>
+                  </button>
                 </div>
               )}
             </div>
 
             {/* Bottom Actions */}
             {ocrText && (
-              <div className="p-3 border-t border-zinc-800 bg-zinc-900/90 flex items-center justify-between">
-                <span className="text-[11px] text-zinc-500 font-mono">
-                  {ocrText.length} characters
-                </span>
+              <div className="p-3 border-t border-zinc-800 bg-zinc-900/90 flex items-center justify-between gap-2">
                 <button
                   onClick={handleCopyOcr}
-                  className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg border border-zinc-700 transition cursor-pointer"
+                  className="flex-1 flex items-center justify-center space-x-1.5 px-3 py-1.5 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg border border-zinc-700 transition cursor-pointer"
                 >
                   {isCopied ? (
                     <>
@@ -275,12 +295,37 @@ export const ImageLightboxModal: React.FC = () => {
                   ) : (
                     <>
                       <Copy className="w-3.5 h-3.5" />
-                      <span>Copy OCR Text</span>
+                      <span>Copy Text</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (!activeNote || !ocrText) return;
+                    const block = `\n\n## Extracted Image Content (${activeLightboxImage.filename || 'Image'})\n${ocrText.trim()}\n`;
+                    updateActiveNote({ content: (activeNote.content || '') + block });
+                    setInsertedToNote(true);
+                    setTimeout(() => setInsertedToNote(false), 2000);
+                  }}
+                  disabled={!activeNote}
+                  className="flex-1 flex items-center justify-center space-x-1.5 px-3 py-1.5 text-xs font-medium bg-zinc-100 hover:bg-white text-zinc-900 rounded-lg transition cursor-pointer font-semibold"
+                >
+                  {insertedToNote ? (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Appended!</span>
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>Append to Note</span>
                     </>
                   )}
                 </button>
               </div>
             )}
+
           </div>
         </div>
       </div>

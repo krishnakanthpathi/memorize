@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { Loader2, CheckCircle2, AlertTriangle, Activity, Trash2, ChevronUp } from 'lucide-react';
+import { Loader2, CheckCircle2, AlertTriangle, Activity, Trash2, ChevronUp, X } from 'lucide-react';
 import { useNotesStore } from '@/store/useNotesStore';
 import { cn } from '@/lib/utils';
 
 export const TaskProgressWidget: React.FC = () => {
-  const { tasks, clearFinishedTasks } = useNotesStore();
+  const { tasks, clearFinishedTasks, cancelActiveMediaUpload } = useNotesStore();
+
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   const runningTasks = tasks.filter((t) => t.status === 'running');
@@ -107,9 +108,22 @@ export const TaskProgressWidget: React.FC = () => {
                           <Loader2 className="w-3.5 h-3.5 animate-spin text-foreground shrink-0" />
                           <span className="font-bold text-foreground truncate">{t.title}</span>
                         </div>
-                        <span className="text-[10px] font-mono text-muted-foreground shrink-0">
-                          {runningTimeSec}s
-                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[10px] font-mono text-muted-foreground">
+                            {runningTimeSec}s
+                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              cancelActiveMediaUpload();
+                            }}
+                            className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                            title="Cancel task"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+
                       </div>
                       {t.description && (
                         <p className="text-[11px] text-muted-foreground leading-relaxed">

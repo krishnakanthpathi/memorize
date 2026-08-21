@@ -150,29 +150,47 @@ def delete_media_item(media_id_or_filename: str) -> bool:
 @handle_errors
 def list_orphan_media_files() -> List[Dict[str, Any]]:
     """
-    Finds unreferenced media files in data/media/ that are not linked to any active
-    Markdown memory notes or DB records.
+    Finds unreferenced media and document files in data/media/ that are not linked
+    to any active Markdown memory notes or valid DB records.
     """
     constants.MEDIA_DIR.mkdir(parents=True, exist_ok=True)
-    on_disk_files = {f.name: f for f in constants.MEDIA_DIR.iterdir() if f.is_file() and not f.name.startswith(".")}
+    on_disk_files = {
+        f.name: f
+        for f in constants.MEDIA_DIR.iterdir()
+        if f.is_file() and not f.name.startswith(".")
+    }
     all_memories = get_all_memories()
 
-    # Collect all image references from memory contents
+    # Collect all file references from memory contents
     referenced_filenames = set()
     for mem in all_memories:
         content = mem.get("content", "")
-        # Match standard markdown ![...](/api/media/filename.ext)
-        matches = re.findall(r"/api/media/([a-zA-Z0-9_\-\.]+)", content)
+        # Match /api/media/..., /api/media/download/..., /api/documents/...
+        matches = re.findall(
+            r"/api/(?:media|documents)(?:/download)?/([a-zA-Z0-9_\-\.]+)", content
+        )
         for m in matches:
-            referenced_filenames.add(m)
+            referenced_filenames.add(m.strip())
 
     # Collect all media recorded in DB
     db_records = list_all_media_records()
-    db_filenames = {r["filename"] for r in db_records}
+    active_memory_ids = {m["id"] for m in all_memories}
+
+    # DB records whose memory_id is alive or whose file is directly referenced
+    db_valid_filenames = set()
+    orphan_db_record_ids = []
+
+    for r in db_records:
+        fname = r["filename"]
+        mem_id = r.get("memory_id")
+        if (mem_id and mem_id in active_memory_ids) or (fname in referenced_filenames):
+            db_valid_filenames.add(fname)
+        else:
+            orphan_db_record_ids.append(r["id"])
 
     orphans = []
     for fname, path in on_disk_files.items():
-        if fname not in referenced_filenames and fname not in db_filenames:
+        if fname not in referenced_filenames and fname not in db_valid_filenames:
             orphans.append({
                 "filename": fname,
                 "file_path": str(path),
@@ -183,14 +201,68 @@ def list_orphan_media_files() -> List[Dict[str, Any]]:
 
 
 @handle_errors
-def delete_all_orphan_media() -> int:
-    """Deletes all detected orphan media files from data/media/."""
+def delete_all_orphan_media() -> Dict[str, Any]:
+    """
+    Deletes all detected orphan media/document files from data/media/
+    and purges dangling records from SQLite.
+    """
     orphans = list_orphan_media_files()
     deleted_count = 0
+    freed_bytes = 0
+
     for orphan in orphans:
         p = Path(orphan["file_path"])
         if p.exists():
+            freed_bytes += p.stat().st_size
             p.unlink()
             deleted_count += 1
-    logger.info(f"Cleaned up {deleted_count} orphan media files.")
-    return deleted_count
+
+        # Also purge from DB if present
+        rec = get_media_record_by_filename(orphan["filename"])
+        if rec:
+            delete_media_record(rec["id"])
+
+    logger.info(f"Cleaned up {deleted_count} orphan media files ({freed_bytes} bytes freed).")
+    return {
+        "deleted_count": deleted_count,
+        "freed_bytes": freed_bytes,
+        "orphans_removed": [o["filename"] for o in orphans],
+    }
+
+
+@handle_errors
+def get_media_download_info(identifier: str) -> Optional[Dict[str, Any]]:
+    """
+    Retrieves download metadata for a media or document item.
+    """
+    record = get_media_record(identifier)
+    if not record:
+        record = get_media_record_by_filename(identifier)
+
+    if not record:
+        # Check direct file existence
+        direct_path = constants.MEDIA_DIR / identifier
+        if direct_path.exists() and direct_path.is_file():
+            return {
+                "id": identifier,
+                "filename": direct_path.name,
+                "original_filename": direct_path.name,
+                "file_path": str(direct_path),
+                "file_size": direct_path.stat().st_size,
+                "mime_type": "application/octet-stream",
+                "download_url": f"/api/media/download/{direct_path.name}",
+                "view_url": f"/api/media/{direct_path.name}",
+            }
+        return None
+
+    return {
+        "id": record["id"],
+        "filename": record["filename"],
+        "original_filename": record.get("original_filename") or record["filename"],
+        "file_path": record["file_path"],
+        "file_size": record.get("file_size", 0),
+        "mime_type": record.get("mime_type", "application/octet-stream"),
+        "download_url": f"/api/media/download/{record['filename']}",
+        "view_url": f"/api/media/{record['filename']}",
+    }
+

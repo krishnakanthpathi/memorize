@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { api } from '@/services/api';
+import { documentApi, DocumentUploadResponse } from '@/services/documentApi';
 import { AppIconType, AsyncTask, CategoryStat, CodeTheme, Note, SystemView, ThemeMode, ToastNotification } from '@/types';
+
 
 interface NotesState {
   // Theme & Appearance
@@ -37,7 +39,16 @@ interface NotesState {
   activeModal: 'search' | 'versions' | 'audit' | 'backup' | 'models' | 'settings' | 'new-category' | 'shortcuts' | 'merge' | 'tags' | 'rename-note' | 'new-note' | null;
   activeLightboxImage: { url: string; filename: string; mediaId?: string; ocrText?: string } | null;
   setActiveLightboxImage: (img: { url: string; filename: string; mediaId?: string; ocrText?: string } | null) => void;
-  uploadAndInsertMedia: (file: File | Blob, filename?: string, memoryId?: string) => Promise<{ url: string; filename: string; ocrText?: string; mediaId?: string }>;
+  activeDocumentViewer: { docId?: string; filename?: string; url?: string; initialPage?: number } | null;
+  setActiveDocumentViewer: (doc: { docId?: string; filename?: string; url?: string; initialPage?: number } | null) => void;
+  uploadAndInsertMedia: (file: File | Blob, filename?: string, memoryId?: string, runOcr?: boolean) => Promise<{ url: string; filename: string; ocrText?: string; mediaId?: string }>;
+  uploadAndProcessPdf: (file: File | Blob, filename?: string, memoryId?: string, runOcr?: boolean) => Promise<DocumentUploadResponse>;
+  triggerMediaOcr: (mediaId: string, customPrompt?: string) => Promise<string>;
+  triggerDocumentOcr: (docIdentifier: string, customPrompt?: string) => Promise<string>;
+  cancelActiveMediaUpload: () => void;
+
+
+
 
   // Background Task & Toast Notification Center
   tasks: AsyncTask[];
@@ -169,8 +180,10 @@ function stripRedundantH1(content: string, title?: string): string {
 
 // Debounce helper for auto-saving
 let saveTimer: any = null;
+let activeUploadController: AbortController | null = null;
 
 export const useNotesStore = create<NotesState>((set, get) => {
+
   const initialTheme = getStoredTheme();
   applyThemeClass(initialTheme);
 
@@ -236,6 +249,8 @@ export const useNotesStore = create<NotesState>((set, get) => {
     isFocusMode: false,
     activeModal: null,
     activeLightboxImage: null,
+    activeDocumentViewer: null,
+
 
     pinnedIds: initialPinned,
     favoriteIds: initialFavorites,
@@ -666,24 +681,35 @@ export const useNotesStore = create<NotesState>((set, get) => {
       }
     },
 
-    setActiveLightboxImage: (img) => set({ activeLightboxImage: img }),
+    setActiveLightboxImage: (img) =>
+      set({ activeLightboxImage: img, activeDocumentViewer: img ? null : get().activeDocumentViewer }),
+    setActiveDocumentViewer: (doc) =>
+      set({ activeDocumentViewer: doc, activeLightboxImage: doc ? null : get().activeLightboxImage }),
 
-    uploadAndInsertMedia: async (file: File | Blob, filename?: string, memoryId?: string) => {
+
+    uploadAndInsertMedia: async (file: File | Blob, filename?: string, memoryId?: string, runOcr: boolean = false) => {
       const fileNameStr = (file as File).name || filename || 'image';
-      const taskId = get().startTask('GLM-OCR Vision Extraction', `Uploading "${fileNameStr}" & processing with local Ollama GLM-OCR model...`);
+      const taskId = get().startTask(
+        runOcr ? 'GLM-OCR Vision Extraction' : 'Image Attachment',
+        `Uploading "${fileNameStr}"...`
+      );
       set({ isUploadingMedia: true });
+
+      const controller = new AbortController();
+      activeUploadController = controller;
+
       try {
-        const res = await api.uploadMedia(file, filename, memoryId, true);
+        const res = await api.uploadMedia(file, filename, memoryId, runOcr, undefined, controller.signal);
         const media = res.media;
         const ocrText = res.ocr?.text || media.ocr_text || '';
         const charCount = ocrText.length;
         get().completeTask(
           taskId,
           charCount > 0
-            ? `Extracted ${charCount.toLocaleString()} characters from "${media.original_filename || media.filename}"`
+            ? `Attached "${media.original_filename || media.filename}" (${charCount.toLocaleString()} chars extracted)`
             : `Attached image "${media.original_filename || media.filename}"`,
           true,
-          'GLM-OCR Complete'
+          'Image Ready'
         );
         return {
           url: media.url,
@@ -692,13 +718,116 @@ export const useNotesStore = create<NotesState>((set, get) => {
           mediaId: media.id,
         };
       } catch (err: any) {
-        console.error('GLM-OCR upload failed:', err);
-        get().failTask(taskId, err?.message || 'Failed to upload or OCR image');
+        if (err.name === 'AbortError' || controller.signal.aborted) {
+          get().completeTask(taskId, 'Media upload cancelled by user', false);
+          throw new Error('Upload cancelled');
+        }
+        console.error('Image upload failed:', err);
+        get().failTask(taskId, err?.message || 'Failed to upload image');
         throw err;
       } finally {
+        if (activeUploadController === controller) {
+          activeUploadController = null;
+        }
         set({ isUploadingMedia: false });
       }
     },
+
+    uploadAndProcessPdf: async (file: File | Blob, filename?: string, memoryId?: string, runOcr: boolean = false) => {
+      const fileNameStr = (file as File).name || filename || 'document.pdf';
+      const taskId = get().startTask(
+        'PDF Ingestion',
+        `Uploading "${fileNameStr}" & generating page thumbnails...`
+      );
+      set({ isUploadingMedia: true });
+
+      const controller = new AbortController();
+      activeUploadController = controller;
+
+      try {
+        const res = await documentApi.uploadPdf(file, filename, memoryId, runOcr, undefined, 50, controller.signal);
+        const pageCount = res.document.page_count;
+        get().completeTask(
+          taskId,
+          `Ready: ${pageCount} page${pageCount > 1 ? 's' : ''} loaded`,
+          true,
+          'PDF Attached'
+        );
+        return res;
+      } catch (err: any) {
+        if (err.name === 'AbortError' || controller.signal.aborted) {
+          get().completeTask(taskId, 'PDF processing cancelled by user', false);
+          throw new Error('Processing cancelled');
+        }
+        console.error('PDF document processing failed:', err);
+        get().failTask(taskId, err?.message || 'Failed to process PDF document');
+        throw err;
+      } finally {
+        if (activeUploadController === controller) {
+          activeUploadController = null;
+        }
+        set({ isUploadingMedia: false });
+      }
+    },
+
+    triggerMediaOcr: async (mediaId: string, customPrompt?: string): Promise<string> => {
+      const taskId = get().startTask('GLM-OCR Vision Extraction', `Extracting text with local Ollama GLM-OCR model...`);
+      try {
+        const res = await api.triggerMediaOcr(mediaId, customPrompt);
+        const text = res?.ocr_text || '';
+        get().completeTask(
+          taskId,
+          text.length > 0
+            ? `Extracted ${text.length.toLocaleString()} characters`
+            : `Completed GLM-OCR scan`,
+          true,
+          'GLM-OCR Complete'
+        );
+        return text;
+      } catch (err: any) {
+        console.error('Trigger media OCR failed:', err);
+        get().failTask(taskId, err?.message || 'GLM-OCR extraction failed');
+        throw err;
+      }
+    },
+
+    triggerDocumentOcr: async (docIdentifier: string, customPrompt?: string): Promise<string> => {
+      const taskId = get().startTask('Document GLM-OCR', `Extracting text across PDF pages with local Ollama GLM-OCR...`);
+      try {
+        const res = await documentApi.triggerDocumentOcr(docIdentifier, customPrompt);
+        const text = res?.ocr_text || '';
+        get().completeTask(
+          taskId,
+          `Processed ${res.total_pages || 1} page${(res.total_pages || 1) > 1 ? 's' : ''} (${text.length.toLocaleString()} characters)`,
+          true,
+          'Document OCR Complete'
+        );
+        return text;
+      } catch (err: any) {
+        console.error('Trigger document OCR failed:', err);
+        get().failTask(taskId, err?.message || 'Document OCR extraction failed');
+        throw err;
+      }
+    },
+
+
+    cancelActiveMediaUpload: () => {
+      if (activeUploadController) {
+        activeUploadController.abort();
+        activeUploadController = null;
+      }
+      set({ isUploadingMedia: false });
+      set((state) => ({
+        tasks: state.tasks.map((t) =>
+          t.status === 'running' &&
+          (t.title.includes('GLM-OCR') || t.title.includes('PDF') || t.title.includes('Vision'))
+            ? { ...t, status: 'error', error: 'Cancelled by user', completedAt: Date.now() }
+            : t
+        ),
+      }));
+    },
+
+
 
 
 

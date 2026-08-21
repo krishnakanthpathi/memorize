@@ -37,8 +37,10 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useNotesStore } from '@/store/useNotesStore';
 import { MilkdownEditor } from './MilkdownEditor';
 import { ImageLightboxModal } from './ImageLightboxModal';
+import { DocumentViewerModal } from './DocumentViewerModal';
 import { TaskProgressWidget } from '@/components/common/TaskProgressWidget';
 import { cn } from '@/lib/utils';
+
 
 
 type EditorViewMode = 'markdown' | 'rich' | 'split';
@@ -76,10 +78,18 @@ export const EditorCanvas: React.FC = () => {
     setIsFocusMode,
     autoTagActiveNote,
     setActiveLightboxImage,
+    activeDocumentViewer,
+    setActiveDocumentViewer,
     uploadAndInsertMedia,
+    uploadAndProcessPdf,
+    triggerMediaOcr,
+    triggerDocumentOcr,
+    cancelActiveMediaUpload,
     togglePin,
     toggleFavorite,
   } = useNotesStore();
+
+
 
 
   const [tagInput, setTagInput] = useState('');
@@ -92,80 +102,186 @@ export const EditorCanvas: React.FC = () => {
   const [externalEditCounter, setExternalEditCounter] = useState<number>(0);
   const [uploadStatusMsg, setUploadStatusMsg] = useState<string | null>(null);
 
+  interface AttachedMediaPrompt {
+    type: 'image' | 'pdf';
+    filename: string;
+    mediaId?: string;
+    docIdentifier?: string;
+    url?: string;
+    pageCount?: number;
+  }
+  const [pendingOcrMedia, setPendingOcrMedia] = useState<AttachedMediaPrompt | null>(null);
+  const [isExtractingText, setIsExtractingText] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const splitTextareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-
-  const handleProcessAndInsertImage = async (file: File | Blob) => {
+  const handleProcessAndInsertFile = async (file: File | Blob) => {
     try {
-      setUploadStatusMsg('Uploading image & extracting text with GLM-OCR...');
+      const fileNameStr = (file as File).name || 'file';
+      const isPdf =
+        file.type === 'application/pdf' ||
+        fileNameStr.toLowerCase().endsWith('.pdf');
+
       let targetNote = activeNote;
       if (!targetNote) {
-        targetNote = await createNewNote(undefined, (file as File).name?.replace(/\.[^/.]+$/, '') || 'Image Note');
+        targetNote = await createNewNote(
+          undefined,
+          fileNameStr.replace(/\.[^/.]+$/, '') || (isPdf ? 'Document Note' : 'Image Note')
+        );
       }
-      const res = await uploadAndInsertMedia(file, (file as File).name || 'image.png', targetNote?.id);
-      let insertion = `\n\n![${res.filename}](${res.url})\n`;
-      if (res.ocrText && res.ocrText.trim()) {
-        insertion += `\n## Extracted Content (GLM-OCR)\n${res.ocrText}\n\n`;
+
+      let insertion = '';
+      if (isPdf) {
+        setUploadStatusMsg('Attaching PDF & generating preview...');
+        const res = await uploadAndProcessPdf(file, fileNameStr, targetNote?.id, false);
+        insertion = `\n\n${res.markdown_insertion}\n`;
+        setPendingOcrMedia({
+          type: 'pdf',
+          filename: fileNameStr,
+          docIdentifier: res.document.id || res.document.filename,
+          url: res.document.url,
+          pageCount: res.document.page_count,
+        });
+        setUploadStatusMsg(null);
+      } else {
+        setUploadStatusMsg('Attaching image...');
+        const res = await uploadAndInsertMedia(file, fileNameStr, targetNote?.id, false);
+        insertion = `\n\n![${res.filename}](${res.url})\n`;
+        setPendingOcrMedia({
+          type: 'image',
+          filename: res.filename,
+          mediaId: res.mediaId,
+          url: res.url,
+        });
+        setUploadStatusMsg(null);
       }
+
       const currentContent = targetNote?.content || '';
       handleContentChange(currentContent + insertion);
       setExternalEditCounter((c) => c + 1);
-      setUploadStatusMsg('Image attached & GLM-OCR processed successfully!');
-      setTimeout(() => setUploadStatusMsg(null), 4000);
     } catch (err: any) {
-      console.error('Failed to upload and OCR image:', err);
-      setUploadStatusMsg(`Failed to attach image: ${err?.message || 'Upload error'}`);
+      console.error('Failed to upload and process file:', err);
+      setUploadStatusMsg(`Failed to attach file: ${err?.message || 'Upload error'}`);
       setTimeout(() => setUploadStatusMsg(null), 5000);
     }
   };
 
+  const handleTriggerPendingOcr = async () => {
+    if (!pendingOcrMedia || !activeNote) return;
+    setIsExtractingText(true);
+    try {
+      let extracted = '';
+      if (pendingOcrMedia.type === 'pdf') {
+        extracted = await triggerDocumentOcr(pendingOcrMedia.docIdentifier || pendingOcrMedia.filename);
+      } else if (pendingOcrMedia.mediaId) {
+        extracted = await triggerMediaOcr(pendingOcrMedia.mediaId);
+      }
 
-  const handleImageFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (extracted && extracted.trim()) {
+        const headerTitle = pendingOcrMedia.type === 'pdf' ? 'Extracted Document Content' : 'Extracted Content';
+        const ocrBlock = `\n\n## ${headerTitle} (GLM-OCR)\n${extracted.trim()}\n`;
+        const currentContent = activeNote.content || '';
+        handleContentChange(currentContent + ocrBlock);
+        setExternalEditCounter((c) => c + 1);
+      }
+      setPendingOcrMedia(null);
+    } catch (err: any) {
+      console.error('OCR extraction failed:', err);
+    } finally {
+      setIsExtractingText(false);
+    }
+  };
+
+
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
-      await handleProcessAndInsertImage(file);
+      await handleProcessAndInsertFile(file);
       e.target.value = '';
     }
   };
 
-  const handleImagePaste = async (e: React.ClipboardEvent) => {
+  const handlePaste = async (e: React.ClipboardEvent) => {
     if (isTrashed || !activeNote) return;
     if (e.clipboardData.files && e.clipboardData.files.length > 0) {
       const file = e.clipboardData.files[0];
-      if (file.type.startsWith('image/')) {
+      if (file.type.startsWith('image/') || file.type === 'application/pdf') {
         e.preventDefault();
-        await handleProcessAndInsertImage(file);
+        await handleProcessAndInsertFile(file);
       }
     }
   };
 
-  const handleImageDrop = async (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent) => {
     if (isTrashed || !activeNote) return;
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const file = e.dataTransfer.files[0];
-      if (file.type.startsWith('image/')) {
+      if (file.type.startsWith('image/') || file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
         e.preventDefault();
-        await handleProcessAndInsertImage(file);
+        await handleProcessAndInsertFile(file);
       }
     }
   };
 
   const handleContainerClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
+
+    // 1. Click on an image element
     if (target.tagName === 'IMG') {
       const img = target as HTMLImageElement;
-      const src = img.getAttribute('src');
-      if (src) {
-        setActiveLightboxImage({
-          url: src,
-          filename: img.getAttribute('alt') || 'image.png',
+      const src = img.getAttribute('src') || '';
+      const alt = img.getAttribute('alt') || '';
+      const parentLink = img.closest('a');
+      const href = parentLink?.getAttribute('href') || '';
+
+      const isPdf =
+        src.includes('_thumb.png') ||
+        src.endsWith('.pdf') ||
+        href.endsWith('.pdf') ||
+        alt.includes('PDF Document') ||
+        alt.toLowerCase().includes('.pdf');
+
+      if (isPdf) {
+        e.preventDefault();
+        e.stopPropagation();
+        const docUrl = href.endsWith('.pdf') ? href : src;
+        const cleanName = alt.replace(/PDF Document:\s*/i, '').trim() || docUrl.split('/').pop() || 'document.pdf';
+        setActiveDocumentViewer({
+          url: docUrl,
+          filename: cleanName,
+        });
+        return;
+      }
+
+      // Standard image
+      e.preventDefault();
+      e.stopPropagation();
+      setActiveLightboxImage({
+        url: src,
+        filename: alt || 'image.png',
+      });
+      return;
+    }
+
+    // 2. Click on an anchor link
+    const anchor = target.closest('a') as HTMLAnchorElement | null;
+    if (anchor) {
+      const href = anchor.getAttribute('href') || '';
+      if (href.endsWith('.pdf') || (href.includes('/api/media/') && href.includes('.pdf'))) {
+        e.preventDefault();
+        e.stopPropagation();
+        setActiveDocumentViewer({
+          url: href,
+          filename: anchor.innerText?.trim() || href.split('/').pop() || 'document.pdf',
         });
       }
     }
   };
+
+
 
   // Selected Paragraph / Text Floating AI Organizer State
   interface TextSelectionState {
@@ -602,24 +718,24 @@ export const EditorCanvas: React.FC = () => {
           </button>
         </div>
 
-        {/* Right: Attach Image + Consolidated Hamburger Menu */}
+        {/* Right: Attach Image / Document + Consolidated Hamburger Menu */}
         <div className="flex items-center gap-1.5 shrink-0">
           {!isTrashed ? (
             <>
-              {/* Hidden File Input for Image Upload */}
+              {/* Hidden File Input for Image & PDF Upload */}
               <input
                 type="file"
                 ref={fileInputRef}
-                accept="image/*"
+                accept="image/*,application/pdf,.pdf"
                 className="hidden"
-                onChange={handleImageFileSelect}
+                onChange={handleFileSelect}
               />
 
-              {/* Attach Image Button */}
+              {/* Attach Media / PDF Button */}
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploadingMedia}
-                title="Attach Image (GLM-OCR)"
+                title="Attach Media / PDF Document (GLM-OCR)"
                 className={cn(
                   'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-border transition-colors cursor-pointer',
                   isUploadingMedia
@@ -635,10 +751,11 @@ export const EditorCanvas: React.FC = () => {
                 ) : (
                   <>
                     <ImageIcon className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Attach Image</span>
+                    <span className="hidden sm:inline">Attach File</span>
                   </>
                 )}
               </button>
+
 
               {/* Consolidated Hamburger Menu */}
               <DropdownMenu.Root>
@@ -950,27 +1067,101 @@ export const EditorCanvas: React.FC = () => {
             : "px-6 sm:px-12 max-w-5xl mx-auto"
         )}
       >
-        {/* Status messages for media upload / auto-tagging if active */}
-        {(autoTagMsg || uploadStatusMsg) && (
-          <div className="flex items-center gap-2 pb-3 text-xs">
-            {autoTagMsg && (
-              <span className="text-[11px] font-mono text-foreground font-medium px-2 py-0.5 rounded-md bg-surface-hover border border-border animate-in fade-in">
-                ✓ {autoTagMsg}
-              </span>
+        {/* Status messages & Interactive OCR Prompt Banner */}
+        {(autoTagMsg || uploadStatusMsg || pendingOcrMedia) && (
+          <div className="space-y-2 pb-3 text-xs">
+            {pendingOcrMedia && (
+              <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-surface-hover/95 border border-primary/40 text-xs shadow-sm animate-in fade-in slide-in-from-top-1">
+                <div className="flex items-center gap-2 truncate">
+                  <Sparkles className="w-4 h-4 text-primary shrink-0 animate-pulse" />
+                  <span className="font-semibold text-foreground truncate">
+                    {pendingOcrMedia.type === 'pdf'
+                      ? `Attached "${pendingOcrMedia.filename}" (${pendingOcrMedia.pageCount || 1} pages)`
+                      : `Attached "${pendingOcrMedia.filename}"`}
+                  </span>
+                  <span className="text-muted-foreground hidden sm:inline">— Extract text with GLM-OCR?</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={handleTriggerPendingOcr}
+                    disabled={isExtractingText}
+                    className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-semibold cursor-pointer transition-all shadow-xs disabled:opacity-50"
+                  >
+                    {isExtractingText ? (
+                      <>
+                        <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+                        <span>Extracting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3 h-3 shrink-0" />
+                        <span>Extract Text (GLM-OCR)</span>
+                      </>
+                    )}
+                  </button>
+
+                  {pendingOcrMedia.type === 'pdf' && (
+                    <button
+                      onClick={() => {
+                        setActiveDocumentViewer({
+                          url: pendingOcrMedia.url,
+                          filename: pendingOcrMedia.filename,
+                          docId: pendingOcrMedia.docIdentifier,
+                        });
+                        setPendingOcrMedia(null);
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-surface border border-border hover:bg-surface-hover text-xs text-foreground cursor-pointer transition-colors"
+                      title="Open Document Lightbox"
+                    >
+                      View Pages
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => setPendingOcrMedia(null)}
+                    className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface transition-colors cursor-pointer"
+                    title="Dismiss"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
             )}
-            {uploadStatusMsg && (
-              <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded-md bg-surface-hover border border-border text-foreground animate-in fade-in flex items-center gap-1.5">
-                {uploadStatusMsg.includes('Uploading') && <Loader2 className="w-3 h-3 animate-spin text-foreground" />}
-                <span>{uploadStatusMsg}</span>
-              </span>
-            )}
+
+            <div className="flex items-center gap-2">
+              {autoTagMsg && (
+                <span className="text-[11px] font-mono text-foreground font-medium px-2 py-0.5 rounded-md bg-surface-hover border border-border animate-in fade-in">
+                  ✓ {autoTagMsg}
+                </span>
+              )}
+              {uploadStatusMsg && (
+                <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded-md bg-surface-hover border border-border text-foreground animate-in fade-in flex items-center gap-2">
+                  {isUploadingMedia && <Loader2 className="w-3 h-3 animate-spin text-foreground shrink-0" />}
+                  <span>{uploadStatusMsg}</span>
+                  {isUploadingMedia && (
+                    <button
+                      onClick={() => {
+                        cancelActiveMediaUpload();
+                        setUploadStatusMsg('Upload cancelled');
+                        setTimeout(() => setUploadStatusMsg(null), 3000);
+                      }}
+                      className="ml-1 px-1.5 py-0.2 rounded bg-destructive/10 text-destructive hover:bg-destructive/20 text-[10px] font-sans font-semibold cursor-pointer transition-colors"
+                      title="Cancel processing"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </span>
+              )}
+            </div>
           </div>
         )}
+
 
         {/* View Content Area based on viewMode */}
         <div
           onClick={handleContainerClick}
-          onDrop={handleImageDrop}
+          onDrop={handleDrop}
           onDragOver={(e) => e.preventDefault()}
           className={cn("flex-1 pt-6 pb-12 flex flex-col relative", `code-theme-${codeTheme}`)}
         >
@@ -998,10 +1189,11 @@ export const EditorCanvas: React.FC = () => {
                 onSelect={handleTextareaSelect}
                 onMouseUp={handleTextareaSelect}
                 onKeyUp={handleTextareaSelect}
-                onPaste={handleImagePaste}
-                onDrop={handleImageDrop}
+                onPaste={handlePaste}
+                onDrop={handleDrop}
                 readOnly={isTrashed}
-                placeholder="Write markdown here (# Heading, - List, ```code, paste/drop images)..."
+                placeholder="Write markdown here (# Heading, - List, ```code, paste/drop images or PDF documents)..."
+
                 className={cn(
                   "markdown-textarea flex-1 w-full min-h-[500px] resize-none outline-none border-none focus:ring-0 p-0 overflow-hidden transition-all",
                   isFocusMode
@@ -1049,8 +1241,9 @@ export const EditorCanvas: React.FC = () => {
                   onSelect={handleTextareaSelect}
                   onMouseUp={handleTextareaSelect}
                   onKeyUp={handleTextareaSelect}
-                  onPaste={handleImagePaste}
-                  onDrop={handleImageDrop}
+                  onPaste={handlePaste}
+                  onDrop={handleDrop}
+
                   readOnly={isTrashed}
                   placeholder="Markdown source..."
                   className={cn(
@@ -1247,6 +1440,10 @@ export const EditorCanvas: React.FC = () => {
 
       {/* Uncompressed Image & Local Ollama GLM-OCR Lightbox Modal */}
       <ImageLightboxModal />
+
+      {/* Multi-Page PDF Document & GLM-OCR Lightbox Modal */}
+      <DocumentViewerModal />
     </div>
   );
 };
+

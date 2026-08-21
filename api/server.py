@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 
 from api.routes import (
     audit_router,
+    documents_router,
     media_router,
     memories_router,
     models_router,
@@ -53,12 +54,14 @@ app.add_middleware(AcceptHeaderMiddleware)
 
 # Register modularized REST routers
 app.include_router(memories_router)
+app.include_router(documents_router)
 app.include_router(media_router)
 app.include_router(audit_router)
 app.include_router(search_router)
 app.include_router(system_router)
 app.include_router(models_router)
 app.include_router(settings_router)
+
 
 
 # OAuth Probes for Google Gemini Custom Connected Apps & Claude
