@@ -122,9 +122,9 @@ export const Sidebar: React.FC = () => {
           <button
             onClick={() => {
               setActiveView('all');
-              createNewNote();
+              setActiveModal('new-note');
             }}
-            title="Quick New Note (⌘N)"
+            title="Create New Note (⌘N)"
             className="p-1.5 rounded-md text-foreground bg-surface-selected hover:bg-surface-hover transition-colors cursor-pointer shadow-2xs"
           >
             <Plus className="w-4 h-4" />

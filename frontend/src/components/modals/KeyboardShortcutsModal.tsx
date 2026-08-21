@@ -17,8 +17,8 @@ export const KeyboardShortcutsModal: React.FC = () => {
     {
       section: 'Note Editing & Lifecycle',
       items: [
-        { title: 'Save Note', keys: ['⌘', 'S'], description: 'Instantly save active note to backend' },
-        { title: 'New Note', keys: ['⌘', 'N'], description: 'Create a new markdown note' },
+        { title: 'Save Note', keys: ['⌘/Ctrl', 'S'], description: 'Instantly save active note to backend' },
+        { title: 'New Note', keys: ['⌘N', 'or', '⌥N', 'or', '⌃N'], description: 'Open Create Note confirmation modal' },
         { title: 'Delete Note', keys: ['⌘', '⌫'], description: 'Move active note to Trash' },
         { title: 'Pin Note', keys: ['⌘', '⇧', 'P'], description: 'Toggle pinned status of active note' },
         { title: 'Favorite Note', keys: ['⌘', '⇧', 'S'], description: 'Toggle favorite status of active note' },

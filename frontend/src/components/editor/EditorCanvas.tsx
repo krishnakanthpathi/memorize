@@ -215,7 +215,7 @@ export const EditorCanvas: React.FC = () => {
     }
   }, [activeNote?.content, viewMode]);
 
-  // ⌘S or Ctrl+S for instant manual save, F2 for Rename Note Title
+  // ⌘S (Save), F2 (Rename Note), ⌘N / ⌃N / ⌥N / ⌘⇧N (New Note)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
@@ -228,10 +228,17 @@ export const EditorCanvas: React.FC = () => {
         if (!isTrashed) {
           setActiveModal('rename-note');
         }
+      } else {
+        const isKeyN = e.key === 'n' || e.key === 'N' || e.code === 'KeyN' || e.key === '˜' || e.key === 'ñ';
+        if ((e.metaKey || e.ctrlKey || e.altKey) && isKeyN) {
+          e.preventDefault();
+          e.stopPropagation();
+          setActiveModal('new-note');
+        }
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [isTrashed, activeNote, saveCurrentNoteRemote, setActiveModal]);
 
   // Word, lines, character counts, and reading time

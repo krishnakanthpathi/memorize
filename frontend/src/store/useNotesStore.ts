@@ -34,7 +34,7 @@ interface NotesState {
   sidebarCollapsed: boolean;
   isFullScreen: boolean;
   isFocusMode: boolean;
-  activeModal: 'search' | 'versions' | 'audit' | 'backup' | 'models' | 'settings' | 'new-category' | 'shortcuts' | 'merge' | 'tags' | 'rename-note' | null;
+  activeModal: 'search' | 'versions' | 'audit' | 'backup' | 'models' | 'settings' | 'new-category' | 'shortcuts' | 'merge' | 'tags' | 'rename-note' | 'new-note' | null;
   activeLightboxImage: { url: string; filename: string; mediaId?: string; ocrText?: string } | null;
   setActiveLightboxImage: (img: { url: string; filename: string; mediaId?: string; ocrText?: string } | null) => void;
   uploadAndInsertMedia: (file: File | Blob, filename?: string, memoryId?: string) => Promise<{ url: string; filename: string; ocrText?: string; mediaId?: string }>;
@@ -85,7 +85,7 @@ interface NotesState {
   fetchNotes: () => Promise<void>;
   fetchCategories: () => Promise<void>;
   selectNote: (id: string | null) => void;
-  createNewNote: (category?: string, initialTitle?: string) => Note;
+  createNewNote: (category?: string, initialTitle?: string, initialTags?: string[]) => Note;
   updateActiveNote: (fields: Partial<Note>, syncRemote?: boolean) => void;
   saveCurrentNoteRemote: () => Promise<void>;
   organizeNote: (memoryId: string, instruction?: string, useAi?: boolean, generateTitle?: boolean) => Promise<any>;
@@ -394,7 +394,7 @@ export const useNotesStore = create<NotesState>((set, get) => {
       set({ activeNoteId: id });
     },
 
-    createNewNote: (categoryParam, initialTitle) => {
+    createNewNote: (categoryParam, initialTitle, initialTags = []) => {
       const { selectedCategory, notes, activeView } = get();
       const cat = categoryParam || (selectedCategory && selectedCategory !== 'all' ? selectedCategory : 'personal');
       const newId = `memo_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -406,7 +406,7 @@ export const useNotesStore = create<NotesState>((set, get) => {
         content: '',
         category: cat,
         folderId: cat,
-        tags: [],
+        tags: initialTags,
         keywords: [],
         isPinned: false,
         isFavorite: false,

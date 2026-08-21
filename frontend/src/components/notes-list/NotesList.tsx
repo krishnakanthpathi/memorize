@@ -273,9 +273,9 @@ export const NotesList: React.FC = () => {
             {/* New note trigger */}
             {activeView !== 'trash' && (
               <button
-                onClick={() => createNewNote(selectedCategory || undefined)}
+                onClick={() => setActiveModal('new-note')}
                 title="Create New Note (⌘N)"
-                className="p-1.5 rounded-md bg-foreground text-background hover:opacity-90 transition-opacity shadow-xs"
+                className="p-1.5 rounded-md bg-foreground text-background hover:opacity-90 transition-opacity shadow-xs cursor-pointer"
               >
                 <SquarePen className="w-3.5 h-3.5" />
               </button>

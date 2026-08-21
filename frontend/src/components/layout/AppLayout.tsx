@@ -15,7 +15,9 @@ import { KeyboardShortcutsModal } from '@/components/modals/KeyboardShortcutsMod
 import { MergeMemoriesModal } from '@/components/modals/MergeMemoriesModal';
 import { ManageTagsModal } from '@/components/modals/ManageTagsModal';
 import { RenameNoteModal } from '@/components/modals/RenameNoteModal';
+import { CreateNoteModal } from '@/components/modals/CreateNoteModal';
 import { ToastNotificationContainer } from '@/components/common/ToastNotificationContainer';
+
 import { useNotesStore } from '@/store/useNotesStore';
 
 
@@ -90,11 +92,19 @@ export const AppLayout: React.FC = () => {
         return;
       }
 
-      // ⌘N or Ctrl+N for New Note
-      if ((e.metaKey || e.ctrlKey) && e.key === 'n' && !e.shiftKey) {
+      // New Note shortcuts on Mac & Windows:
+      // - ⌘N (Command+N) on Mac
+      // - ⌃N (Control+N) on Mac / Windows / Linux
+      // - ⌥N (Option+N / Alt+N) on Mac
+      // - ⌘⇧N (Command+Shift+N)
+      const isKeyN = e.key === 'n' || e.key === 'N' || e.code === 'KeyN' || e.key === '˜' || e.key === 'ñ';
+      const isNewNoteTrigger = (e.metaKey || e.ctrlKey || e.altKey) && isKeyN;
+
+      if (isNewNoteTrigger) {
         e.preventDefault();
+        e.stopPropagation();
         setActiveView('all');
-        createNewNote();
+        setActiveModal('new-note');
         return;
       }
 
@@ -176,8 +186,8 @@ export const AppLayout: React.FC = () => {
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [
     activeView,
     activeModal,
@@ -260,6 +270,7 @@ export const AppLayout: React.FC = () => {
       <MergeMemoriesModal />
       <ManageTagsModal />
       <RenameNoteModal />
+      <CreateNoteModal />
 
       {/* Global Toast Notification Banner Stack */}
       <ToastNotificationContainer />
