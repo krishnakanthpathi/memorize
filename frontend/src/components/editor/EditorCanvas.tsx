@@ -30,6 +30,8 @@ import {
   Menu,
   Star,
   Pin,
+  ChevronDown,
+  Pencil,
 } from 'lucide-react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useNotesStore } from '@/store/useNotesStore';
@@ -94,6 +96,7 @@ export const EditorCanvas: React.FC = () => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const splitTextareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
 
   const handleProcessAndInsertImage = async (file: File | Blob) => {
     try {
@@ -212,19 +215,24 @@ export const EditorCanvas: React.FC = () => {
     }
   }, [activeNote?.content, viewMode]);
 
-  // ⌘S or Ctrl+S for instant manual save
+  // ⌘S or Ctrl+S for instant manual save, F2 for Rename Note Title
   useEffect(() => {
-    const handleSaveKeyDown = (e: KeyboardEvent) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
         if (!isTrashed && activeNote) {
           saveCurrentNoteRemote();
         }
+      } else if (e.key === 'F2') {
+        e.preventDefault();
+        if (!isTrashed) {
+          setActiveModal('rename-note');
+        }
       }
     };
-    window.addEventListener('keydown', handleSaveKeyDown);
-    return () => window.removeEventListener('keydown', handleSaveKeyDown);
-  }, [isTrashed, activeNote, saveCurrentNoteRemote]);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isTrashed, activeNote, saveCurrentNoteRemote, setActiveModal]);
 
   // Word, lines, character counts, and reading time
   const stats = useMemo(() => {
@@ -466,22 +474,22 @@ export const EditorCanvas: React.FC = () => {
 
       {/* Top Bar / Header Action Row */}
       <header className="h-14 px-4 border-b border-border flex items-center justify-between gap-4 shrink-0 bg-surface-editor select-none">
-        {/* Left: Sidebar toggle + Breadcrumbs */}
-        <div className="flex items-center gap-3 truncate">
+        {/* Left: Sidebar toggle + Breadcrumbs (Category + Inline Editable Title + Tags Popover) */}
+        <div className="flex items-center gap-2 truncate min-w-0">
           <button
             onClick={toggleSidebar}
             title={sidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
-            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors"
+            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors shrink-0"
           >
             <PanelLeft className="w-4 h-4" />
           </button>
 
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground truncate">
-            <Folder className="w-3.5 h-3.5 shrink-0" />
+          <div className="flex items-center gap-1 text-xs text-muted-foreground truncate min-w-0">
+            <Folder className="w-3.5 h-3.5 shrink-0 opacity-70" />
             {!isTrashed ? (
               <DropdownMenu.Root>
                 <DropdownMenu.Trigger asChild>
-                  <button className="hover:text-foreground font-medium capitalize truncate underline decoration-dotted decoration-border underline-offset-2 cursor-pointer">
+                  <button className="hover:text-foreground font-medium capitalize truncate underline decoration-dotted decoration-border underline-offset-2 cursor-pointer shrink-0">
                     {activeNote.category || 'personal'}
                   </button>
                 </DropdownMenu.Trigger>
@@ -520,12 +528,25 @@ export const EditorCanvas: React.FC = () => {
                 </DropdownMenu.Portal>
               </DropdownMenu.Root>
             ) : (
-              <span className="capitalize font-medium">{activeNote.category || 'personal'}</span>
+              <span className="capitalize font-medium shrink-0">{activeNote.category || 'personal'}</span>
             )}
-            <span>/</span>
-            <span className="text-foreground font-semibold truncate max-w-[200px]">
-              {activeNote.title || 'Untitled Note'}
-            </span>
+            <span className="opacity-40">/</span>
+
+            {/* Note Title display in breadcrumb (Clickable to open Rename Modal) */}
+            {!isTrashed ? (
+              <button
+                onClick={() => setActiveModal('rename-note')}
+                title="Click to rename note (F2)"
+                className="text-foreground hover:bg-surface-hover font-semibold text-xs px-2 py-1 rounded-md inline-flex items-center gap-1.5 truncate max-w-[200px] sm:max-w-[280px] transition-colors cursor-pointer group"
+              >
+                <span className="truncate">{activeNote.title || 'Untitled Note'}</span>
+                <Pencil className="w-3 h-3 text-muted-foreground/40 group-hover:text-foreground shrink-0 transition-colors" />
+              </button>
+            ) : (
+              <span className="text-foreground font-semibold truncate max-w-[200px] sm:max-w-[280px] px-1.5 py-1">
+                {activeNote.title || 'Untitled Note'}
+              </span>
+            )}
           </div>
         </div>
 
@@ -711,6 +732,17 @@ export const EditorCanvas: React.FC = () => {
                     </DropdownMenu.Item>
 
                     <DropdownMenu.Item
+                      onClick={() => setActiveModal('rename-note')}
+                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Pencil className="w-3.5 h-3.5 shrink-0" />
+                        <span>Rename Note (Edit Title)</span>
+                      </div>
+                      <kbd className="text-[10px] font-mono text-muted-foreground">F2</kbd>
+                    </DropdownMenu.Item>
+
+                    <DropdownMenu.Item
                       onClick={() => setActiveModal('versions')}
                       className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2.5"
                     >
@@ -724,6 +756,19 @@ export const EditorCanvas: React.FC = () => {
                     >
                       <Download className="w-3.5 h-3.5 shrink-0" />
                       <span>Export as Markdown (.md)</span>
+                    </DropdownMenu.Item>
+
+                    <DropdownMenu.Item
+                      onClick={() => setActiveModal('tags')}
+                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Tag className="w-3.5 h-3.5 shrink-0" />
+                        <span>Manage Tags</span>
+                      </div>
+                      <span className="text-[10px] font-mono text-muted-foreground px-1.5 py-0.5 rounded bg-surface-hover border border-border/50">
+                        {Array.isArray(activeNote.tags) ? activeNote.tags.length : 0}
+                      </span>
                     </DropdownMenu.Item>
 
                     <DropdownMenu.Item
@@ -892,121 +937,28 @@ export const EditorCanvas: React.FC = () => {
       {/* Editor Main Canvas Body */}
       <div
         className={cn(
-          "flex-1 overflow-y-auto py-8 w-full flex flex-col transition-all duration-200",
+          "flex-1 overflow-y-auto py-4 w-full flex flex-col transition-all duration-200",
           isFocusMode
             ? "px-8 sm:px-16 lg:px-24 max-w-7xl mx-auto"
             : "px-6 sm:px-12 max-w-5xl mx-auto"
         )}
       >
-        {/* Note Title Input */}
-        <div className="flex items-center justify-between gap-3 group relative pb-2">
-          <input
-            type="text"
-            value={activeNote.title}
-            onChange={handleTitleChange}
-            readOnly={isTrashed}
-            placeholder="Note Title"
-            className={cn(
-              'flex-1 bg-transparent font-bold tracking-tight text-foreground placeholder:text-muted-foreground/40 border-none outline-none focus:ring-0 leading-tight transition-all',
-              isFocusMode ? 'text-4xl sm:text-5xl font-extrabold pb-1' : 'text-3xl',
-              isTrashed && 'opacity-80 cursor-default'
-            )}
-          />
-        </div>
-
-        {/* Tags & Metadata bar */}
-        <div className="flex items-center flex-wrap gap-2 pt-2 pb-6 border-b border-border/50 text-xs">
-          {/* Memory ID Chip with Copy Action */}
-          <button
-            onClick={() => {
-              if (activeNote?.id) {
-                navigator.clipboard.writeText(activeNote.id);
-                setCopiedId(true);
-                setTimeout(() => setCopiedId(false), 2000);
-              }
-            }}
-            title="Click to copy Memory ID"
-            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-surface-hover hover:bg-surface-hover/80 text-muted-foreground hover:text-foreground font-mono text-[11px] border border-border/60 transition-colors cursor-pointer"
-          >
-            {copiedId ? (
-              <>
-                <Check className="w-3 h-3 text-foreground" />
-                <span className="text-foreground font-medium">Copied ID!</span>
-              </>
-            ) : (
-              <>
-                <span className="opacity-60">ID:</span>
-                <span className="font-semibold text-foreground/80">{activeNote.id}</span>
-                <Copy className="w-2.5 h-2.5 opacity-60" />
-              </>
-            )}
-          </button>
-
-          {/* Tags list */}
-          {Array.isArray(activeNote.tags) &&
-            activeNote.tags.map((tag) => (
-              <span
-                key={tag}
-                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-surface-hover text-foreground font-mono text-[11px] border border-border/60"
-              >
-                <span>#{tag}</span>
-                {!isTrashed && (
-                  <button
-                    onClick={() => handleRemoveTag(tag)}
-                    className="text-muted-foreground hover:text-foreground p-0.5 cursor-pointer"
-                  >
-                    <X className="w-2.5 h-2.5" />
-                  </button>
-                )}
+        {/* Status messages for media upload / auto-tagging if active */}
+        {(autoTagMsg || uploadStatusMsg) && (
+          <div className="flex items-center gap-2 pb-3 text-xs">
+            {autoTagMsg && (
+              <span className="text-[11px] font-mono text-foreground font-medium px-2 py-0.5 rounded-md bg-surface-hover border border-border animate-in fade-in">
+                ✓ {autoTagMsg}
               </span>
-            ))}
-
-          {/* Add Tag input */}
-          {!isTrashed && (
-            showTagInput ? (
-              <div className="inline-flex items-center gap-1">
-                <input
-                  type="text"
-                  autoFocus
-                  placeholder="tag name..."
-                  value={tagInput}
-                  onChange={(e) => setTagInput(e.target.value)}
-                  onKeyDown={handleAddTag}
-                  onBlur={() => {
-                    if (!tagInput.trim()) setShowTagInput(false);
-                  }}
-                  className="bg-surface-hover border border-border px-2 py-0.5 rounded text-[11px] font-mono outline-none focus:ring-1 focus:ring-ring w-24"
-                />
-                <span className="text-[10px] text-muted-foreground">↵ to add</span>
-              </div>
-            ) : (
-              <div className="inline-flex items-center gap-1.5">
-                <button
-                  onClick={() => setShowTagInput(true)}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-surface-hover border border-dashed border-border transition-colors font-mono cursor-pointer"
-                >
-                  <Plus className="w-3 h-3" />
-                  <span>Add Tag</span>
-                </button>
-
-                {autoTagMsg && (
-                  <span className="text-[11px] font-mono text-foreground font-medium px-2 py-0.5 rounded-md bg-surface-hover border border-border animate-in fade-in">
-                    ✓ {autoTagMsg}
-                  </span>
-                )}
-
-                {uploadStatusMsg && (
-                  <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded-md bg-surface-hover border border-border text-foreground animate-in fade-in flex items-center gap-1.5">
-                    {uploadStatusMsg.includes('Uploading') && <Loader2 className="w-3 h-3 animate-spin text-foreground" />}
-                    <span>{uploadStatusMsg}</span>
-                  </span>
-                )}
-              </div>
-            )
-          )}
-
-
-        </div>
+            )}
+            {uploadStatusMsg && (
+              <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded-md bg-surface-hover border border-border text-foreground animate-in fade-in flex items-center gap-1.5">
+                {uploadStatusMsg.includes('Uploading') && <Loader2 className="w-3 h-3 animate-spin text-foreground" />}
+                <span>{uploadStatusMsg}</span>
+              </span>
+            )}
+          </div>
+        )}
 
         {/* View Content Area based on viewMode */}
         <div

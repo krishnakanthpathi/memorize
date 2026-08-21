@@ -97,6 +97,43 @@ def title_to_filename(title: str) -> str:
 
 
 @handle_errors
+def strip_redundant_h1_title(content: str, title: Optional[str] = None) -> str:
+    """
+    Strips leading redundant '# Title' or '# Heading' from the markdown body if it duplicates
+    the note title or acts as a top-level H1 that is already captured in the title field.
+    """
+    if not content:
+        return ""
+    lines = content.strip().split("\n")
+    if not lines:
+        return ""
+
+    first_line = lines[0].strip()
+    if first_line.startswith("# ") and not first_line.startswith("## "):
+        h1_text = first_line[2:].strip()
+        clean_h1 = re.sub(r"[^\w\s]", "", h1_text.lower()).strip()
+        clean_title = re.sub(r"[^\w\s]", "", (title or "").lower()).strip() if title else ""
+        
+        # If title is empty/untitled or if H1 matches/contains the note title
+        if (
+            not clean_title
+            or clean_title == "untitled memory"
+            or clean_title == "untitled note"
+            or clean_h1 == clean_title
+            or clean_h1 in clean_title
+            or clean_title in clean_h1
+            or clean_title.startswith(clean_h1)
+            or clean_h1.startswith(clean_title)
+        ):
+            remaining = lines[1:]
+            while remaining and not remaining[0].strip():
+                remaining.pop(0)
+            return "\n".join(remaining).strip()
+
+    return content.strip()
+
+
+@handle_errors
 def create_markdown_file(
     memory_id: str,
     title: str,
@@ -111,19 +148,22 @@ def create_markdown_file(
 ) -> Path:
     """
     Builds YAML frontmatter + content body and writes a Markdown file to disk.
+    Strips redundant leading H1 title from body to avoid duplicate titles in UI.
     Returns the absolute Path of the created file.
     """
     if tags is None:
         tags = []
 
     title = normalize_title(title)
+    clean_body = strip_redundant_h1_title(content, title)
+
     now_iso = datetime.now(timezone.utc).isoformat()
     if not created_at:
         created_at = now_iso
     if not updated_at:
         updated_at = now_iso
     if not content_hash:
-        content_hash = compute_string_hash(content)
+        content_hash = compute_string_hash(clean_body)
 
     category_dir = get_category_dir(category)
 
@@ -153,7 +193,7 @@ def create_markdown_file(
     }
 
     yaml_block = yaml.dump(frontmatter, sort_keys=False).strip()
-    full_text = f"---\n{yaml_block}\n---\n\n{content.strip()}\n"
+    full_text = f"---\n{yaml_block}\n---\n\n{clean_body}\n"
 
     target_path.parent.mkdir(parents=True, exist_ok=True)
     with open(target_path, "w", encoding="utf-8") as f:
@@ -162,6 +202,7 @@ def create_markdown_file(
     logger.info(f"Wrote Markdown memory file: {target_path}")
     backup_single_memory_file(target_path)
     return target_path
+
 
 
 @handle_errors
@@ -238,8 +279,10 @@ def read_markdown_file(file_path: Union[Path, str]) -> Tuple[Dict[str, Any], str
     frontmatter_str = match.group(1)
     content = match.group(2).strip()
     frontmatter = yaml.safe_load(frontmatter_str) or {}
+    clean_content = strip_redundant_h1_title(content, frontmatter.get("title"))
 
-    return frontmatter, content
+    return frontmatter, clean_content
+
 
 
 @handle_errors

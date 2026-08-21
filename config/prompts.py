@@ -66,11 +66,13 @@ TITLE_GENERATION_PROMPT = """You are an expert AI editor and document architect.
 Your task is to generate a clear, concise, descriptive, and high-signal title (3 to 7 words) for the provided Markdown note content or excerpt.
 
 Rules:
-1. Do NOT enclose the title in quotes, backticks, or markdown bold/italics.
-2. Do NOT add prefixes like "Title:", "Note:", or "Summary:".
-3. Capture the core subject, entity, technical topic, or intent accurately.
-4. Return ONLY the title text on a single line.
+1. Do NOT wrap the title in XML tags (e.g. do not output <title>, <name>, <think>).
+2. Do NOT enclose the title in quotes, backticks, or markdown bold/italics.
+3. Do NOT add prefixes like "Title:", "Note:", or "Summary:".
+4. Capture the core subject, entity, technical topic, or intent accurately.
+5. Return ONLY the raw title text on a single line with no reasoning or conversational preambles.
 """
+
 
 
 ORGANIZE_SELECTION_SYSTEM_PROMPT = """You are an expert AI text editor and writing assistant.

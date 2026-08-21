@@ -32,18 +32,42 @@ DEFAULT_MAX_MERGE_CONTEXT_TOKENS = 3500
 
 
 def clean_generated_title(raw_title: str) -> str:
-    """Strips quotes, prefixes, markdown artifacts and normalizes a generated title."""
+    """Strips XML tags, reasoning blocks, quotes, prefixes, markdown artifacts and normalizes a generated title."""
     if not raw_title:
         return "Untitled Note"
     clean = raw_title.strip()
+
+    # 1. Strip reasoning blocks like <think>...</think>
+    clean = re.sub(r"<think>.*?</think>", "", clean, flags=re.DOTALL | re.IGNORECASE).strip()
+
+    # 2. Extract content inside <title>...</title> or <name>...</name> or <topic>...</topic> if present
+    xml_match = re.search(r"<(?:title|name|topic|heading)>(.*?)</(?:title|name|topic|heading)>", clean, flags=re.DOTALL | re.IGNORECASE)
+    if xml_match:
+        clean = xml_match.group(1).strip()
+
+    # 3. Strip any remaining XML/HTML tags
+    clean = re.sub(r"<[^>]+>", "", clean).strip()
+
+    # 4. Handle JSON if LLM returned JSON like {"title": "..."}
+    if clean.startswith("{") and clean.endswith("}"):
+        try:
+            data = json.loads(clean)
+            if isinstance(data, dict):
+                clean = data.get("title") or data.get("name") or clean
+        except Exception:
+            pass
+
+    # 5. Strip code blocks, quotes, and prefixes
+    clean = re.sub(r"```[a-zA-Z]*\n?|```", "", clean).strip()
     clean = re.sub(r"^[\"\'`]+|[\"\'`]+$", "", clean).strip()
-    clean = re.sub(r"^(?:#+\s*|\*{1,2})?(?:title|summary|topic):\s*", "", clean, flags=re.IGNORECASE).strip()
+    clean = re.sub(r"^(?:#+\s*|\*{1,2})?(?:title|summary|topic|name):\s*", "", clean, flags=re.IGNORECASE).strip()
     clean = re.sub(r"^#+\s*", "", clean).strip()
     clean = re.sub(r"^\*\*(.*?)\*\*$", r"\1", clean).strip()
     clean = re.sub(r"^\*(.*?)\*$", r"\1", clean).strip()
     clean = clean.split("\n")[0].strip()
     clean = re.sub(r"^\d+[\.\)]\s*", "", clean).strip()
     return normalize_title(clean) if clean else "Untitled Note"
+
 
 
 def llm_classify_text(text: str, available_categories: List[str]) -> Dict[str, Any]:

@@ -34,7 +34,7 @@ interface NotesState {
   sidebarCollapsed: boolean;
   isFullScreen: boolean;
   isFocusMode: boolean;
-  activeModal: 'search' | 'versions' | 'audit' | 'backup' | 'models' | 'settings' | 'new-category' | 'shortcuts' | 'merge' | null;
+  activeModal: 'search' | 'versions' | 'audit' | 'backup' | 'models' | 'settings' | 'new-category' | 'shortcuts' | 'merge' | 'tags' | 'rename-note' | null;
   activeLightboxImage: { url: string; filename: string; mediaId?: string; ocrText?: string } | null;
   setActiveLightboxImage: (img: { url: string; filename: string; mediaId?: string; ocrText?: string } | null) => void;
   uploadAndInsertMedia: (file: File | Blob, filename?: string, memoryId?: string) => Promise<{ url: string; filename: string; ocrText?: string; mediaId?: string }>;
@@ -136,6 +136,35 @@ function applyThemeClass(theme: ThemeMode) {
   } else if (theme === 'black') {
     root.classList.add('dark', 'black');
   }
+}
+
+function stripRedundantH1(content: string, title?: string): string {
+  if (!content) return '';
+  const lines = content.trim().split('\n');
+  if (lines.length === 0) return '';
+  const firstLine = lines[0].trim();
+  if (firstLine.startsWith('# ') && !firstLine.startsWith('## ')) {
+    const h1Text = firstLine.slice(2).trim();
+    const cleanH1 = h1Text.toLowerCase().replace(/[^\w\s]/g, '').trim();
+    const cleanTitle = (title || '').toLowerCase().replace(/[^\w\s]/g, '').trim();
+    if (
+      !cleanTitle ||
+      cleanTitle === 'untitled note' ||
+      cleanTitle === 'untitled memory' ||
+      cleanH1 === cleanTitle ||
+      cleanH1.includes(cleanTitle) ||
+      cleanTitle.includes(cleanH1) ||
+      cleanTitle.startsWith(cleanH1) ||
+      cleanH1.startsWith(cleanTitle)
+    ) {
+      lines.shift();
+      while (lines.length > 0 && !lines[0].trim()) {
+        lines.shift();
+      }
+      return lines.join('\n').trim();
+    }
+  }
+  return content.trim();
 }
 
 // Debounce helper for auto-saving
@@ -294,9 +323,11 @@ export const useNotesStore = create<NotesState>((set, get) => {
 
         const notes = rawNotes.map((n) => ({
           ...n,
+          content: stripRedundantH1(n.content, n.title),
           isPinned: pinnedIds.includes(n.id),
           isFavorite: favoriteIds.includes(n.id),
         }));
+
 
         set((state) => {
           let activeNoteId = state.activeNoteId;
@@ -508,12 +539,17 @@ export const useNotesStore = create<NotesState>((set, get) => {
     },
 
     generateNoteTitle: async (memoryId: string, customContent?: string, instruction?: string) => {
-      const { notes } = get();
+      const { notes, activeNoteId } = get();
       const target = notes.find((n) => n.id === memoryId);
       const contentToUse = customContent !== undefined ? customContent : target?.content || '';
       if (!contentToUse.trim()) return;
 
-      const taskId = get().startTask('Generate Title', `Extracting smart title from content for "${target?.title || 'Note'}"...`);
+      if (saveTimer) {
+        clearTimeout(saveTimer);
+        saveTimer = null;
+      }
+
+      const taskId = get().startTask('Generate Title', `Extracting smart title from content...`);
       set({ isGeneratingTitle: true });
       try {
         const res = await api.generateTitle(
@@ -525,19 +561,22 @@ export const useNotesStore = create<NotesState>((set, get) => {
         );
         if (res.status === 'success' && res.title) {
           const cleanTitle = res.title;
-          if (target) {
-            const updatedNote: Note = {
-              ...target,
-              title: cleanTitle,
-              updatedAt: new Date().toISOString(),
-            };
-            set((state) => ({
-              notes: state.notes.map((n) => (n.id === memoryId ? updatedNote : n)),
-              isGeneratingTitle: false,
-            }));
-            await get().fetchCategories();
-          }
+          const updatedNotes = get().notes.map((n) =>
+            n.id === memoryId
+              ? {
+                  ...n,
+                  title: cleanTitle,
+                  content: contentToUse,
+                  updatedAt: new Date().toISOString(),
+                }
+              : n
+          );
+          set({
+            notes: updatedNotes,
+            isGeneratingTitle: false,
+          });
           get().completeTask(taskId, `Title updated to "${cleanTitle}"`, true, 'Title Generated');
+          await get().fetchCategories();
           return cleanTitle;
         }
       } catch (err: any) {
