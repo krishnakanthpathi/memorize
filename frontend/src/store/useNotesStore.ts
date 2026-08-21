@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { api } from '@/services/api';
-import { AppIconType, CategoryStat, CodeTheme, Note, SystemView, ThemeMode } from '@/types';
+import { AppIconType, AsyncTask, CategoryStat, CodeTheme, Note, SystemView, ThemeMode, ToastNotification } from '@/types';
 
 interface NotesState {
   // Theme & Appearance
@@ -28,12 +28,26 @@ interface NotesState {
   isGeneratingTitle: boolean;
   isTransformingSelection: boolean;
   isAutoTagging: boolean;
+  isUploadingMedia: boolean;
   isOnline: boolean;
   lastSavedAt: string | null;
   sidebarCollapsed: boolean;
   isFullScreen: boolean;
   isFocusMode: boolean;
   activeModal: 'search' | 'versions' | 'audit' | 'backup' | 'models' | 'settings' | 'new-category' | 'shortcuts' | 'merge' | null;
+  activeLightboxImage: { url: string; filename: string; mediaId?: string; ocrText?: string } | null;
+  setActiveLightboxImage: (img: { url: string; filename: string; mediaId?: string; ocrText?: string } | null) => void;
+  uploadAndInsertMedia: (file: File | Blob, filename?: string, memoryId?: string) => Promise<{ url: string; filename: string; ocrText?: string; mediaId?: string }>;
+
+  // Background Task & Toast Notification Center
+  tasks: AsyncTask[];
+  toasts: ToastNotification[];
+  startTask: (title: string, description?: string) => string;
+  completeTask: (id: string, resultSummary?: string, showToast?: boolean, toastTitle?: string) => void;
+  failTask: (id: string, errorMsg: string, showToast?: boolean) => void;
+  addToast: (toast: Omit<ToastNotification, 'id' | 'createdAt'>) => string;
+  dismissToast: (id: string) => void;
+  clearFinishedTasks: () => void;
 
   // Multi-selection & Merge State
   selectedNoteIds: string[];
@@ -71,7 +85,7 @@ interface NotesState {
   fetchNotes: () => Promise<void>;
   fetchCategories: () => Promise<void>;
   selectNote: (id: string | null) => void;
-  createNewNote: (category?: string) => Note;
+  createNewNote: (category?: string, initialTitle?: string) => Note;
   updateActiveNote: (fields: Partial<Note>, syncRemote?: boolean) => void;
   saveCurrentNoteRemote: () => Promise<void>;
   organizeNote: (memoryId: string, instruction?: string, useAi?: boolean, generateTitle?: boolean) => Promise<any>;
@@ -98,6 +112,7 @@ interface NotesState {
   setActiveModal: (modal: NotesState['activeModal']) => void;
   exportActiveNote: () => void;
 }
+
 
 // Local storage keys
 const THEME_KEY = 'memorize_theme';
@@ -184,15 +199,92 @@ export const useNotesStore = create<NotesState>((set, get) => {
     isGeneratingTitle: false,
     isTransformingSelection: false,
     isAutoTagging: false,
+    isUploadingMedia: false,
     isOnline: true,
     lastSavedAt: null,
     sidebarCollapsed: false,
     isFullScreen: false,
     isFocusMode: false,
     activeModal: null,
+    activeLightboxImage: null,
 
     pinnedIds: initialPinned,
     favoriteIds: initialFavorites,
+
+    // Task & Toast Notification Center
+    tasks: [],
+    toasts: [],
+
+    startTask: (title: string, description?: string) => {
+      const id = `task_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const newTask: AsyncTask = {
+        id,
+        title,
+        description,
+        status: 'running',
+        startedAt: Date.now(),
+      };
+      set((state) => ({ tasks: [newTask, ...state.tasks.slice(0, 19)] }));
+      return id;
+    },
+
+    completeTask: (id: string, resultSummary?: string, showToast: boolean = true, toastTitle?: string) => {
+      const task = get().tasks.find((t) => t.id === id);
+      set((state) => ({
+        tasks: state.tasks.map((t) =>
+          t.id === id
+            ? { ...t, status: 'success' as const, completedAt: Date.now(), resultSummary }
+            : t
+        ),
+      }));
+
+      if (showToast) {
+        get().addToast({
+          title: toastTitle || task?.title || 'Task Completed',
+          description: resultSummary || task?.description,
+          type: 'success',
+        });
+      }
+    },
+
+    failTask: (id: string, errorMsg: string, showToast: boolean = true) => {
+      const task = get().tasks.find((t) => t.id === id);
+      set((state) => ({
+        tasks: state.tasks.map((t) =>
+          t.id === id
+            ? { ...t, status: 'error' as const, completedAt: Date.now(), error: errorMsg }
+            : t
+        ),
+      }));
+
+      if (showToast) {
+        get().addToast({
+          title: `${task?.title || 'Task'} Failed`,
+          description: errorMsg,
+          type: 'error',
+        });
+      }
+    },
+
+    addToast: (toast) => {
+      const id = `toast_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const newToast: ToastNotification = {
+        ...toast,
+        id,
+        createdAt: Date.now(),
+        duration: toast.duration || 4500,
+      };
+      set((state) => ({ toasts: [newToast, ...state.toasts.slice(0, 4)] }));
+      return id;
+    },
+
+    dismissToast: (id: string) => {
+      set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) }));
+    },
+
+    clearFinishedTasks: () => {
+      set((state) => ({ tasks: state.tasks.filter((t) => t.status === 'running') }));
+    },
 
     fetchNotes: async () => {
       set({ isLoading: true });
@@ -271,7 +363,7 @@ export const useNotesStore = create<NotesState>((set, get) => {
       set({ activeNoteId: id });
     },
 
-    createNewNote: (categoryParam) => {
+    createNewNote: (categoryParam, initialTitle) => {
       const { selectedCategory, notes, activeView } = get();
       const cat = categoryParam || (selectedCategory && selectedCategory !== 'all' ? selectedCategory : 'personal');
       const newId = `memo_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -279,7 +371,7 @@ export const useNotesStore = create<NotesState>((set, get) => {
 
       const newNote: Note = {
         id: newId,
-        title: 'New Note',
+        title: initialTitle || 'New Note',
         content: '',
         category: cat,
         folderId: cat,
@@ -349,6 +441,7 @@ export const useNotesStore = create<NotesState>((set, get) => {
         return;
       }
 
+      const taskId = get().startTask('Saving Note', `Saving "${current.title || 'Untitled'}" and updating vector embeddings...`);
       set({ isSaving: true });
       try {
         await api.saveMemory({
@@ -364,10 +457,12 @@ export const useNotesStore = create<NotesState>((set, get) => {
           lastSavedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           isOnline: true,
         });
+        get().completeTask(taskId, `Note "${current.title || 'Untitled'}" saved & vector index updated`, false);
         get().fetchCategories();
-      } catch (err) {
+      } catch (err: any) {
         console.error('Remote save failed:', err);
         set({ isSaving: false, isOnline: false });
+        get().failTask(taskId, err?.message || 'Failed to save note');
       }
     },
 
@@ -376,6 +471,8 @@ export const useNotesStore = create<NotesState>((set, get) => {
       const target = notes.find((n) => n.id === memoryId);
       if (!target) return;
 
+      const taskTitle = instruction ? 'Custom AI Transform' : 'AI Polish & Restructure';
+      const taskId = get().startTask(taskTitle, `Analyzing and restructuring "${target.title || 'Untitled'}"...`);
       set({ isOrganizingNote: true });
       try {
         const res = await api.organizeMemory(memoryId, instruction, useAi, generateTitle);
@@ -393,11 +490,18 @@ export const useNotesStore = create<NotesState>((set, get) => {
             isOrganizingNote: false,
           }));
 
+          get().completeTask(
+            taskId,
+            `Successfully polished "${res.title || target.title}"`,
+            true,
+            'AI Polish Complete'
+          );
           await get().fetchCategories();
           return res;
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to organize note with AI:', err);
+        get().failTask(taskId, err?.message || 'AI organize failed');
       } finally {
         set({ isOrganizingNote: false });
       }
@@ -409,6 +513,7 @@ export const useNotesStore = create<NotesState>((set, get) => {
       const contentToUse = customContent !== undefined ? customContent : target?.content || '';
       if (!contentToUse.trim()) return;
 
+      const taskId = get().startTask('Generate Title', `Extracting smart title from content for "${target?.title || 'Note'}"...`);
       set({ isGeneratingTitle: true });
       try {
         const res = await api.generateTitle(
@@ -432,10 +537,12 @@ export const useNotesStore = create<NotesState>((set, get) => {
             }));
             await get().fetchCategories();
           }
+          get().completeTask(taskId, `Title updated to "${cleanTitle}"`, true, 'Title Generated');
           return cleanTitle;
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to generate title with AI:', err);
+        get().failTask(taskId, err?.message || 'Title generation failed');
       } finally {
         set({ isGeneratingTitle: false });
       }
@@ -443,14 +550,17 @@ export const useNotesStore = create<NotesState>((set, get) => {
 
     transformSelectedText: async (selectedText: string, instruction?: string, mode: string = 'polish', fullContext?: string) => {
       if (!selectedText || !selectedText.trim()) return;
+      const taskId = get().startTask('AI Selection Transform', `Applying ${mode} transform to selected paragraph...`);
       set({ isTransformingSelection: true });
       try {
         const res = await api.transformSelection(selectedText, instruction, mode, fullContext);
         if (res.status === 'success') {
+          get().completeTask(taskId, `Applied ${mode} transformation`, true, 'Selection Transformed');
           return res.transformed_text;
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to transform selected text:', err);
+        get().failTask(taskId, err?.message || 'Selection transform failed');
       } finally {
         set({ isTransformingSelection: false });
       }
@@ -462,6 +572,7 @@ export const useNotesStore = create<NotesState>((set, get) => {
       const contentToUse = customContent !== undefined ? customContent : target?.content || '';
       if (!contentToUse.trim()) return;
 
+      const taskId = get().startTask('Auto-Tag & Classify', `Extracting tags and determining category for "${target?.title || 'Note'}"...`);
       set({ isAutoTagging: true });
       try {
         const res = await api.autoTagNote({
@@ -500,14 +611,57 @@ export const useNotesStore = create<NotesState>((set, get) => {
             await get().fetchCategories();
           }
 
+          get().completeTask(
+            taskId,
+            `Applied ${generatedTags.length} tags: ${generatedTags.map(t => `#${t}`).join(' ')} (${detectedCat || 'personal'})`,
+            true,
+            'Auto-Tagging Complete'
+          );
           return { tags: generatedTags, category: detectedCat };
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to auto-tag note with AI:', err);
+        get().failTask(taskId, err?.message || 'Auto-tagging failed');
       } finally {
         set({ isAutoTagging: false });
       }
     },
+
+    setActiveLightboxImage: (img) => set({ activeLightboxImage: img }),
+
+    uploadAndInsertMedia: async (file: File | Blob, filename?: string, memoryId?: string) => {
+      const fileNameStr = (file as File).name || filename || 'image';
+      const taskId = get().startTask('GLM-OCR Vision Extraction', `Uploading "${fileNameStr}" & processing with local Ollama GLM-OCR model...`);
+      set({ isUploadingMedia: true });
+      try {
+        const res = await api.uploadMedia(file, filename, memoryId, true);
+        const media = res.media;
+        const ocrText = res.ocr?.text || media.ocr_text || '';
+        const charCount = ocrText.length;
+        get().completeTask(
+          taskId,
+          charCount > 0
+            ? `Extracted ${charCount.toLocaleString()} characters from "${media.original_filename || media.filename}"`
+            : `Attached image "${media.original_filename || media.filename}"`,
+          true,
+          'GLM-OCR Complete'
+        );
+        return {
+          url: media.url,
+          filename: media.original_filename || media.filename,
+          ocrText,
+          mediaId: media.id,
+        };
+      } catch (err: any) {
+        console.error('GLM-OCR upload failed:', err);
+        get().failTask(taskId, err?.message || 'Failed to upload or OCR image');
+        throw err;
+      } finally {
+        set({ isUploadingMedia: false });
+      }
+    },
+
+
 
     notePendingDelete: null,
     requestDeleteNote: (id, permanent = false) => {

@@ -121,7 +121,7 @@ export const AuditModal: React.FC = () => {
               className={cn(
                 'px-6 py-2 border-b text-xs flex items-center gap-2 font-medium',
                 msg.type === 'success'
-                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                  ? 'bg-surface-hover border-border text-foreground'
                   : 'bg-destructive/10 border-destructive/20 text-destructive'
               )}
             >
@@ -175,9 +175,9 @@ export const AuditModal: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       {totalOrphans === 0 ? (
-                        <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                        <CheckCircle2 className="w-5 h-5 text-foreground" />
                       ) : (
-                        <AlertTriangle className="w-5 h-5 text-amber-500" />
+                        <AlertTriangle className="w-5 h-5 text-foreground" />
                       )}
                       <div>
                         <h4 className="text-xs font-bold">
@@ -185,6 +185,7 @@ export const AuditModal: React.FC = () => {
                             ? 'All Storage Tiers Synced'
                             : `${totalOrphans} Discrepancies / Orphans Found`}
                         </h4>
+
                         <p className="text-[11px] text-muted-foreground">
                           {totalOrphans === 0
                             ? 'Files, database indexes, and ChromaDB vector embeddings are fully aligned.'

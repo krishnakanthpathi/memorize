@@ -78,13 +78,16 @@ export interface AuditSummary {
   orphan_files_count: number;
   orphan_indexes_count: number;
   orphan_chunks_count: number;
+  orphan_media_count?: number;
   orphan_files?: string[];
   orphan_indexes?: string[];
   orphan_chunks?: string[];
+  orphan_media?: Array<{ filename: string; file_path: string; file_size: number }>;
   action_summary?: {
     reconciled_files?: number;
     cleaned_indexes?: number;
     cleaned_chunks?: number;
+    cleaned_media?: number;
   };
 }
 
@@ -243,4 +246,56 @@ export interface AutoTagResponse {
   memory_id?: string;
 }
 
+export interface MediaItem {
+  id: string;
+  memory_id?: string | null;
+  filename: string;
+  original_filename: string;
+  file_path: string;
+  mime_type: string;
+  file_size: number;
+  content_hash: string;
+  ocr_text?: string;
+  ocr_status?: 'pending' | 'completed' | 'failed' | 'skipped';
+  ocr_model?: string;
+  url: string;
+  created_at: string;
+  updated_at?: string;
+}
 
+export interface MediaUploadResponse {
+  status: string;
+  media: MediaItem;
+  ocr: {
+    status: 'pending' | 'completed' | 'failed' | 'skipped';
+    text: string;
+    model: string;
+  };
+}
+
+export interface MediaOcrResponse {
+  status: string;
+  media_id: string;
+  ocr_text: string;
+  ocr_model: string;
+}
+
+export interface AsyncTask {
+  id: string;
+  title: string;
+  description?: string;
+  status: 'running' | 'success' | 'error';
+  startedAt: number;
+  completedAt?: number;
+  resultSummary?: string;
+  error?: string;
+}
+
+export interface ToastNotification {
+  id: string;
+  title: string;
+  description?: string;
+  type?: 'info' | 'success' | 'error';
+  duration?: number;
+  createdAt: number;
+}

@@ -5,6 +5,9 @@ import {
   CategoryStat,
   CorrelationItem,
   GenerateTitleResponse,
+  MediaItem,
+  MediaOcrResponse,
+  MediaUploadResponse,
   MemoryOrganizeResponse,
   MergeMemoriesRequest,
   MergeMemoriesResponse,
@@ -315,9 +318,11 @@ export const api = {
       orphan_files_count: summary.orphan_files_count ?? (details.orphan_files ? details.orphan_files.length : 0),
       orphan_indexes_count: summary.orphan_indexes_count ?? (details.orphan_indexes ? details.orphan_indexes.length : 0),
       orphan_chunks_count: summary.orphan_chunks_count ?? (details.orphan_chunks ? details.orphan_chunks.length : 0),
+      orphan_media_count: summary.orphan_media_count ?? (details.orphan_media ? details.orphan_media.length : 0),
       orphan_files: (details.orphan_files || []).map((f: any) => typeof f === "string" ? f : f.file_name || f.file_path),
       orphan_indexes: (details.orphan_indexes || []).map((i: any) => typeof i === "string" ? i : i.title || i.memory_id),
       orphan_chunks: (details.orphan_chunks || []).map((c: any) => typeof c === "string" ? c : c.id || JSON.stringify(c)),
+      orphan_media: details.orphan_media || [],
     };
   },
 
@@ -466,7 +471,115 @@ export const api = {
       },
     };
   },
+
+  // Uncompressed Original Media & Local Ollama GLM-OCR
+  async uploadMedia(
+    file: File | Blob,
+    filename?: string,
+    memoryId?: string,
+    runOcr: boolean = true,
+    customPrompt?: string
+  ): Promise<MediaUploadResponse> {
+    const formData = new FormData();
+    formData.append("file", file, filename || (file instanceof File ? file.name : "image.png"));
+    if (filename) formData.append("filename", filename);
+    if (memoryId) formData.append("memory_id", memoryId);
+    formData.append("run_ocr", String(runOcr));
+    if (customPrompt) formData.append("custom_prompt", customPrompt);
+
+    const res = await fetch(`${API_BASE}/media/upload`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Media upload failed: ${res.statusText}`);
+    }
+    return res.json();
+  },
+
+  async uploadMediaFromDataUrl(
+    dataUrl: string,
+    filename?: string,
+    memoryId?: string,
+    runOcr: boolean = true,
+    customPrompt?: string
+  ): Promise<MediaUploadResponse> {
+    const formData = new FormData();
+    formData.append("data_url", dataUrl);
+    if (filename) formData.append("filename", filename);
+    if (memoryId) formData.append("memory_id", memoryId);
+    formData.append("run_ocr", String(runOcr));
+    if (customPrompt) formData.append("custom_prompt", customPrompt);
+
+    const res = await fetch(`${API_BASE}/media/upload`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Media upload failed: ${res.statusText}`);
+    }
+    return res.json();
+  },
+
+  async uploadMediaFromUrl(
+    imageUrl: string,
+    memoryId?: string,
+    runOcr: boolean = true,
+    customPrompt?: string
+  ): Promise<MediaUploadResponse> {
+    const formData = new FormData();
+    formData.append("image_url", imageUrl);
+    if (memoryId) formData.append("memory_id", memoryId);
+    formData.append("run_ocr", String(runOcr));
+    if (customPrompt) formData.append("custom_prompt", customPrompt);
+
+    const res = await fetch(`${API_BASE}/media/upload`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Media upload failed: ${res.statusText}`);
+    }
+    return res.json();
+  },
+
+  async getMediaItem(mediaId: string): Promise<{ status: string; media: MediaItem }> {
+    const res = await fetch(`${API_BASE}/media/item/${encodeURIComponent(mediaId)}`);
+    if (!res.ok) throw new Error(`Fetch media item failed: ${res.statusText}`);
+    return res.json();
+  },
+
+  async triggerMediaOcr(mediaId: string, customPrompt?: string): Promise<MediaOcrResponse> {
+    const res = await fetch(`${API_BASE}/media/${encodeURIComponent(mediaId)}/ocr`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: customPrompt }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `OCR execution failed: ${res.statusText}`);
+    }
+    return res.json();
+  },
+
+  async listMedia(): Promise<{ status: string; total: number; media: MediaItem[] }> {
+    const res = await fetch(`${API_BASE}/media/list`);
+    if (!res.ok) throw new Error(`List media failed: ${res.statusText}`);
+    return res.json();
+  },
+
+  async deleteMedia(mediaId: string): Promise<{ status: string; media_id: string; deleted: boolean }> {
+    const res = await fetch(`${API_BASE}/media/${encodeURIComponent(mediaId)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) throw new Error(`Delete media failed: ${res.statusText}`);
+    return res.json();
+  },
 };
+
 
 
 

@@ -106,6 +106,36 @@ def init_db() -> None:
             "CREATE INDEX IF NOT EXISTS idx_memory_versions_id ON memory_versions(memory_id, version_number);"
         )
 
+        # Create media_items table for original uncompressed images & OCR metadata
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS media_items (
+                id TEXT PRIMARY KEY,
+                memory_id TEXT,
+                filename TEXT NOT NULL,
+                original_filename TEXT NOT NULL,
+                file_path TEXT NOT NULL UNIQUE,
+                mime_type TEXT NOT NULL,
+                file_size INTEGER NOT NULL,
+                content_hash TEXT NOT NULL,
+                ocr_text TEXT,
+                ocr_status TEXT DEFAULT 'pending',
+                ocr_model TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            """
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_media_memory_id ON media_items(memory_id);"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_media_hash ON media_items(content_hash);"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_media_filename ON media_items(filename);"
+        )
+
         conn.commit()
     logger.info(f"SQLite database initialized at {constants.DB_PATH}")
 
@@ -282,13 +312,16 @@ def get_all_memories(
 
 @handle_errors
 def delete_memory_from_index(memory_id: str) -> bool:
-    """Removes a memory from the SQLite index by ID."""
+    """Removes a memory and its associated version and backup records from SQLite index by ID."""
     init_db()
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
+        deleted = cursor.rowcount > 0
+        cursor.execute("DELETE FROM memory_versions WHERE memory_id = ?", (memory_id,))
+        cursor.execute("DELETE FROM backup_records WHERE memory_id = ?", (memory_id,))
         conn.commit()
-        return cursor.rowcount > 0
+        return deleted
 
 
 @handle_errors
@@ -510,5 +543,179 @@ def clear_all_memory_versions_from_db() -> None:
         cursor.execute("DELETE FROM memory_versions;")
         conn.commit()
     logger.info("Cleared all memory versions from SQLite DB.")
+
+
+# ==========================================
+# Media Store Database Helpers
+# ==========================================
+
+
+@handle_errors
+def upsert_media_record(media_entry: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Inserts or updates a media record in SQLite.
+    """
+    init_db()
+    media_id = media_entry["id"]
+    memory_id = media_entry.get("memory_id")
+    filename = media_entry["filename"]
+    original_filename = media_entry.get("original_filename", filename)
+    file_path = str(media_entry["file_path"])
+    mime_type = media_entry.get("mime_type", "image/png")
+    file_size = int(media_entry.get("file_size", 0))
+    content_hash = media_entry.get("content_hash", "")
+    ocr_text = media_entry.get("ocr_text", "")
+    ocr_status = media_entry.get("ocr_status", "pending")
+    ocr_model = media_entry.get("ocr_model", "")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    created_at = media_entry.get("created_at") or now_iso
+    updated_at = media_entry.get("updated_at") or now_iso
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO media_items (
+                id, memory_id, filename, original_filename, file_path,
+                mime_type, file_size, content_hash, ocr_text, ocr_status,
+                ocr_model, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                memory_id = excluded.memory_id,
+                filename = excluded.filename,
+                original_filename = excluded.original_filename,
+                file_path = excluded.file_path,
+                mime_type = excluded.mime_type,
+                file_size = excluded.file_size,
+                content_hash = excluded.content_hash,
+                ocr_text = excluded.ocr_text,
+                ocr_status = excluded.ocr_status,
+                ocr_model = excluded.ocr_model,
+                updated_at = excluded.updated_at
+            ;
+            """,
+            (
+                media_id,
+                memory_id,
+                filename,
+                original_filename,
+                file_path,
+                mime_type,
+                file_size,
+                content_hash,
+                ocr_text,
+                ocr_status,
+                ocr_model,
+                created_at,
+                updated_at,
+            ),
+        )
+        conn.commit()
+    logger.info(f"Upserted media record '{media_id}' ({filename}) in SQLite.")
+    return media_entry
+
+
+@handle_errors
+def get_media_record(media_id: str) -> Optional[Dict[str, Any]]:
+    """Retrieves a single media record by its ID."""
+    init_db()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM media_items WHERE id = ?", (media_id,))
+        row = cursor.fetchone()
+        if row:
+            return dict(row)
+    return None
+
+
+@handle_errors
+def get_media_record_by_hash(content_hash: str) -> Optional[Dict[str, Any]]:
+    """Retrieves a media record by its SHA-256 content hash."""
+    init_db()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM media_items WHERE content_hash = ? LIMIT 1", (content_hash,))
+        row = cursor.fetchone()
+        if row:
+            return dict(row)
+    return None
+
+
+@handle_errors
+def get_media_record_by_filename(filename: str) -> Optional[Dict[str, Any]]:
+    """Retrieves a media record by its stored filename or original filename."""
+    if not filename:
+        return None
+    init_db()
+    clean_name = Path(filename).name
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT * FROM media_items 
+            WHERE filename = ? OR original_filename = ? OR filename LIKE ?
+            ORDER BY created_at DESC LIMIT 1
+            """,
+            (clean_name, clean_name, f"%{clean_name}%"),
+        )
+        row = cursor.fetchone()
+        if row:
+            return dict(row)
+    return None
+
+
+
+@handle_errors
+def get_media_records_for_memory(memory_id: str) -> List[Dict[str, Any]]:
+    """Retrieves all media records associated with a given memory ID."""
+    init_db()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM media_items WHERE memory_id = ? ORDER BY created_at DESC", (memory_id,))
+        rows = cursor.fetchall()
+        return [dict(r) for r in rows]
+
+
+@handle_errors
+def list_all_media_records() -> List[Dict[str, Any]]:
+    """Retrieves all stored media items ordered by creation date descending."""
+    init_db()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM media_items ORDER BY created_at DESC")
+        rows = cursor.fetchall()
+        return [dict(r) for r in rows]
+
+
+@handle_errors
+def update_media_ocr_result(media_id: str, ocr_text: str, ocr_status: str = "completed", ocr_model: str = "glm-ocr") -> bool:
+    """Updates the OCR text, status, and model for a media item."""
+    init_db()
+    now_iso = datetime.now(timezone.utc).isoformat()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE media_items
+            SET ocr_text = ?, ocr_status = ?, ocr_model = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (ocr_text, ocr_status, ocr_model, now_iso, media_id),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+@handle_errors
+def delete_media_record(media_id: str) -> bool:
+    """Deletes a media item record from SQLite."""
+    init_db()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM media_items WHERE id = ?", (media_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+
 
 

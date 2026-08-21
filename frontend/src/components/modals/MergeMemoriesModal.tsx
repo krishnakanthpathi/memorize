@@ -34,7 +34,11 @@ export const MergeMemoriesModal: React.FC = () => {
     clearNoteSelection,
     fetchNotes,
     selectNote,
+    startTask,
+    completeTask,
+    failTask,
   } = useNotesStore();
+
 
   const isOpen = activeModal === 'merge';
 
@@ -123,6 +127,10 @@ export const MergeMemoriesModal: React.FC = () => {
 
     setIsMerging(true);
     setErrorMsg('');
+    const taskId = startTask(
+      useAi ? 'AI Memory Merge' : 'Direct Memory Merge',
+      `Consolidating ${selectedNoteIds.length} notes into "${targetTitle.trim() || 'Merged Note'}"...`
+    );
     try {
       const res = await api.mergeMemories({
         memory_ids: selectedNoteIds,
@@ -135,13 +143,21 @@ export const MergeMemoriesModal: React.FC = () => {
       });
 
       setMergeResult(res);
+      completeTask(
+        taskId,
+        `Merged ${res.merged_source_count} notes into "${res.title}"`,
+        true,
+        'Notes Merged'
+      );
       await fetchNotes();
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to merge memories.');
+      failTask(taskId, err.message || 'Failed to merge memories.');
     } finally {
       setIsMerging(false);
     }
   };
+
 
   const handleDone = () => {
     if (mergeResult?.merged_memory_id) {
@@ -188,7 +204,7 @@ export const MergeMemoriesModal: React.FC = () => {
 
           {/* Success Banner */}
           {mergeResult && (
-            <div className="px-6 py-2.5 bg-emerald-500/10 border-b border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs flex items-center justify-between font-medium">
+            <div className="px-6 py-2.5 bg-surface-hover border-b border-border text-foreground text-xs flex items-center justify-between font-medium">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4" />
                 <span>
@@ -197,12 +213,13 @@ export const MergeMemoriesModal: React.FC = () => {
               </div>
               <button
                 onClick={handleDone}
-                className="px-3 py-1 rounded-md bg-emerald-600 text-white font-semibold text-xs hover:bg-emerald-700 transition-colors shadow-xs"
+                className="px-3 py-1 rounded-md bg-foreground text-background font-semibold text-xs hover:opacity-90 transition-opacity shadow-xs cursor-pointer"
               >
                 Open Merged Note
               </button>
             </div>
           )}
+
 
           {/* Error Banner */}
           {errorMsg && (
@@ -233,9 +250,10 @@ export const MergeMemoriesModal: React.FC = () => {
                       value="suggested"
                       className="px-2 py-1 rounded-md text-[11px] font-semibold data-[state=active]:bg-card data-[state=active]:text-foreground text-muted-foreground transition-all flex items-center justify-center gap-1"
                     >
-                      <Sparkles className="w-3 h-3 text-violet-500" />
+                      <Sparkles className="w-3 h-3 text-foreground" />
                       <span>Related ({correlatedList.length})</span>
                     </Tabs.Trigger>
+
                   </Tabs.List>
                 </div>
 
@@ -303,10 +321,11 @@ export const MergeMemoriesModal: React.FC = () => {
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-bold text-foreground truncate">{item.title}</span>
-                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold shrink-0">
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-surface-hover border border-border text-foreground font-semibold shrink-0">
                             {item.similarity_percent}% match
                           </span>
                         </div>
+
 
                         <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                           <span className="capitalize px-1.5 py-0.2 rounded bg-surface-hover font-mono">
@@ -461,7 +480,7 @@ export const MergeMemoriesModal: React.FC = () => {
                     <div className="p-3.5 rounded-xl bg-surface-hover/50 border border-border/80 flex items-center justify-between">
                       <div>
                         <div className="flex items-center gap-1.5">
-                          <Sparkles className="w-3.5 h-3.5 text-violet-500" />
+                          <Sparkles className="w-3.5 h-3.5 text-foreground" />
                           <span className="text-xs font-bold text-foreground">Synthesize with AI</span>
                         </div>
                         <p className="text-[11px] text-muted-foreground">
@@ -499,7 +518,7 @@ export const MergeMemoriesModal: React.FC = () => {
                   <div className="pt-2 flex items-center justify-end gap-3">
                     <button
                       onClick={handleDone}
-                      className="px-4 py-2 rounded-lg bg-surface-hover hover:bg-surface-hover/80 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                      className="px-4 py-2 rounded-lg bg-surface-hover hover:bg-surface-hover/80 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                     >
                       Cancel
                     </button>
@@ -516,12 +535,13 @@ export const MergeMemoriesModal: React.FC = () => {
                         </>
                       ) : (
                         <>
-                          {useAi ? <Sparkles className="w-4 h-4 text-violet-300 dark:text-violet-200" /> : <Combine className="w-4 h-4" />}
+                          {useAi ? <Sparkles className="w-4 h-4 text-background" /> : <Combine className="w-4 h-4" />}
                           <span>{useAi ? `Merge ${selectedNotes.length} Notes with AI` : `Merge ${selectedNotes.length} Notes (Direct)`}</span>
                         </>
                       )}
                     </button>
                   </div>
+
                 </>
               )}
             </div>

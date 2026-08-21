@@ -23,6 +23,9 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 MEMORIES_DIR = DATA_DIR / "memories"
 MEMORIES_DIR.mkdir(parents=True, exist_ok=True)
 
+MEDIA_DIR = DATA_DIR / "media"
+MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+
 BACKUP_DIR = DATA_DIR / "backups"
 BACKUP_MEMORIES_DIR = BACKUP_DIR / "memories"
 BACKUP_MEMORIES_DIR.mkdir(parents=True, exist_ok=True)
@@ -59,6 +62,8 @@ LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama").lower()
 LLM_MODEL = os.getenv("LLM_MODEL", os.getenv("DEFAULT_LLM_MODEL", "gpt-oss:120b-cloud"))
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", os.getenv("OLLAMA_CLASSIFICATION_MODEL", "gpt-oss:120b-cloud"))
+OLLAMA_OCR_MODEL = os.getenv("OLLAMA_OCR_MODEL", "glm-ocr")
+MAX_MEDIA_UPLOAD_SIZE = int(os.getenv("MAX_MEDIA_UPLOAD_SIZE", str(50 * 1024 * 1024))) # 50 MB default uncompressed limit
 
 # Provider endpoints
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://bedrock-mantle.ap-southeast-2.api.aws/v1")

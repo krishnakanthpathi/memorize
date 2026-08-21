@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import List
 
-from config.constants import DEFAULT_CATEGORIES, MEMORIES_DIR
+import config.constants as constants
 
 
 def get_available_categories() -> List[str]:
@@ -9,7 +9,7 @@ def get_available_categories() -> List[str]:
     Returns strictly the predefined list of allowed memory categories.
     Prevents dynamic creation of duplicate or rogue category folders.
     """
-    return sorted(list(set(cat.lower() for cat in DEFAULT_CATEGORIES)))
+    return sorted(list(set(cat.lower() for cat in constants.DEFAULT_CATEGORIES)))
 
 
 def get_category_dir(category: str) -> Path:
@@ -23,7 +23,7 @@ def get_category_dir(category: str) -> Path:
     if cat_name not in allowed:
         cat_name = "personal"
 
-    cat_dir = MEMORIES_DIR / cat_name
+    cat_dir = constants.MEMORIES_DIR / cat_name
     cat_dir.mkdir(parents=True, exist_ok=True)
     return cat_dir
 

@@ -41,6 +41,47 @@ Available Categories & Auto-Classification Guide:
 """
 
 
+import base64
+import re
+
+from storage.media_store_manager import save_raw_image
+from utils.llm_client import extract_text_with_ollama_ocr
+
+
+def process_embedded_data_urls(content: str, memory_id: Optional[str] = None) -> str:
+    """Detects base64 data URIs in markdown content, saves them uncompressed to data/media/, and replaces with local media URLs."""
+    if not content or "data:image/" not in content:
+        return content
+
+    def replace_data_uri(match):
+        mime_type = match.group(1)
+        b64_data = match.group(2)
+        try:
+            raw_bytes = base64.b64decode(b64_data)
+            ext = mime_type.split("/")[-1].replace("jpeg", "jpg")
+            rec = save_raw_image(
+                file_bytes=raw_bytes,
+                filename=f"embedded_image.{ext}",
+                mime_type=mime_type,
+                memory_id=memory_id,
+            )
+            ocr_text = ""
+            try:
+                ocr_text = extract_text_with_ollama_ocr(raw_bytes)
+            except Exception:
+                pass
+
+            replacement = f"![Image]({rec['url']})"
+            if ocr_text:
+                replacement += f"\n\n**Extracted Content (OCR):**\n{ocr_text}"
+            return replacement
+        except Exception:
+            return match.group(0)
+
+    pattern = r"data:(image/[a-zA-Z0-9\+\-\.]+);base64,([A-Za-z0-9+/=]+)"
+    return re.sub(pattern, replace_data_uri, content)
+
+
 def store(
     title: str,
     content: str = "",
@@ -75,6 +116,8 @@ def store(
     """
     if tags is None:
         tags = []
+
+    content = process_embedded_data_urls(content, memory_id=memory_id)
 
     use_llm = bool(get_setting("use_llm", False))
     if use_llm and (not tags or not category or category == "personal") and content:
@@ -122,6 +165,8 @@ def update(
     """
     if tags is None:
         tags = []
+
+    content = process_embedded_data_urls(content, memory_id=memory_id)
 
     action = "append" if append else "update"
     return execute_upsert_memory(

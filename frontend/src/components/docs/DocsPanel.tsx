@@ -172,7 +172,7 @@ export const DocsPanel: React.FC = () => {
                 <div className="p-4 rounded-xl border border-border bg-surface-hover/30 space-y-2">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">Headers & Emphasis</h3>
                   <pre className="p-3 bg-surface-hover rounded-lg font-mono text-xs overflow-x-auto text-foreground">
-{`# Heading 1
+                    {`# Heading 1
 ## Heading 2
 ### Heading 3
 
@@ -183,7 +183,7 @@ export const DocsPanel: React.FC = () => {
                 <div className="p-4 rounded-xl border border-border bg-surface-hover/30 space-y-2">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">Task Lists & Lists</h3>
                   <pre className="p-3 bg-surface-hover rounded-lg font-mono text-xs overflow-x-auto text-foreground">
-{`- [x] Finished memory indexing
+                    {`- [x] Finished memory indexing
 - [ ] Implement new model selector
 - Standard bullet item 1
   - Nested item 1.1`}
@@ -193,7 +193,7 @@ export const DocsPanel: React.FC = () => {
                 <div className="p-4 rounded-xl border border-border bg-surface-hover/30 space-y-2">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">Code Blocks with Language Tagging</h3>
                   <pre className="p-3 bg-surface-hover rounded-lg font-mono text-xs overflow-x-auto text-foreground">
-{`\`\`\`python
+                    {`\`\`\`python
 def memorize(title: str, content: str):
     return api.save_memory(title=title, content=content)
 \`\`\``}
@@ -281,41 +281,225 @@ def memorize(title: str, content: str):
             </div>
           )}
 
-          {/* SECTION 4: MCP TOOLS */}
+          {/* SECTION 4: MCP TOOLS & PROTOCOL */}
           {activeSection === 'mcp' && (
             <div className="space-y-6">
               <div>
-                <h1 className="text-2xl font-bold tracking-tight mb-2">Model Context Protocol (MCP) Server</h1>
+                <h1 className="text-2xl font-bold tracking-tight mb-2">Model Context Protocol (MCP) Ecosystem</h1>
                 <p className="text-sm text-muted-foreground">
-                  Memorize registers 5 lean core MCP tools allowing any MCP-compliant agent (e.g. Claude Desktop, Google Gemini, Cursor, Antigravity) to store, update, delete, fetch, and search knowledge memories.
+                  The Model Context Protocol (MCP) turns Memorize into an external long-term memory system for any AI agent (Claude Desktop, Cursor, Gemini, Antigravity, Claude Code). It enables autonomous note creation, semantic RAG retrieval, synthesis, and synchronization across Markdown, SQLite, and ChromaDB.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {[
-                  { name: 'store', desc: 'Stores a memory into the system. If no category is given, auto-categorizes using the 11-category taxonomy.' },
-                  { name: 'update', desc: 'Updates an existing memory. Overwrites, merges, or appends new information cleanly.' },
-                  { name: 'delete', desc: 'Deletes a memory across disk markdown storage, SQLite DB index, and ChromaDB vector store.' },
-                  { name: 'fetch', desc: 'Fetches full memory metadata and markdown content by ID/title.' },
-                  { name: 'hybrid_fetch', desc: 'Performs 50/30/20 weighted hybrid RAG search combining vector similarity, tag matches, and categories.' },
-                  { name: 'list_memories', desc: 'Lists stored memories with optional category/tag filters and limit.' },
-                  { name: 'get_categories', desc: 'Returns all 11 standard predefined categories with note counts and descriptions.' },
-                ].map((tool) => (
-                  <div key={tool.name} className="p-3.5 rounded-xl border border-border bg-surface-hover/40 space-y-1">
-                    <span className="font-mono font-bold text-xs text-foreground block">
-                      ⚡ {tool.name}
-                    </span>
-                    <p className="text-[11px] text-muted-foreground">{tool.desc}</p>
+              {/* MCP Configuration Snippets */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Terminal className="w-4 h-4 text-foreground" />
+                  <h3 className="text-sm font-bold text-foreground">MCP Client Configuration (JSON)</h3>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Claude Desktop Config */}
+                  <div className="p-4 rounded-xl border border-border bg-surface-hover/30 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-xs text-foreground">Claude Desktop</span>
+                      <button
+                        onClick={() =>
+                          copyCode(
+                            JSON.stringify(
+                              {
+                                mcpServers: {
+                                  memorize: {
+                                    command: "python3",
+                                    args: ["/Users/krishnakanth/Projects/memorize/main.py"],
+                                    env: {
+                                      PYTHONPATH: "/Users/krishnakanth/Projects/memorize",
+                                    },
+                                  },
+                                },
+                              },
+                              null,
+                              2
+                            ),
+                            'claude-json'
+                          )
+                        }
+                        className="flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded bg-surface-selected hover:bg-surface-hover border border-border cursor-pointer transition-colors"
+                      >
+                        {copiedText === 'claude-json' ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                        {copiedText === 'claude-json' ? 'Copied' : 'Copy JSON'}
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Add to <code className="font-mono text-[10px] bg-surface-selected px-1 py-0.5 rounded">~/Library/Application Support/Claude/claude_desktop_config.json</code>
+                    </p>
+                    <pre className="p-2.5 rounded-lg bg-surface-list border border-border font-mono text-[10px] text-muted-foreground overflow-x-auto">
+                      {`{
+  "mcpServers": {
+    "memorize": {
+      "command": "python3",
+      "args": ["/Users/krishnakanth/Projects/memorize/main.py"]
+    }
+  }
+}`}
+                    </pre>
                   </div>
-                ))}
+
+                  {/* Cursor IDE Config */}
+                  <div className="p-4 rounded-xl border border-border bg-surface-hover/30 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-xs text-foreground">Cursor / Antigravity</span>
+                      <button
+                        onClick={() =>
+                          copyCode(
+                            JSON.stringify(
+                              {
+                                mcpServers: {
+                                  memorize: {
+                                    command: "python3",
+                                    args: ["main.py"],
+                                    cwd: "/Users/krishnakanth/Projects/memorize",
+                                  },
+                                },
+                              },
+                              null,
+                              2
+                            ),
+                            'cursor-json'
+                          )
+                        }
+                        className="flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded bg-surface-selected hover:bg-surface-hover border border-border cursor-pointer transition-colors"
+                      >
+                        {copiedText === 'cursor-json' ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                        {copiedText === 'cursor-json' ? 'Copied' : 'Copy JSON'}
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Add to <code className="font-mono text-[10px] bg-surface-selected px-1 py-0.5 rounded">~/.cursor/mcp.json</code> or project settings
+                    </p>
+                    <pre className="p-2.5 rounded-lg bg-surface-list border border-border font-mono text-[10px] text-muted-foreground overflow-x-auto">
+                      {`{
+  "mcpServers": {
+    "memorize": {
+      "command": "python3",
+      "args": ["main.py"],
+      "cwd": "/Users/krishnakanth/Projects/memorize"
+    }
+  }
+}`}
+                    </pre>
+                  </div>
+
+                  {/* Remote / SSE Config */}
+                  <div className="p-4 rounded-xl border border-border bg-surface-hover/30 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-xs text-foreground">Remote / SSE (Google Gemini / Webhooks)</span>
+                      <button
+                        onClick={() =>
+                          copyCode(
+                            JSON.stringify(
+                              {
+                                mcpServers: {
+                                  memorize: {
+                                    url: "http://localhost:7777/sse",
+                                  },
+                                },
+                              },
+                              null,
+                              2
+                            ),
+                            'sse-json'
+                          )
+                        }
+                        className="flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded bg-surface-selected hover:bg-surface-hover border border-border cursor-pointer transition-colors"
+                      >
+                        {copiedText === 'sse-json' ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                        {copiedText === 'sse-json' ? 'Copied' : 'Copy URL'}
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Direct HTTP/SSE endpoint (served simultaneously on port 7777)
+                    </p>
+                    <pre className="p-2.5 rounded-lg bg-surface-list border border-border font-mono text-[10px] text-muted-foreground overflow-x-auto">
+                      {`{
+  "mcpServers": {
+    "memorize": {
+      "url": "http://localhost:7777/sse"
+    }
+  }
+}`}
+                    </pre>
+                  </div>
+
+                  {/* Claude Code CLI */}
+                  <div className="p-4 rounded-xl border border-border bg-surface-hover/30 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-xs text-foreground">Claude Code CLI</span>
+                      <button
+                        onClick={() =>
+                          copyCode(
+                            "claude mcp add memorize -- python3 /Users/krishnakanth/Projects/memorize/main.py",
+                            'cli-cmd'
+                          )
+                        }
+                        className="flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded bg-surface-selected hover:bg-surface-hover border border-border cursor-pointer transition-colors"
+                      >
+                        {copiedText === 'cli-cmd' ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                        {copiedText === 'cli-cmd' ? 'Copied' : 'Copy Command'}
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Run directly in terminal to register Memorize globally
+                    </p>
+                    <pre className="p-2.5 rounded-lg bg-surface-list border border-border font-mono text-[10px] text-muted-foreground overflow-x-auto">
+                      claude mcp add memorize -- python3 /Users/krishnakanth/Projects/memorize/main.py
+                    </pre>
+                  </div>
+                </div>
               </div>
 
+              {/* 12 Core Registered MCP Tools */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-foreground" />
+                    <h3 className="text-sm font-bold text-foreground">12 Registered FastMCP Tools</h3>
+                  </div>
+                  <span className="px-2 py-0.5 rounded bg-surface-selected font-mono text-[10px] font-bold text-foreground">
+                    12 Active Tools
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[
+                    { name: 'store', desc: 'Saves a new memory. Auto-categorizes into the 11-category taxonomy and generates embeddings.' },
+                    { name: 'update', desc: 'Updates, appends, or cleanly merges content with existing notes without data loss.' },
+                    { name: 'delete', desc: 'Purges a note permanently across Markdown storage, SQLite index, and ChromaDB vector store.' },
+                    { name: 'fetch', desc: 'Retrieves full Markdown content, YAML frontmatter, and metadata by ID or title.' },
+                    { name: 'hybrid_fetch', desc: '50/30/20 weighted hybrid RAG search combining vector similarity, tag matches, and categories.' },
+                    { name: 'list_memories', desc: 'Lists stored memory summaries with optional category/tag filters and limit.' },
+                    { name: 'get_categories', desc: 'Returns all 11 standard predefined categories with note counts and semantic descriptions.' },
+                    { name: 'merge_memories', desc: 'Consolidates multiple notes into a single master document with AI or deterministic merging.' },
+                    { name: 'find_correlated_memories', desc: 'Discovers semantically related notes using vector similarity and tag overlap.' },
+                    { name: 'organize_memory', desc: 'Polishes, restructures, or summarizes a note using AI with automatic rollback snapshot.' },
+                    { name: 'generate_title', desc: 'Generates a concise, high-signal 3-7 word title from note content.' },
+                    { name: 'organize_selection', desc: 'Transforms or polishes a selected passage (polish, summarize, technical, expand).' },
+                  ].map((tool) => (
+                    <div key={tool.name} className="p-3.5 rounded-xl border border-border bg-surface-hover/40 space-y-1">
+                      <span className="font-mono font-bold text-xs text-foreground block">
+                        ⚡ {tool.name}
+                      </span>
+                      <p className="text-[11px] text-muted-foreground">{tool.desc}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
               {/* Predefined Categories Taxonomy */}
               <div className="space-y-3 pt-2">
                 <div className="flex items-center gap-2">
                   <Folder className="w-4 h-4 text-foreground" />
-                  <h3 className="text-sm font-bold text-foreground">Standard Categories Taxonomy for AI Auto-Assignment</h3>
+                  <h3 className="text-sm font-bold text-foreground">Standard 11-Category Taxonomy</h3>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                   {[
@@ -336,6 +520,40 @@ def memorize(title: str, content: str):
                       <span className="text-[10px] text-muted-foreground block leading-tight">{c.desc}</span>
                     </div>
                   ))}
+                </div>
+              </div>
+
+              {/* Safety, Concurrency & Performance FAQ */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-foreground" />
+                  <h3 className="text-sm font-bold text-foreground">Architecture, Safety & Concurrency</h3>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="p-3.5 rounded-xl border border-border bg-surface-list space-y-1">
+                    <span className="text-xs font-bold text-foreground block">Does it lock or corrupt the database?</span>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      No. SQLite operates in WAL (Write-Ahead Logging) mode and ChromaDB uses isolated persistent embeddings. Running the FastAPI web app and MCP server concurrently causes zero file locks.
+                    </p>
+                  </div>
+                  <div className="p-3.5 rounded-xl border border-border bg-surface-list space-y-1">
+                    <span className="text-xs font-bold text-foreground block">What if an AI accidentally modifies or deletes notes?</span>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Memorize takes version snapshots on every update and preserves deleted note snapshots. You can restore historical versions anytime from the Version History drawer or Backup Manager.
+                    </p>
+                  </div>
+                  <div className="p-3.5 rounded-xl border border-border bg-surface-list space-y-1">
+                    <span className="text-xs font-bold text-foreground block">Does it slow down LLM conversations?</span>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      MCP tool execution runs locally in under 50ms. RAG retrieval queries top-k ranked chunks, injecting minimal tokens to prevent prompt bloat.
+                    </p>
+                  </div>
+                  <div className="p-3.5 rounded-xl border border-border bg-surface-list space-y-1">
+                    <span className="text-xs font-bold text-foreground block">How to run without port conflicts?</span>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      The FastAPI backend on port 7777 automatically serves both REST routes and Universal MCP (<code className="font-mono text-[10px]">/mcp</code> and <code className="font-mono text-[10px]">/sse</code>). For Claude Desktop or Cursor, use standard stdio transport (<code className="font-mono text-[10px]">python3 main.py</code>).
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>

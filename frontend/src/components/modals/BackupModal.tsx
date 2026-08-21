@@ -119,7 +119,7 @@ export const BackupModal: React.FC = () => {
               className={cn(
                 'px-6 py-2 border-b text-xs flex items-center gap-2 font-medium',
                 msg.type === 'success'
-                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                  ? 'bg-surface-hover border-border text-foreground'
                   : 'bg-destructive/10 border-destructive/20 text-destructive'
               )}
             >
@@ -131,6 +131,7 @@ export const BackupModal: React.FC = () => {
               <span>{msg.text}</span>
             </div>
           )}
+
 
           {/* Content */}
           <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto text-xs">

@@ -13,7 +13,9 @@ import { NewCategoryModal } from '@/components/modals/NewCategoryModal';
 import { DeleteConfirmationModal } from '@/components/modals/DeleteConfirmationModal';
 import { KeyboardShortcutsModal } from '@/components/modals/KeyboardShortcutsModal';
 import { MergeMemoriesModal } from '@/components/modals/MergeMemoriesModal';
+import { ToastNotificationContainer } from '@/components/common/ToastNotificationContainer';
 import { useNotesStore } from '@/store/useNotesStore';
+
 
 export const AppLayout: React.FC = () => {
   const {
@@ -252,6 +254,10 @@ export const AppLayout: React.FC = () => {
       <DeleteConfirmationModal />
       <KeyboardShortcutsModal />
       <MergeMemoriesModal />
+
+      {/* Global Toast Notification Banner Stack */}
+      <ToastNotificationContainer />
     </div>
   );
 };
+

@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 from typing import Dict, Any, Optional, Union
 
-from config.constants import BACKUP_DIR, BACKUP_MEMORIES_DIR, DB_PATH, MEMORIES_DIR
+import config.constants as constants
 from core.hashing import compute_file_hash
 from core.logger import handle_errors, logger
 from storage.db_manager import (
@@ -24,12 +24,15 @@ def backup_single_memory_file(file_path: Union[str, Path]) -> bool:
     if not file_path.exists() or not file_path.name.endswith(".md"):
         return False
 
+    mem_dir = constants.MEMORIES_DIR
+    backup_mem_dir = constants.BACKUP_MEMORIES_DIR
+
     try:
-        rel_path = file_path.relative_to(MEMORIES_DIR)
+        rel_path = file_path.relative_to(mem_dir)
     except ValueError:
         rel_path = Path(file_path.parent.name) / file_path.name
 
-    target_backup_path = BACKUP_MEMORIES_DIR / rel_path
+    target_backup_path = backup_mem_dir / rel_path
     target_backup_path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(file_path, target_backup_path)
 
@@ -69,14 +72,16 @@ def backup_database_snapshot() -> bool:
     """
     Creates a snapshot backup of the SQLite database (memorize.db) in data/backups/memorize_backup.db.
     """
-    if not DB_PATH.exists():
+    db_path = constants.DB_PATH
+    backup_dir = constants.BACKUP_DIR
+    if not db_path.exists():
         return False
 
-    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-    backup_db_path = BACKUP_DIR / "memorize_backup.db"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup_db_path = backup_dir / "memorize_backup.db"
     try:
         import sqlite3
-        conn_src = sqlite3.connect(str(DB_PATH))
+        conn_src = sqlite3.connect(str(db_path))
         conn_dst = sqlite3.connect(str(backup_db_path))
         with conn_dst:
             conn_src.backup(conn_dst)
@@ -86,7 +91,7 @@ def backup_database_snapshot() -> bool:
         return True
     except Exception as e:
         logger.warning(f"Database online backup failed: {e}. Falling back to copy.")
-        shutil.copy2(DB_PATH, backup_db_path)
+        shutil.copy2(db_path, backup_db_path)
         return True
 
 
@@ -96,18 +101,20 @@ def generate_backup_readme() -> str:
     Generates a comprehensive README.txt snapshot summarizing all backed up memory files,
     category breakdowns, and backup metadata. Writes README.txt to data/backups/ and SQLite database.
     """
-    if not BACKUP_MEMORIES_DIR.exists():
-        BACKUP_MEMORIES_DIR.mkdir(parents=True, exist_ok=True)
+    backup_mem_dir = constants.BACKUP_MEMORIES_DIR
+    backup_dir = constants.BACKUP_DIR
+    if not backup_mem_dir.exists():
+        backup_mem_dir.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     categories_dict: Dict[str, list] = {}
     total_files = 0
 
-    for root, _, files in os.walk(BACKUP_MEMORIES_DIR):
+    for root, _, files in os.walk(backup_mem_dir):
         for file in files:
             if file.endswith(".md") and not file.startswith("."):
                 full_path = Path(root) / file
-                rel = full_path.relative_to(BACKUP_MEMORIES_DIR)
+                rel = full_path.relative_to(backup_mem_dir)
                 cat = rel.parent.name if rel.parent.name != "." else "personal"
                 if cat not in categories_dict:
                     categories_dict[cat] = []
@@ -148,8 +155,8 @@ def generate_backup_readme() -> str:
     ])
 
     readme_content = "\n".join(lines)
-    readme_path = BACKUP_DIR / "README.txt"
-    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    readme_path = backup_dir / "README.txt"
+    backup_dir.mkdir(parents=True, exist_ok=True)
     with open(readme_path, "w", encoding="utf-8") as f:
         f.write(readme_content)
 
@@ -164,12 +171,15 @@ def delete_single_backup_file(file_path: Union[str, Path]) -> bool:
     Removes the backup file when a memory is explicitly deleted.
     """
     file_path = Path(file_path)
+    mem_dir = constants.MEMORIES_DIR
+    backup_mem_dir = constants.BACKUP_MEMORIES_DIR
+
     try:
-        rel_path = file_path.relative_to(MEMORIES_DIR)
+        rel_path = file_path.relative_to(mem_dir)
     except ValueError:
         rel_path = Path(file_path.parent.name) / file_path.name
 
-    target_backup_path = BACKUP_MEMORIES_DIR / rel_path
+    target_backup_path = backup_mem_dir / rel_path
     if target_backup_path.exists():
         target_backup_path.unlink()
         logger.info(f"Deleted memory backup: {target_backup_path}")
@@ -183,11 +193,12 @@ def backup_all_memories() -> Dict[str, Any]:
     Scans data/memories/, backs up all Markdown files into data/backups/memories/,
     snapshots memorize.db into data/backups/memorize_backup.db, and generates README.txt.
     """
-    if not MEMORIES_DIR.exists():
+    mem_dir = constants.MEMORIES_DIR
+    if not mem_dir.exists():
         return {"status": "success", "backed_up_count": 0}
 
     backed_up_count = 0
-    for root, _, files in os.walk(MEMORIES_DIR):
+    for root, _, files in os.walk(mem_dir):
         for file in files:
             if file.endswith(".md") and not file.startswith("."):
                 full_path = Path(root) / file
@@ -210,20 +221,22 @@ def restore_memories_from_backup() -> Dict[str, Any]:
     """
     Restores any missing Markdown memory files from data/backups/memories/ into data/memories/.
     """
-    if not BACKUP_MEMORIES_DIR.exists():
+    mem_dir = constants.MEMORIES_DIR
+    backup_mem_dir = constants.BACKUP_MEMORIES_DIR
+    if not backup_mem_dir.exists():
         return {"status": "success", "restored_count": 0}
 
     restored_count = 0
-    for root, _, files in os.walk(BACKUP_MEMORIES_DIR):
+    for root, _, files in os.walk(backup_mem_dir):
         for file in files:
             if file.endswith(".md") and not file.startswith("."):
                 backup_file_path = Path(root) / file
                 try:
-                    rel_path = backup_file_path.relative_to(BACKUP_MEMORIES_DIR)
+                    rel_path = backup_file_path.relative_to(backup_mem_dir)
                 except ValueError:
                     continue
 
-                target_mem_path = MEMORIES_DIR / rel_path
+                target_mem_path = mem_dir / rel_path
                 if not target_mem_path.exists():
                     target_mem_path.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(backup_file_path, target_mem_path)
@@ -241,9 +254,12 @@ def clear_all_backups() -> bool:
     from storage.db_manager import clear_all_backup_records_from_db
     clear_all_backup_records_from_db()
 
-    if BACKUP_DIR.exists():
-        shutil.rmtree(BACKUP_DIR)
-        BACKUP_MEMORIES_DIR.mkdir(parents=True, exist_ok=True)
+    backup_dir = constants.BACKUP_DIR
+    backup_mem_dir = constants.BACKUP_MEMORIES_DIR
+
+    if backup_dir.exists():
+        shutil.rmtree(backup_dir)
+        backup_mem_dir.mkdir(parents=True, exist_ok=True)
         logger.info("Cleared all memory backups, snapshots, and README files.")
         return True
     return False
@@ -255,7 +271,7 @@ def get_backup_readme() -> str:
     """
     Retrieves the backup README.txt text summary from disk or SQLite database.
     """
-    readme_path = BACKUP_DIR / "README.txt"
+    readme_path = constants.BACKUP_DIR / "README.txt"
     if readme_path.exists():
         with open(readme_path, "r", encoding="utf-8") as f:
             return f.read()

@@ -11,6 +11,8 @@ import { math, katexOptionsCtx } from '@milkdown/plugin-math';
 import { refractor } from 'refractor/all';
 import 'katex/dist/katex.min.css';
 import { normalizeMarkdownMath } from '@/lib/renderMath';
+import { useNotesStore } from '@/store/useNotesStore';
+
 
 interface MilkdownEditorProps {
   noteId: string;
@@ -61,12 +63,30 @@ const EditorInner: React.FC<MilkdownEditorProps> = ({
       .use(listener);
   });
 
+  const handleImageClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target && target.tagName === 'IMG') {
+      const img = target as HTMLImageElement;
+      const src = img.getAttribute('src');
+      if (src) {
+        useNotesStore.getState().setActiveLightboxImage({
+          url: src,
+          filename: img.getAttribute('alt') || 'image.png',
+        });
+      }
+    }
+  };
+
   return (
-    <div className="milkdown-wrapper w-full h-full min-h-[400px]">
+    <div
+      onClick={handleImageClick}
+      className="milkdown-wrapper w-full h-full min-h-[400px]"
+    >
       <Milkdown />
     </div>
   );
 };
+
 
 export const MilkdownEditor: React.FC<MilkdownEditorProps> = ({
   noteId,

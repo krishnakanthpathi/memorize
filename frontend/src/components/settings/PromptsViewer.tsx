@@ -32,7 +32,7 @@ const PROMPT_METADATA_MAP: Record<string, PromptMeta> = {
     category: 'merge',
     categoryLabel: 'Memory Merging',
     badge: 'Smart Merge',
-    badgeColor: 'text-violet-400 bg-violet-500/10 border-violet-500/20',
+    badgeColor: 'text-foreground bg-surface-hover border-border',
     icon: Layers,
     variables: ['existing_content', 'new_content', 'instructions'],
   },
@@ -40,7 +40,7 @@ const PROMPT_METADATA_MAP: Record<string, PromptMeta> = {
     category: 'merge',
     categoryLabel: 'Memory Merging',
     badge: 'Multi-Document',
-    badgeColor: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20',
+    badgeColor: 'text-foreground bg-surface-hover border-border',
     icon: Brain,
     variables: ['source_notes', 'target_title', 'custom_instructions'],
   },
@@ -48,7 +48,7 @@ const PROMPT_METADATA_MAP: Record<string, PromptMeta> = {
     category: 'organize',
     categoryLabel: 'Document Editing',
     badge: 'Restructure & Polish',
-    badgeColor: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+    badgeColor: 'text-foreground bg-surface-hover border-border',
     icon: FileEdit,
     variables: ['content', 'instruction', 'generate_title'],
   },
@@ -56,7 +56,7 @@ const PROMPT_METADATA_MAP: Record<string, PromptMeta> = {
     category: 'metadata',
     categoryLabel: 'Metadata & Titles',
     badge: 'Title Architect',
-    badgeColor: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+    badgeColor: 'text-foreground bg-surface-hover border-border',
     icon: Hash,
     variables: ['content', 'current_title', 'instruction'],
   },
@@ -64,7 +64,7 @@ const PROMPT_METADATA_MAP: Record<string, PromptMeta> = {
     category: 'organize',
     categoryLabel: 'Document Editing',
     badge: 'Selection Transform',
-    badgeColor: 'text-sky-400 bg-sky-500/10 border-sky-500/20',
+    badgeColor: 'text-foreground bg-surface-hover border-border',
     icon: FileText,
     variables: ['selected_text', 'mode', 'full_context'],
   },
@@ -72,7 +72,7 @@ const PROMPT_METADATA_MAP: Record<string, PromptMeta> = {
     category: 'classify',
     categoryLabel: 'Classification',
     badge: 'JSON Tagging',
-    badgeColor: 'text-rose-400 bg-rose-500/10 border-rose-500/20',
+    badgeColor: 'text-foreground bg-surface-hover border-border',
     icon: Tag,
     variables: ['content', 'allowed_categories'],
   },
@@ -80,7 +80,7 @@ const PROMPT_METADATA_MAP: Record<string, PromptMeta> = {
     category: 'summary',
     categoryLabel: 'Summaries',
     badge: 'Executive Summary',
-    badgeColor: 'text-teal-400 bg-teal-500/10 border-teal-500/20',
+    badgeColor: 'text-foreground bg-surface-hover border-border',
     icon: Terminal,
     variables: ['text', 'max_sentences'],
   },
@@ -305,8 +305,8 @@ export const PromptsViewer: React.FC = () => {
                 >
                   {copied ? (
                     <>
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      <span className="text-emerald-400">Copied!</span>
+                      <Check className="w-3.5 h-3.5 text-foreground" />
+                      <span className="text-foreground">Copied!</span>
                     </>
                   ) : (
                     <>
@@ -339,9 +339,10 @@ export const PromptsViewer: React.FC = () => {
               <div className="relative rounded-lg bg-surface-list border border-border/80 overflow-hidden">
                 <div className="flex items-center justify-between px-3 py-1.5 bg-surface-hover/80 border-b border-border/60 text-[10px] font-mono text-muted-foreground">
                   <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500/70" />
+                    <span className="w-2 h-2 rounded-full bg-foreground/70" />
                     <span>SYSTEM INSTRUCTION DIRECTIVE</span>
                   </div>
+
                   <div className="flex items-center gap-3">
                     <span>{linesCount} lines</span>
                     <span>{wordsCount} words</span>

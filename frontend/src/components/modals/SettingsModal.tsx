@@ -123,12 +123,13 @@ export const SettingsModal: React.FC = () => {
                       : 'border-border bg-surface-hover text-muted-foreground hover:text-foreground'
                   )}
                 >
-                  <Sun className="w-5 h-5 text-amber-600" />
+                  <Sun className="w-5 h-5 text-foreground" />
                   <div>
                     <span className="block text-xs">Light Mode</span>
                     <span className="text-[10px] opacity-70">Crisp White</span>
                   </div>
                 </div>
+
 
                 <div
                   onClick={() => setTheme('dark')}
@@ -240,7 +241,7 @@ export const SettingsModal: React.FC = () => {
                 <div className="flex items-center justify-between pt-2 border-t border-border/60">
                   <div className="text-[11px] text-muted-foreground font-mono truncate max-w-xs">
                     {testStatus ? (
-                      <span className={cn(testStatus.startsWith('Connected') ? 'text-emerald-500 font-semibold' : 'text-rose-500')}>
+                      <span className="text-foreground font-semibold">
                         {testStatus}
                       </span>
                     ) : (
@@ -305,7 +306,7 @@ export const SettingsModal: React.FC = () => {
                             )}
                           >
                             <span className="truncate">{m}</span>
-                            {selectedModel === m && <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />}
+                            {selectedModel === m && <CheckCircle2 className="w-3 h-3 text-foreground shrink-0" />}
                           </div>
                         ))
                       ) : (
@@ -334,7 +335,7 @@ export const SettingsModal: React.FC = () => {
                             )}
                           >
                             <span className="truncate">{m}</span>
-                            {selectedModel === m && <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />}
+                            {selectedModel === m && <CheckCircle2 className="w-3 h-3 text-foreground shrink-0" />}
                           </div>
                         ))
                       ) : (

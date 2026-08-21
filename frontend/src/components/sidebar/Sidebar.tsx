@@ -271,15 +271,16 @@ export const Sidebar: React.FC = () => {
               )}
             >
               <div className="flex items-center gap-2.5">
-                <Trash2 className="w-4 h-4 text-destructive/80" />
+                <Trash2 className="w-4 h-4 text-muted-foreground" />
                 <span>Trash</span>
               </div>
               {trashNotes.length > 0 && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-destructive/20 text-destructive font-mono">
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface-hover text-muted-foreground font-mono">
                   {trashNotes.length}
                 </span>
               )}
             </button>
+
           </div>
         </div>
 
@@ -420,7 +421,7 @@ export const Sidebar: React.FC = () => {
                   <ShieldCheck className="w-4 h-4 text-foreground/80" />
                   <span>Storage & Audit</span>
                 </div>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span className="w-1.5 h-1.5 rounded-full bg-foreground/50" />
               </button>
 
               <button
@@ -439,7 +440,7 @@ export const Sidebar: React.FC = () => {
               >
                 <div className="flex items-center gap-2.5">
                   <Cpu className="w-4 h-4 text-foreground/80" />
-                  <span>LLM & Prompts Engine</span>
+                  <span>LLM & Prompts</span>
                 </div>
               </button>
             </div>
@@ -447,7 +448,7 @@ export const Sidebar: React.FC = () => {
         </div>
       </div>
 
-      {/* Footer: Modernized Status, 3-Way Switcher, Docs, Settings */}
+      {/* Footer: Monochrome Status, 3-Way Switcher, Settings */}
       <div className="p-3 border-t border-border space-y-2.5 bg-surface-sidebar">
         {/* Status Indicator */}
         <div className="flex items-center justify-between text-[10px] px-1 text-muted-foreground font-mono">
@@ -455,7 +456,7 @@ export const Sidebar: React.FC = () => {
             <span
               className={cn(
                 'w-2 h-2 rounded-full inline-block',
-                isOnline ? 'bg-emerald-500 shadow-2xs' : 'bg-rose-500 animate-pulse'
+                isOnline ? 'bg-foreground/80 shadow-2xs' : 'bg-muted-foreground animate-pulse'
               )}
             />
             <span className="font-semibold text-foreground/90">
@@ -473,29 +474,29 @@ export const Sidebar: React.FC = () => {
         <div className="p-0.5 rounded-lg bg-surface-hover border border-border/70 flex items-center justify-between">
           <button
             onClick={() => setTheme('light')}
-            title="Light Mode (Crisp Pure White)"
+            title="Light Mode"
             className={cn(
               'flex-1 flex items-center justify-center gap-1 py-1 px-1 rounded-md text-xs transition-all cursor-pointer',
               theme === 'light'
-                ? 'bg-white text-zinc-900 font-semibold shadow-2xs'
+                ? 'bg-card text-foreground font-semibold shadow-2xs'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >
-            <Sun className="w-3 h-3 text-amber-600" />
+            <Sun className="w-3 h-3 text-foreground" />
             <span className="text-[10px]">Light</span>
           </button>
 
           <button
             onClick={() => setTheme('dark')}
-            title="Dark Mode (Slate Zinc)"
+            title="Dark Mode"
             className={cn(
               'flex-1 flex items-center justify-center gap-1 py-1 px-1 rounded-md text-xs transition-all cursor-pointer',
               theme === 'dark'
-                ? 'bg-zinc-800 text-zinc-100 font-semibold shadow-2xs'
+                ? 'bg-card text-foreground font-semibold shadow-2xs'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >
-            <Moon className="w-3 h-3 text-zinc-300" />
+            <Moon className="w-3 h-3 text-foreground" />
             <span className="text-[10px]">Dark</span>
           </button>
 
@@ -505,50 +506,33 @@ export const Sidebar: React.FC = () => {
             className={cn(
               'flex-1 flex items-center justify-center gap-1 py-1 px-1 rounded-md text-xs transition-all cursor-pointer',
               theme === 'black'
-                ? 'bg-black text-white font-semibold ring-1 ring-zinc-700 shadow-2xs'
+                ? 'bg-card text-foreground font-semibold ring-1 ring-border shadow-2xs'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >
-            <Zap className="w-3 h-3 text-white" />
+            <Zap className="w-3 h-3 text-foreground" />
             <span className="text-[10px]">OLED</span>
           </button>
         </div>
 
-        {/* Navigation Action Buttons: Documentation & Settings */}
-        <div className="grid grid-cols-2 gap-1.5 pt-0.5">
-          <button
-            onClick={() => setActiveView('docs')}
-            className={cn(
-              'flex items-center justify-between py-1.5 px-2 rounded-lg text-xs font-medium transition-colors cursor-pointer border',
-              activeView === 'docs'
-                ? 'bg-surface-selected text-foreground font-semibold border-border'
-                : 'bg-surface-hover/50 text-muted-foreground hover:text-foreground hover:bg-surface-hover border-border/40'
-            )}
-          >
-            <div className="flex items-center gap-1.5">
-              <BookOpen className="w-3.5 h-3.5" />
-              <span>Docs</span>
-            </div>
-            <kbd className="text-[9px] font-mono opacity-70">⌘⇧D</kbd>
-          </button>
-
-          <button
-            onClick={() => setActiveView('settings')}
-            className={cn(
-              'flex items-center justify-between py-1.5 px-2 rounded-lg text-xs font-medium transition-colors cursor-pointer border',
-              activeView === 'settings'
-                ? 'bg-surface-selected text-foreground font-semibold border-border'
-                : 'bg-surface-hover/50 text-muted-foreground hover:text-foreground hover:bg-surface-hover border-border/40'
-            )}
-          >
-            <div className="flex items-center gap-1.5">
-              <Settings className="w-3.5 h-3.5" />
-              <span>Settings</span>
-            </div>
-            <kbd className="text-[9px] font-mono opacity-70">⌘,</kbd>
-          </button>
-        </div>
+        {/* Settings Button */}
+        <button
+          onClick={() => setActiveView('settings')}
+          className={cn(
+            'w-full flex items-center justify-between py-1.5 px-2.5 rounded-lg text-xs font-medium transition-colors cursor-pointer border',
+            activeView === 'settings'
+              ? 'bg-surface-selected text-foreground font-semibold border-border'
+              : 'bg-surface-hover/50 text-muted-foreground hover:text-foreground hover:bg-surface-hover border-border/40'
+          )}
+        >
+          <div className="flex items-center gap-2">
+            <Settings className="w-3.5 h-3.5" />
+            <span>Preferences & Settings</span>
+          </div>
+          <kbd className="text-[9px] font-mono opacity-70">⌘,</kbd>
+        </button>
       </div>
     </aside>
   );
 };
+

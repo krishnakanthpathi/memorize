@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
-from config.constants import MEMORIES_DIR
+import config.constants as constants
 from core.hashing import compute_string_hash
 from core.id_generator import generate_memory_id
 from core.logger import handle_errors, logger
@@ -11,9 +11,14 @@ from storage.db_manager import (
     clear_all_index_memories,
     delete_memory_from_index,
     get_all_memories,
+    get_db_connection,
     get_memory_by_id,
 )
 from storage.markdown_handler import read_markdown_file
+from storage.media_store_manager import (
+    delete_all_orphan_media,
+    list_orphan_media_files,
+)
 from vector.vector_db import (
     delete_chunks_by_ids,
     get_all_chunks,
@@ -36,8 +41,9 @@ def find_orphan_files() -> List[Dict[str, Any]]:
                 pass
 
     orphan_files = []
-    if MEMORIES_DIR.exists():
-        for path in MEMORIES_DIR.rglob("*.md"):
+    mem_dir = constants.MEMORIES_DIR
+    if mem_dir.exists():
+        for path in mem_dir.rglob("*.md"):
             if path.name.startswith(".") or path.name == ".gitkeep":
                 continue
             resolved_path = path.resolve()
@@ -46,7 +52,7 @@ def find_orphan_files() -> List[Dict[str, Any]]:
                 orphan_files.append({
                     "file_path": str(path),
                     "file_name": path.name,
-                    "category": path.parent.name if path.parent != MEMORIES_DIR else "personal",
+                    "category": path.parent.name if path.parent != mem_dir else "personal",
                     "file_size_bytes": stat.st_size,
                     "last_modified": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
                 })
@@ -238,12 +244,14 @@ def recover_orphaned_documents() -> Dict[str, Any]:
 @handle_errors
 def audit_storage_integrity(auto_fix: bool = False) -> Dict[str, Any]:
     """
-    Performs a full storage integrity audit across disk storage, SQLite database, and ChromaDB vector store.
+    Performs a full storage integrity audit across disk storage, SQLite database, ChromaDB vector store,
+    and uncompressed media storage.
     Optionally reconciles/auto-fixes orphan records and indexes out-of-sync files.
     """
     orphan_files = find_orphan_files()
     orphan_indexes = find_orphan_indexes()
     orphan_chunks = find_orphan_chunks()
+    orphan_media = list_orphan_media_files()
 
     # Detect content hash mismatches between disk and SQLite DB
     db_memories = get_all_memories()
@@ -267,19 +275,42 @@ def audit_storage_integrity(auto_fix: bool = False) -> Dict[str, Any]:
     if auto_fix:
         deleted_idx = delete_orphan_indexes()
         deleted_chk = delete_orphan_chunks()
-        recovered_docs = recover_orphaned_documents()
+        deleted_fls = delete_orphan_files()
+        deleted_media_count = delete_all_orphan_media()
+
+        # Reconcile content hash mismatches by syncing SQLite content to disk content
+        reconciled_hashes = 0
+        for mm in hash_mismatches:
+            fp_p = Path(mm["file_path"])
+            if fp_p.exists():
+                try:
+                    _, c_content = read_markdown_file(fp_p)
+                    c_hash = compute_string_hash(c_content)
+                    with get_db_connection() as conn:
+                        conn.cursor().execute(
+                            "UPDATE memories SET content = ?, content_hash = ? WHERE id = ?",
+                            (c_content, c_hash, mm["memory_id"]),
+                        )
+                        conn.commit()
+                    reconciled_hashes += 1
+                except Exception as e:
+                    logger.error(f"Failed to reconcile hash mismatch for memory {mm.get('memory_id')}: {e}")
+
         auto_fix_results = {
             "deleted_orphan_indexes": deleted_idx.get("deleted_count", 0),
             "deleted_orphan_chunks": deleted_chk.get("deleted_count", 0),
-            "recovered_documents": recovered_docs.get("recovered_count", 0),
+            "deleted_orphan_files": deleted_fls.get("deleted_count", 0),
+            "deleted_orphan_media": deleted_media_count,
+            "reconciled_hash_mismatches": reconciled_hashes,
         }
         # Refresh state after auto-fix
         orphan_files = find_orphan_files()
         orphan_indexes = find_orphan_indexes()
         orphan_chunks = find_orphan_chunks()
+        orphan_media = list_orphan_media_files()
         hash_mismatches = []
 
-    is_healthy = not (orphan_files or orphan_indexes or orphan_chunks or hash_mismatches)
+    is_healthy = not (orphan_files or orphan_indexes or orphan_chunks or orphan_media or hash_mismatches)
 
     return {
         "status": "success",
@@ -288,12 +319,14 @@ def audit_storage_integrity(auto_fix: bool = False) -> Dict[str, Any]:
             "orphan_files_count": len(orphan_files),
             "orphan_indexes_count": len(orphan_indexes),
             "orphan_chunks_count": len(orphan_chunks),
+            "orphan_media_count": len(orphan_media),
             "hash_mismatches_count": len(hash_mismatches),
         },
         "details": {
             "orphan_files": orphan_files,
             "orphan_indexes": orphan_indexes,
             "orphan_chunks": orphan_chunks,
+            "orphan_media": orphan_media,
             "hash_mismatches": hash_mismatches,
         },
         "auto_fix_applied": auto_fix,
@@ -309,11 +342,11 @@ def clear_all_memories(clear_backups: bool = True) -> Dict[str, Any]:
     clears ChromaDB vector store collection, and purges backups if clear_backups is True.
     """
     import shutil
-    from config.constants import DEFAULT_CATEGORIES
 
     deleted_files = 0
-    if MEMORIES_DIR.exists():
-        for item in MEMORIES_DIR.iterdir():
+    mem_dir = constants.MEMORIES_DIR
+    if mem_dir.exists():
+        for item in mem_dir.iterdir():
             try:
                 if item.is_dir():
                     shutil.rmtree(item)
@@ -327,8 +360,8 @@ def clear_all_memories(clear_backups: bool = True) -> Dict[str, Any]:
         clear_all_backups()
 
     # Re-initialize standard category subdirectories with .gitkeep
-    for cat in DEFAULT_CATEGORIES:
-        cat_dir = MEMORIES_DIR / cat
+    for cat in constants.DEFAULT_CATEGORIES:
+        cat_dir = mem_dir / cat
         cat_dir.mkdir(parents=True, exist_ok=True)
         gitkeep = cat_dir / ".gitkeep"
         if not gitkeep.exists():

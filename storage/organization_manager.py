@@ -5,7 +5,7 @@ import shutil
 from typing import Any, Dict, List
 
 from classification.classifier import classify_memory
-from config.constants import MEMORIES_DIR
+import config.constants as constants
 from core.logger import handle_errors, logger
 from storage.markdown_handler import create_markdown_file, read_markdown_file
 from storage.db_manager import get_memory_by_id, upsert_memory_index
@@ -22,7 +22,8 @@ def reorganize_memories(auto_fix: bool = True, reclassify: bool = True) -> Dict[
     4. Cleans up empty category directories.
     5. Re-syncs database and vector stores.
     """
-    if not MEMORIES_DIR.exists():
+    mem_dir = constants.MEMORIES_DIR
+    if not mem_dir.exists():
         return {"status": "error", "message": "Memories directory does not exist."}
 
     available_categories = get_available_categories()
@@ -31,7 +32,7 @@ def reorganize_memories(auto_fix: bool = True, reclassify: bool = True) -> Dict[
     files_renamed = []
     reclassified_count = 0
 
-    for root, dirs, files in os.walk(MEMORIES_DIR):
+    for root, dirs, files in os.walk(mem_dir):
         for file in files:
             if not file.endswith(".md") or file.startswith("."):
                 continue
@@ -105,9 +106,10 @@ def reorganize_memories(auto_fix: bool = True, reclassify: bool = True) -> Dict[
                         files_renamed.append({"from": file, "to": ideal_filename})
 
     # Remove empty directories in data/memories/
-    for item in MEMORIES_DIR.iterdir():
-        if item.is_dir() and not any(item.iterdir()):
-            shutil.rmtree(item)
+    if mem_dir.exists():
+        for item in mem_dir.iterdir():
+            if item.is_dir() and not any(item.iterdir()):
+                shutil.rmtree(item)
 
 
 

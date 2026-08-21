@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 
 from api.routes import (
     audit_router,
+    media_router,
     memories_router,
     models_router,
     search_router,
@@ -52,6 +53,7 @@ app.add_middleware(AcceptHeaderMiddleware)
 
 # Register modularized REST routers
 app.include_router(memories_router)
+app.include_router(media_router)
 app.include_router(audit_router)
 app.include_router(search_router)
 app.include_router(system_router)
@@ -59,7 +61,7 @@ app.include_router(models_router)
 app.include_router(settings_router)
 
 
-# OAuth Probes for Google Gemini Custom Connected Apps
+# OAuth Probes for Google Gemini Custom Connected Apps & Claude
 @app.get("/.well-known/oauth-protected-resource")
 @app.get("/.well-known/oauth-protected-resource/sse")
 @app.get("/.well-known/oauth-protected-resource/mcp")
@@ -73,18 +75,30 @@ def oauth_probe():
 @app.get("/info")
 @app.head("/info")
 def mcp_server_info_probe():
+    tools_list = [
+        {"name": t.name, "description": t.description}
+        for t in mcp._tool_manager.list_tools()
+    ]
     return JSONResponse({
         "name": SERVER_NAME,
         "version": "2.0.0",
         "description": "FastMCP Personal Memory & Knowledge Base Server",
         "status": "online",
+        "mcp_version": "1.0",
+        "tools_count": len(tools_list),
+        "tools": tools_list,
+        "endpoints": {
+            "mcp": "/mcp",
+            "sse": "/sse",
+            "info": "/info",
+        }
     })
 
 
 @app.get("/")
 def root_endpoint():
     return {
-        "service": "Memorize REST API Service",
+        "service": "Memorize REST API & Universal FastMCP Server",
         "version": "2.0.0",
         "status": "healthy",
         "endpoints": {
@@ -94,9 +108,13 @@ def root_endpoint():
             "models": "/api/models",
             "settings": "/api/settings",
             "mcp": "/mcp",
+            "sse": "/sse",
+            "info": "/info",
         },
     }
 
 
-# Mount streamable HTTP MCP App at /mcp root
+# Mount streamable HTTP / SSE MCP Apps
 app.mount("/mcp", streamable_app)
+app.mount("/sse", streamable_app)
+

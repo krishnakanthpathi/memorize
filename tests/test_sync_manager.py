@@ -88,6 +88,15 @@ class TestSyncManager(unittest.TestCase):
         self.assertEqual(rec_res["status"], "success")
         self.assertGreaterEqual(rec_res["recovered_count"], 1)
 
+    def test_audit_storage_integrity_auto_fix(self):
+        orphan_path = constants.MEMORIES_DIR / "orphan_to_delete.md"
+        orphan_path.write_text("Orphan to delete during auto-fix", encoding="utf-8")
+
+        report = audit_storage_integrity(auto_fix=True)
+        self.assertTrue(report["is_healthy"])
+        self.assertEqual(report["summary"]["orphan_files_count"], 0)
+        self.assertFalse(orphan_path.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -102,11 +102,12 @@ export const VersionHistoryModal: React.FC = () => {
 
           {/* Success Banner */}
           {successMsg && (
-            <div className="px-6 py-2 bg-emerald-500/10 border-b border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2 font-medium">
+            <div className="px-6 py-2 bg-surface-hover border-b border-border text-foreground text-xs flex items-center gap-2 font-medium">
               <CheckCircle2 className="w-4 h-4" />
               <span>{successMsg}</span>
             </div>
           )}
+
 
           {/* Main 2-column view inside modal */}
           <div className="flex-1 flex overflow-hidden">

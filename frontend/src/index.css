@@ -324,7 +324,31 @@
   text-align: left !important;
 }
 
+/* Milkdown & Markdown Embedded Images */
+.milkdown img,
+.prose img,
+.milkdown-wrapper img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.75rem;
+  border: 1px solid hsl(var(--border) / 0.8);
+  margin: 1.25rem auto;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.25);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: zoom-in;
+  display: block;
+}
+
+.milkdown img:hover,
+.prose img:hover,
+.milkdown-wrapper img:hover {
+  border-color: rgba(16, 185, 129, 0.6);
+  box-shadow: 0 8px 30px -4px rgba(16, 185, 129, 0.2);
+  transform: scale(1.008);
+}
+
 /* Raw Markdown Line Numbers & Editor Styling */
+
 .markdown-line-numbers {
   user-select: none;
   text-align: right;

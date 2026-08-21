@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import re
@@ -9,6 +10,7 @@ from config.constants import (
     LLM_PROVIDER,
     OLLAMA_BASE_URL,
     OLLAMA_MODEL,
+    OLLAMA_OCR_MODEL,
     OPENAI_API_KEY,
     OPENAI_BASE_URL,
     OPENAI_MODEL,
@@ -194,3 +196,55 @@ def test_llm_connection(
             "model": model or LLM_MODEL or "default",
             "error": str(e),
         }
+
+
+DEFAULT_OCR_PROMPT = """Text Recognition:
+Extract all visible text, numbers, dates, addresses, tables, formulas, and labels from this image accurately in clean markdown format. Preserve the structural layout and details accurately."""
+
+
+def extract_text_with_ollama_ocr(
+    image_bytes: bytes,
+    prompt: Optional[str] = None,
+    model: Optional[str] = None,
+    base_url: Optional[str] = None,
+    timeout: int = 120,
+) -> str:
+    """
+    Extracts text, formulas, and structured content from an uncompressed image using local Ollama GLM-OCR model.
+    """
+    if not image_bytes:
+        return ""
+
+    ocr_model = model or OLLAMA_OCR_MODEL or "glm-ocr"
+    effective_url = (base_url or OLLAMA_BASE_URL).rstrip("/")
+    url = f"{effective_url}/api/generate"
+    b64_image = base64.b64encode(image_bytes).decode("utf-8")
+    ocr_prompt = prompt or DEFAULT_OCR_PROMPT
+
+    payload = {
+        "model": ocr_model,
+        "prompt": ocr_prompt,
+        "images": [b64_image],
+        "stream": False,
+        "options": {
+            "num_ctx": 16384,
+            "temperature": 0.1,
+        },
+    }
+
+    try:
+        resp = requests.post(url, json=payload, timeout=timeout)
+        if resp.status_code == 200:
+            result = resp.json().get("response", "")
+            return clean_llm_markdown_output(result)
+        else:
+            logger.warning(
+                f"Ollama OCR request to '{ocr_model}' failed with status {resp.status_code}: {resp.text}"
+            )
+            raise RuntimeError(f"Ollama OCR failed with status {resp.status_code}: {resp.text}")
+    except Exception as e:
+        logger.error(f"Error during Ollama OCR extraction with model '{ocr_model}': {e}")
+        raise
+
+
+

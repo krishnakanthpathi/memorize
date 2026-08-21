@@ -26,11 +26,18 @@ import {
   Shrink,
   Minimize,
   Tag,
+  Image as ImageIcon,
+  Menu,
+  Star,
+  Pin,
 } from 'lucide-react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useNotesStore } from '@/store/useNotesStore';
 import { MilkdownEditor } from './MilkdownEditor';
+import { ImageLightboxModal } from './ImageLightboxModal';
+import { TaskProgressWidget } from '@/components/common/TaskProgressWidget';
 import { cn } from '@/lib/utils';
+
 
 type EditorViewMode = 'markdown' | 'rich' | 'split';
 
@@ -45,6 +52,8 @@ export const EditorCanvas: React.FC = () => {
     isOrganizingNote,
     isGeneratingTitle,
     isTransformingSelection,
+    isAutoTagging,
+    isUploadingMedia,
     lastSavedAt,
     sidebarCollapsed,
     toggleSidebar,
@@ -63,9 +72,13 @@ export const EditorCanvas: React.FC = () => {
     isFocusMode,
     toggleFocusMode,
     setIsFocusMode,
-    isAutoTagging,
     autoTagActiveNote,
+    setActiveLightboxImage,
+    uploadAndInsertMedia,
+    togglePin,
+    toggleFavorite,
   } = useNotesStore();
+
 
   const [tagInput, setTagInput] = useState('');
   const [showTagInput, setShowTagInput] = useState(false);
@@ -73,9 +86,83 @@ export const EditorCanvas: React.FC = () => {
   const [customAiPrompt, setCustomAiPrompt] = useState('');
   const [showCustomPromptInput, setShowCustomPromptInput] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
-  const [viewMode, setViewMode] = useState<EditorViewMode>('markdown'); // Default as Markdown Viewer
+  const [viewMode, setViewMode] = useState<EditorViewMode>('rich'); // Default as Rich WYSIWYG Viewer
+  const [externalEditCounter, setExternalEditCounter] = useState<number>(0);
+  const [uploadStatusMsg, setUploadStatusMsg] = useState<string | null>(null);
+
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const splitTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleProcessAndInsertImage = async (file: File | Blob) => {
+    try {
+      setUploadStatusMsg('Uploading image & extracting text with GLM-OCR...');
+      let targetNote = activeNote;
+      if (!targetNote) {
+        targetNote = await createNewNote(undefined, (file as File).name?.replace(/\.[^/.]+$/, '') || 'Image Note');
+      }
+      const res = await uploadAndInsertMedia(file, (file as File).name || 'image.png', targetNote?.id);
+      let insertion = `\n\n![${res.filename}](${res.url})\n`;
+      if (res.ocrText && res.ocrText.trim()) {
+        insertion += `\n## Extracted Content (GLM-OCR)\n${res.ocrText}\n\n`;
+      }
+      const currentContent = targetNote?.content || '';
+      handleContentChange(currentContent + insertion);
+      setExternalEditCounter((c) => c + 1);
+      setUploadStatusMsg('Image attached & GLM-OCR processed successfully!');
+      setTimeout(() => setUploadStatusMsg(null), 4000);
+    } catch (err: any) {
+      console.error('Failed to upload and OCR image:', err);
+      setUploadStatusMsg(`Failed to attach image: ${err?.message || 'Upload error'}`);
+      setTimeout(() => setUploadStatusMsg(null), 5000);
+    }
+  };
+
+
+  const handleImageFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      await handleProcessAndInsertImage(file);
+      e.target.value = '';
+    }
+  };
+
+  const handleImagePaste = async (e: React.ClipboardEvent) => {
+    if (isTrashed || !activeNote) return;
+    if (e.clipboardData.files && e.clipboardData.files.length > 0) {
+      const file = e.clipboardData.files[0];
+      if (file.type.startsWith('image/')) {
+        e.preventDefault();
+        await handleProcessAndInsertImage(file);
+      }
+    }
+  };
+
+  const handleImageDrop = async (e: React.DragEvent) => {
+    if (isTrashed || !activeNote) return;
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      if (file.type.startsWith('image/')) {
+        e.preventDefault();
+        await handleProcessAndInsertImage(file);
+      }
+    }
+  };
+
+  const handleContainerClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'IMG') {
+      const img = target as HTMLImageElement;
+      const src = img.getAttribute('src');
+      if (src) {
+        setActiveLightboxImage({
+          url: src,
+          filename: img.getAttribute('alt') || 'image.png',
+        });
+      }
+    }
+  };
 
   // Selected Paragraph / Text Floating AI Organizer State
   interface TextSelectionState {
@@ -394,14 +481,14 @@ export const EditorCanvas: React.FC = () => {
             {!isTrashed ? (
               <DropdownMenu.Root>
                 <DropdownMenu.Trigger asChild>
-                  <button className="hover:text-foreground font-medium capitalize truncate underline decoration-dotted decoration-border underline-offset-2">
+                  <button className="hover:text-foreground font-medium capitalize truncate underline decoration-dotted decoration-border underline-offset-2 cursor-pointer">
                     {activeNote.category || 'personal'}
                   </button>
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Portal>
                   <DropdownMenu.Content
                     align="start"
-                    className="z-50 min-w-[140px] bg-popover text-popover-foreground rounded-md p-1 border border-border shadow-lg text-xs"
+                    className="z-50 min-w-[150px] bg-popover text-popover-foreground rounded-lg p-1 border border-border shadow-xl text-xs"
                   >
                     <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase font-semibold">
                       Move Category
@@ -412,7 +499,7 @@ export const EditorCanvas: React.FC = () => {
                         onClick={() => handleCategoryChange(cat.category)}
                         className={cn(
                           'px-2 py-1.5 rounded cursor-pointer outline-none hover:bg-surface-hover capitalize flex items-center justify-between',
-                          cat.category === activeNote.category && 'font-bold'
+                          cat.category === activeNote.category && 'font-bold bg-surface-selected'
                         )}
                       >
                         <span>{cat.category}</span>
@@ -433,22 +520,22 @@ export const EditorCanvas: React.FC = () => {
                 </DropdownMenu.Portal>
               </DropdownMenu.Root>
             ) : (
-              <span className="capitalize">{activeNote.category || 'personal'}</span>
+              <span className="capitalize font-medium">{activeNote.category || 'personal'}</span>
             )}
             <span>/</span>
-            <span className="text-foreground font-semibold truncate max-w-[180px]">
+            <span className="text-foreground font-semibold truncate max-w-[200px]">
               {activeNote.title || 'Untitled Note'}
             </span>
           </div>
         </div>
 
-        {/* Center: Viewer Mode Switcher (Markdown / Normal / Split) */}
-        <div className="hidden sm:flex items-center bg-surface-hover p-0.5 rounded-lg border border-border/80">
+        {/* Center: Monochrome View Mode Switcher */}
+        <div className="flex items-center bg-surface-hover p-0.5 rounded-lg border border-border/80">
           <button
             onClick={() => setViewMode('markdown')}
-            title="Markdown Source Viewer"
+            title="Markdown Source"
             className={cn(
-              'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all',
+              'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer',
               viewMode === 'markdown'
                 ? 'bg-card text-foreground shadow-xs font-semibold'
                 : 'text-muted-foreground hover:text-foreground'
@@ -460,9 +547,9 @@ export const EditorCanvas: React.FC = () => {
 
           <button
             onClick={() => setViewMode('rich')}
-            title="Normal / WYSIWYG Editor"
+            title="Normal / Rendered Editor"
             className={cn(
-              'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all',
+              'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer',
               viewMode === 'rich'
                 ? 'bg-card text-foreground shadow-xs font-semibold'
                 : 'text-muted-foreground hover:text-foreground'
@@ -474,9 +561,9 @@ export const EditorCanvas: React.FC = () => {
 
           <button
             onClick={() => setViewMode('split')}
-            title="Split Markdown & Preview"
+            title="Split Source & Rendered Preview"
             className={cn(
-              'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all',
+              'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer',
               viewMode === 'split'
                 ? 'bg-card text-foreground shadow-xs font-semibold'
                 : 'text-muted-foreground hover:text-foreground'
@@ -487,206 +574,223 @@ export const EditorCanvas: React.FC = () => {
           </button>
         </div>
 
-        {/* Right: Actions (Save, AI, Versions, Export, Delete) */}
+        {/* Right: Attach Image + Consolidated Hamburger Menu */}
         <div className="flex items-center gap-1.5 shrink-0">
-          {!isTrashed && (
+          {!isTrashed ? (
             <>
-              {/* Manual Save Button */}
+              {/* Hidden File Input for Image Upload */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageFileSelect}
+              />
+
+              {/* Attach Image Button */}
               <button
-                onClick={() => saveCurrentNoteRemote()}
-                disabled={isSaving}
-                title="Save Note (⌘S / Ctrl+S)"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploadingMedia}
+                title="Attach Image (GLM-OCR)"
                 className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-xs select-none mr-1',
-                  isSaving
-                    ? 'bg-muted text-muted-foreground cursor-wait'
-                    : 'bg-foreground text-background hover:opacity-90 active:scale-95'
+                  'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-border transition-colors cursor-pointer',
+                  isUploadingMedia
+                    ? 'bg-surface-selected text-foreground cursor-wait'
+                    : 'bg-surface-hover hover:bg-surface-hover/80 text-foreground'
                 )}
               >
-                {isSaving ? (
+                {isUploadingMedia ? (
                   <>
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Saving...</span>
+                    <span className="hidden sm:inline">Processing...</span>
                   </>
                 ) : (
                   <>
-                    <Save className="w-3.5 h-3.5" />
-                    <span>Save</span>
+                    <ImageIcon className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Attach Image</span>
                   </>
                 )}
               </button>
 
-              {/* AI Organize & Polish Dropdown */}
+              {/* Consolidated Hamburger Menu */}
               <DropdownMenu.Root>
                 <DropdownMenu.Trigger asChild>
                   <button
-                    disabled={isOrganizingNote || isGeneratingTitle}
-                    title="Organize, polish, or generate title with AI"
-                    className={cn(
-                      'flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-xs select-none border border-border/80',
-                      isOrganizingNote || isGeneratingTitle
-                        ? 'bg-muted text-muted-foreground cursor-wait'
-                        : 'bg-surface-hover hover:bg-surface-hover/80 text-foreground'
-                    )}
+                    title="Menu & Note Tools"
+                    className="p-1.5 rounded-lg border border-border bg-surface-hover hover:bg-surface-hover/80 text-foreground transition-colors cursor-pointer"
                   >
-                    {isOrganizingNote ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-500" />
-                        <span className="text-[11px] hidden md:inline">Organizing...</span>
-                      </>
-                    ) : isGeneratingTitle ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-500" />
-                        <span className="text-[11px] hidden md:inline">Generating Title...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-3.5 h-3.5 text-violet-500" />
-                        <span className="text-[11px] hidden md:inline">AI Organize</span>
-                      </>
-                    )}
+                    <Menu className="w-4 h-4" />
                   </button>
                 </DropdownMenu.Trigger>
+
                 <DropdownMenu.Portal>
                   <DropdownMenu.Content
                     align="end"
-                    className="z-50 min-w-[240px] bg-popover text-popover-foreground rounded-lg p-1.5 border border-border shadow-xl text-xs animate-in fade-in zoom-in-95 space-y-0.5"
+                    className="z-50 min-w-[240px] bg-popover text-popover-foreground rounded-lg p-1.5 border border-border shadow-2xl text-xs space-y-1 animate-in fade-in zoom-in-95"
                   >
+                    {/* Section 1: AI Actions */}
                     <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
-                      AI Note Enhancement
+                      AI Actions
                     </div>
 
                     <DropdownMenu.Item
                       onClick={() => organizeNote(activeNote.id, undefined, true, true)}
-                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2"
+                      disabled={isOrganizingNote}
+                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2.5"
                     >
-                      <Sparkles className="w-3.5 h-3.5 text-violet-500 shrink-0" />
+                      <Sparkles className="w-3.5 h-3.5 shrink-0" />
                       <div>
-                        <span className="font-semibold block">Polish & Auto-Generate Title</span>
-                        <span className="text-[10px] text-muted-foreground">Restructure content and generate smart title</span>
+                        <span className="font-semibold block">Polish & Organize</span>
+                        <span className="text-[10px] text-muted-foreground">Restructure and auto-title</span>
                       </div>
                     </DropdownMenu.Item>
 
                     <DropdownMenu.Item
                       onClick={() => generateNoteTitle(activeNote.id, activeNote.content)}
-                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2"
+                      disabled={isGeneratingTitle}
+                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2.5"
                     >
-                      <FileText className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                      <FileText className="w-3.5 h-3.5 shrink-0" />
                       <div>
-                        <span className="font-semibold block">Generate Title Only</span>
-                        <span className="text-[10px] text-muted-foreground">Extract concise title from note content</span>
+                        <span className="font-semibold block">Generate Title</span>
+                        <span className="text-[10px] text-muted-foreground">Extract smart title from content</span>
                       </div>
                     </DropdownMenu.Item>
 
                     <DropdownMenu.Item
                       onClick={handleAutoTag}
                       disabled={isAutoTagging || !activeNote.content?.trim()}
-                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2"
+                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2.5"
                     >
-                      <Tag className="w-3.5 h-3.5 text-pink-500 shrink-0" />
+                      <Tag className="w-3.5 h-3.5 shrink-0" />
                       <div>
-                        <span className="font-semibold block">Auto-Tag & Classify with AI</span>
-                        <span className="text-[10px] text-muted-foreground">Extract 3-5 tags and auto-categorize</span>
-                      </div>
-                    </DropdownMenu.Item>
-
-                    <DropdownMenu.Separator className="h-px bg-border my-1" />
-
-                    <DropdownMenu.Item
-                      onClick={() => organizeNote(activeNote.id)}
-                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2"
-                    >
-                      <Wand2 className="w-3.5 h-3.5 text-violet-500 shrink-0" />
-                      <div>
-                        <span className="font-semibold block">Polish & Restructure</span>
-                        <span className="text-[10px] text-muted-foreground">Fix formatting, headers & remove fluff</span>
+                        <span className="font-semibold block">Auto-Tag Note</span>
+                        <span className="text-[10px] text-muted-foreground">Extract tags & auto-categorize</span>
                       </div>
                     </DropdownMenu.Item>
 
                     <DropdownMenu.Item
                       onClick={() => organizeNote(activeNote.id, "Summarize into concise executive key takeaways and actionable points")}
-                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2"
+                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2.5"
                     >
-                      <ListOrdered className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                      <ListOrdered className="w-3.5 h-3.5 shrink-0" />
                       <div>
                         <span className="font-semibold block">Summarize Key Points</span>
-                        <span className="text-[10px] text-muted-foreground">Extract core bullet insights & summary</span>
+                        <span className="text-[10px] text-muted-foreground">Extract core bullet insights</span>
                       </div>
                     </DropdownMenu.Item>
 
                     <DropdownMenu.Item
-                      onClick={() => organizeNote(activeNote.id, "Restructure with clear headings, code syntax examples, formulas, and parameters")}
-                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2"
+                      onClick={() => setShowCustomPromptInput(true)}
+                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2.5"
                     >
-                      <AlignLeft className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <Wand2 className="w-3.5 h-3.5 shrink-0" />
                       <div>
-                        <span className="font-semibold block">Technical Reference</span>
-                        <span className="text-[10px] text-muted-foreground">Format as clean developer documentation</span>
+                        <span className="font-semibold block">Custom AI Prompt...</span>
+                        <span className="text-[10px] text-muted-foreground">Apply custom instructions</span>
                       </div>
                     </DropdownMenu.Item>
 
                     <DropdownMenu.Separator className="h-px bg-border my-1" />
 
+                    {/* Section 2: Note Operations */}
+                    <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                      Note Operations
+                    </div>
+
                     <DropdownMenu.Item
-                      onClick={() => setShowCustomPromptInput(true)}
-                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2 text-muted-foreground hover:text-foreground"
+                      onClick={() => saveCurrentNoteRemote()}
+                      disabled={isSaving}
+                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center justify-between"
                     >
-                      <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                      <span>Custom AI Instruction...</span>
+                      <div className="flex items-center gap-2.5">
+                        <Save className="w-3.5 h-3.5 shrink-0" />
+                        <span>Save Note</span>
+                      </div>
+                      <kbd className="text-[10px] font-mono text-muted-foreground">⌘S</kbd>
+                    </DropdownMenu.Item>
+
+                    <DropdownMenu.Item
+                      onClick={() => setActiveModal('versions')}
+                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2.5"
+                    >
+                      <History className="w-3.5 h-3.5 shrink-0" />
+                      <span>Version History & Revert</span>
+                    </DropdownMenu.Item>
+
+                    <DropdownMenu.Item
+                      onClick={exportActiveNote}
+                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2.5"
+                    >
+                      <Download className="w-3.5 h-3.5 shrink-0" />
+                      <span>Export as Markdown (.md)</span>
+                    </DropdownMenu.Item>
+
+                    <DropdownMenu.Item
+                      onClick={() => togglePin(activeNote.id)}
+                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Pin className="w-3.5 h-3.5 shrink-0" />
+                        <span>{activeNote.isPinned ? 'Unpin Note' : 'Pin Note'}</span>
+                      </div>
+                      <kbd className="text-[10px] font-mono text-muted-foreground">⌘⇧P</kbd>
+                    </DropdownMenu.Item>
+
+                    <DropdownMenu.Item
+                      onClick={() => toggleFavorite(activeNote.id)}
+                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Star className="w-3.5 h-3.5 shrink-0" />
+                        <span>{activeNote.isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}</span>
+                      </div>
+                      <kbd className="text-[10px] font-mono text-muted-foreground">⌘⇧S</kbd>
+                    </DropdownMenu.Item>
+
+                    <DropdownMenu.Item
+                      onClick={() => {
+                        navigator.clipboard.writeText(activeNote.id);
+                        setCopiedId(true);
+                        setTimeout(() => setCopiedId(false), 2000);
+                      }}
+                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2.5"
+                    >
+                      <Copy className="w-3.5 h-3.5 shrink-0" />
+                      <span>Copy Note ID</span>
+                    </DropdownMenu.Item>
+
+                    <DropdownMenu.Separator className="h-px bg-border my-1" />
+
+                    {/* Section 3: View & Delete */}
+                    <DropdownMenu.Item
+                      onClick={toggleFocusMode}
+                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        {isFocusMode ? <Shrink className="w-3.5 h-3.5 shrink-0" /> : <Expand className="w-3.5 h-3.5 shrink-0" />}
+                        <span>{isFocusMode ? 'Exit Zen Focus' : 'Zen Focus Mode'}</span>
+                      </div>
+                      <kbd className="text-[10px] font-mono text-muted-foreground">⌘⇧Z</kbd>
+                    </DropdownMenu.Item>
+
+                    <DropdownMenu.Item
+                      onClick={() => requestDeleteNote(activeNote.id, false)}
+                      className="px-2.5 py-1.5 rounded-md cursor-pointer outline-none hover:bg-surface-hover flex items-center gap-2.5 text-muted-foreground hover:text-foreground"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                      <span>Move to Trash</span>
                     </DropdownMenu.Item>
                   </DropdownMenu.Content>
                 </DropdownMenu.Portal>
               </DropdownMenu.Root>
-
-              {/* Zen / Focus Mode Toggle */}
-              <button
-                onClick={toggleFocusMode}
-                title={isFocusMode ? "Exit Focus Mode (Esc / ⌘⇧Z)" : "Zen Focus Mode (⌘⇧Z)"}
-                className={cn(
-                  "p-1.5 rounded-md transition-colors cursor-pointer",
-                  isFocusMode
-                    ? "text-primary bg-primary/10 hover:bg-primary/20 font-semibold"
-                    : "text-muted-foreground hover:text-foreground hover:bg-surface-hover"
-                )}
-              >
-                {isFocusMode ? <Shrink className="w-4 h-4" /> : <Expand className="w-4 h-4" />}
-              </button>
-
-              {/* Version History Modal Trigger */}
-              <button
-                onClick={() => setActiveModal('versions')}
-                title="Version History & Revert"
-                className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors"
-              >
-                <History className="w-4 h-4" />
-              </button>
-
-              {/* Export Markdown */}
-              <button
-                onClick={exportActiveNote}
-                title="Export as Markdown (.md)"
-                className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors"
-              >
-                <Download className="w-4 h-4" />
-              </button>
-
-              {/* Delete */}
-              <button
-                onClick={() => requestDeleteNote(activeNote.id, false)}
-                title="Move Note to Trash"
-                className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
             </>
-          )}
-
-          {isTrashed && (
+          ) : (
             <div className="flex items-center gap-1.5">
               <button
                 onClick={() => restoreNote(activeNote.id)}
                 title="Restore this note to Active Notes"
-                className="flex items-center gap-1 px-2.5 py-1 rounded bg-foreground text-background font-semibold text-xs hover:opacity-90 transition-opacity cursor-pointer shadow-2xs"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-foreground text-background font-semibold text-xs hover:opacity-90 transition-opacity cursor-pointer shadow-2xs"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>Restore</span>
@@ -695,7 +799,7 @@ export const EditorCanvas: React.FC = () => {
               <button
                 onClick={() => requestDeleteNote(activeNote.id, true)}
                 title="Permanently delete this note"
-                className="flex items-center gap-1 px-2.5 py-1 rounded bg-destructive text-destructive-foreground font-semibold text-xs hover:opacity-90 transition-opacity cursor-pointer shadow-2xs"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-foreground/10 text-foreground hover:bg-foreground/20 font-semibold text-xs transition-colors cursor-pointer border border-border"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Delete Permanently</span>
@@ -705,7 +809,7 @@ export const EditorCanvas: React.FC = () => {
                 <button
                   onClick={() => requestEmptyTrash()}
                   title="Empty all notes from Trash"
-                  className="flex items-center gap-1 px-2 py-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 text-xs transition-colors cursor-pointer"
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface-hover text-xs transition-colors cursor-pointer"
                 >
                   <span>Empty Trash</span>
                 </button>
@@ -715,10 +819,11 @@ export const EditorCanvas: React.FC = () => {
         </div>
       </header>
 
+
       {/* Custom AI Instruction Banner */}
       {showCustomPromptInput && (
         <div className="px-6 sm:px-12 py-2.5 bg-surface-sidebar border-b border-border flex items-center gap-2 animate-in slide-in-from-top-1 text-xs">
-          <Sparkles className="w-4 h-4 text-violet-500 shrink-0" />
+          <Sparkles className="w-4 h-4 text-foreground shrink-0" />
           <input
             type="text"
             value={customAiPrompt}
@@ -743,13 +848,13 @@ export const EditorCanvas: React.FC = () => {
               }
             }}
             disabled={isOrganizingNote || !customAiPrompt.trim()}
-            className="px-3 py-1.5 rounded-md bg-foreground text-background font-semibold text-xs hover:opacity-90 disabled:opacity-50"
+            className="px-3 py-1.5 rounded-md bg-foreground text-background font-semibold text-xs hover:opacity-90 disabled:opacity-50 cursor-pointer"
           >
             Apply
           </button>
           <button
             onClick={() => setShowCustomPromptInput(false)}
-            className="p-1 rounded text-muted-foreground hover:text-foreground"
+            className="p-1 rounded text-muted-foreground hover:text-foreground cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -760,8 +865,8 @@ export const EditorCanvas: React.FC = () => {
       {isFocusMode && (
         <div className="px-6 sm:px-12 py-2 bg-card/95 backdrop-blur-md border-b border-border flex items-center justify-between text-xs animate-in slide-in-from-top-1 select-none shadow-xs">
           <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1.5 font-semibold text-primary">
-              <Sparkles className="w-3.5 h-3.5 text-violet-500" />
+            <span className="flex items-center gap-1.5 font-semibold text-foreground">
+              <Sparkles className="w-3.5 h-3.5" />
               <span>Zen Focus Mode</span>
             </span>
             <span className="text-muted-foreground/60">•</span>
@@ -793,7 +898,7 @@ export const EditorCanvas: React.FC = () => {
             : "px-6 sm:px-12 max-w-5xl mx-auto"
         )}
       >
-        {/* Note Title Input with AI Title Generation Button */}
+        {/* Note Title Input */}
         <div className="flex items-center justify-between gap-3 group relative pb-2">
           <input
             type="text"
@@ -807,32 +912,6 @@ export const EditorCanvas: React.FC = () => {
               isTrashed && 'opacity-80 cursor-default'
             )}
           />
-
-          {!isTrashed && (
-            <button
-              onClick={() => generateNoteTitle(activeNote.id, activeNote.content)}
-              disabled={isGeneratingTitle || isOrganizingNote || !activeNote.content?.trim()}
-              title="Generate concise, high-signal title from note content using AI"
-              className={cn(
-                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all select-none shadow-xs shrink-0 cursor-pointer",
-                isGeneratingTitle
-                  ? "bg-violet-500/10 text-violet-500 border-violet-500/30 cursor-wait animate-pulse"
-                  : "bg-surface-hover hover:bg-surface-hover/80 text-muted-foreground hover:text-foreground border-border/80 active:scale-95"
-              )}
-            >
-              {isGeneratingTitle ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-500" />
-                  <span className="hidden sm:inline">Generating Title...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-3.5 h-3.5 text-violet-500" />
-                  <span className="hidden sm:inline">Generate Title</span>
-                </>
-              )}
-            </button>
-          )}
         </div>
 
         {/* Tags & Metadata bar */}
@@ -847,12 +926,12 @@ export const EditorCanvas: React.FC = () => {
               }
             }}
             title="Click to copy Memory ID"
-            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-surface-hover/80 hover:bg-surface-hover text-muted-foreground hover:text-foreground font-mono text-[11px] border border-border/60 transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-surface-hover hover:bg-surface-hover/80 text-muted-foreground hover:text-foreground font-mono text-[11px] border border-border/60 transition-colors cursor-pointer"
           >
             {copiedId ? (
               <>
-                <Check className="w-3 h-3 text-emerald-500" />
-                <span className="text-emerald-500 font-medium">Copied ID!</span>
+                <Check className="w-3 h-3 text-foreground" />
+                <span className="text-foreground font-medium">Copied ID!</span>
               </>
             ) : (
               <>
@@ -874,7 +953,7 @@ export const EditorCanvas: React.FC = () => {
                 {!isTrashed && (
                   <button
                     onClick={() => handleRemoveTag(tag)}
-                    className="text-muted-foreground hover:text-foreground p-0.5"
+                    className="text-muted-foreground hover:text-foreground p-0.5 cursor-pointer"
                   >
                     <X className="w-2.5 h-2.5" />
                   </button>
@@ -882,7 +961,7 @@ export const EditorCanvas: React.FC = () => {
               </span>
             ))}
 
-          {/* Add Tag input & Auto LLM Tagging */}
+          {/* Add Tag input */}
           {!isTrashed && (
             showTagInput ? (
               <div className="inline-flex items-center gap-1">
@@ -910,43 +989,32 @@ export const EditorCanvas: React.FC = () => {
                   <span>Add Tag</span>
                 </button>
 
-                {/* Auto LLM Tagging Button */}
-                <button
-                  onClick={handleAutoTag}
-                  disabled={isAutoTagging || !activeNote.content?.trim()}
-                  title="Auto-generate relevant tags and detect category using AI"
-                  className={cn(
-                    "inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-mono border transition-all cursor-pointer shadow-2xs select-none",
-                    isAutoTagging
-                      ? "bg-violet-500/15 text-violet-400 border-violet-500/30 animate-pulse cursor-wait"
-                      : "bg-surface-hover/70 hover:bg-surface-hover text-muted-foreground hover:text-foreground border-border/70 active:scale-95"
-                  )}
-                >
-                  {isAutoTagging ? (
-                    <>
-                      <Loader2 className="w-3 h-3 animate-spin text-violet-400" />
-                      <span>Auto-Tagging...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-3 h-3 text-violet-400" />
-                      <span>Auto Tag (AI)</span>
-                    </>
-                  )}
-                </button>
-
                 {autoTagMsg && (
-                  <span className="text-[11px] font-mono text-emerald-500 font-medium animate-in fade-in">
+                  <span className="text-[11px] font-mono text-foreground font-medium px-2 py-0.5 rounded-md bg-surface-hover border border-border animate-in fade-in">
                     ✓ {autoTagMsg}
+                  </span>
+                )}
+
+                {uploadStatusMsg && (
+                  <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded-md bg-surface-hover border border-border text-foreground animate-in fade-in flex items-center gap-1.5">
+                    {uploadStatusMsg.includes('Uploading') && <Loader2 className="w-3 h-3 animate-spin text-foreground" />}
+                    <span>{uploadStatusMsg}</span>
                   </span>
                 )}
               </div>
             )
           )}
+
+
         </div>
 
         {/* View Content Area based on viewMode */}
-        <div className={cn("flex-1 pt-6 pb-12 flex flex-col", `code-theme-${codeTheme}`)}>
+        <div
+          onClick={handleContainerClick}
+          onDrop={handleImageDrop}
+          onDragOver={(e) => e.preventDefault()}
+          className={cn("flex-1 pt-6 pb-12 flex flex-col relative", `code-theme-${codeTheme}`)}
+        >
           {/* MODE 1: MARKDOWN VIEWER / SOURCE (Default) */}
           {viewMode === 'markdown' && (
             <div className={cn("flex-1 flex gap-3 min-h-[500px]", isFocusMode && "min-h-[650px]")}>
@@ -971,8 +1039,10 @@ export const EditorCanvas: React.FC = () => {
                 onSelect={handleTextareaSelect}
                 onMouseUp={handleTextareaSelect}
                 onKeyUp={handleTextareaSelect}
+                onPaste={handleImagePaste}
+                onDrop={handleImageDrop}
                 readOnly={isTrashed}
-                placeholder="Write markdown here (# Heading, - List, ```code)..."
+                placeholder="Write markdown here (# Heading, - List, ```code, paste/drop images)..."
                 className={cn(
                   "markdown-textarea flex-1 w-full min-h-[500px] resize-none outline-none border-none focus:ring-0 p-0 overflow-hidden transition-all",
                   isFocusMode
@@ -988,8 +1058,8 @@ export const EditorCanvas: React.FC = () => {
           {viewMode === 'rich' && (
             <div className={cn("pt-2 max-w-none text-foreground transition-all", isFocusMode ? "prose prose-lg dark:prose-invert max-w-none text-base sm:text-lg leading-relaxed" : "prose dark:prose-invert max-w-none")}>
               <MilkdownEditor
-                key={activeNote.id}
-                noteId={activeNote.id}
+                key={`${activeNote.id}_${externalEditCounter}`}
+                noteId={`${activeNote.id}_${externalEditCounter}`}
                 initialContent={activeNote.content}
                 readOnly={isTrashed}
                 onChange={handleContentChange}
@@ -1020,6 +1090,8 @@ export const EditorCanvas: React.FC = () => {
                   onSelect={handleTextareaSelect}
                   onMouseUp={handleTextareaSelect}
                   onKeyUp={handleTextareaSelect}
+                  onPaste={handleImagePaste}
+                  onDrop={handleImageDrop}
                   readOnly={isTrashed}
                   placeholder="Markdown source..."
                   className={cn(
@@ -1035,8 +1107,8 @@ export const EditorCanvas: React.FC = () => {
               {/* Right: WYSIWYG Rendered Preview */}
               <div className={cn("p-4 bg-surface-hover/20 rounded-xl border border-border/70 overflow-y-auto max-w-none text-foreground", isFocusMode ? "p-6 prose prose-lg dark:prose-invert max-w-none text-base" : "prose dark:prose-invert max-w-none")}>
                 <MilkdownEditor
-                  key={`split_${activeNote.id}`}
-                  noteId={`split_${activeNote.id}`}
+                  key={`split_${activeNote.id}_${externalEditCounter}`}
+                  noteId={`split_${activeNote.id}_${externalEditCounter}`}
                   initialContent={activeNote.content}
                   readOnly={true}
                   onChange={() => {}}
@@ -1044,20 +1116,21 @@ export const EditorCanvas: React.FC = () => {
               </div>
             </div>
           )}
+
         </div>
       </div>
 
       {/* Bottom Status Bar: Sync Status + Words, Lines, Characters counts */}
       <footer className="h-8 px-4 border-t border-border bg-surface-sidebar flex items-center justify-between text-[11px] font-mono text-muted-foreground select-none shrink-0">
-        {/* Left: Sync Status */}
-        <div className="flex items-center gap-2">
+        {/* Left: Sync Status + Activity & Task Progress */}
+        <div className="flex items-center gap-2.5">
           {!isTrashed ? (
             <>
               <div className="flex items-center gap-1.5">
                 <span
                   className={cn(
                     'w-1.5 h-1.5 rounded-full',
-                    isSaving ? 'bg-amber-400 animate-ping' : 'bg-emerald-500'
+                    isSaving ? 'bg-muted-foreground animate-ping' : 'bg-foreground'
                   )}
                 />
                 <span className="font-medium text-foreground">
@@ -1070,9 +1143,11 @@ export const EditorCanvas: React.FC = () => {
                   <span>at {lastSavedAt}</span>
                 </>
               )}
+              <span>•</span>
+              <TaskProgressWidget />
             </>
           ) : (
-            <span className="text-destructive font-semibold">Note is in Trash (Read-Only)</span>
+            <span className="text-muted-foreground font-semibold">Note is in Trash (Read-Only)</span>
           )}
         </div>
 
@@ -1098,17 +1173,17 @@ export const EditorCanvas: React.FC = () => {
         >
           {isTransformingSelection ? (
             <div className="flex items-center gap-2 px-2.5 py-1 text-xs text-foreground font-medium select-none">
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-500" />
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-foreground" />
               <span>Organizing selection with AI...</span>
             </div>
           ) : selectionActionSuccess ? (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-emerald-500 font-semibold animate-in fade-in select-none">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-foreground font-semibold animate-in fade-in select-none">
               <CheckCircle2 className="w-3.5 h-3.5" />
               <span>{selectionActionSuccess}</span>
             </div>
           ) : showSelectionPromptInput ? (
             <div className="flex items-center gap-1.5 min-w-[280px]">
-              <Sparkles className="w-3.5 h-3.5 text-violet-500 shrink-0" />
+              <Sparkles className="w-3.5 h-3.5 text-foreground shrink-0" />
               <input
                 type="text"
                 value={selectionPrompt}
@@ -1149,7 +1224,7 @@ export const EditorCanvas: React.FC = () => {
           ) : (
             <>
               <div className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground px-1 border-r border-border select-none">
-                <Sparkles className="w-3 h-3 text-violet-500" />
+                <Sparkles className="w-3 h-3 text-foreground" />
                 <span>AI Selection</span>
               </div>
 
@@ -1158,7 +1233,7 @@ export const EditorCanvas: React.FC = () => {
                 title="Polish and clean grammar, typography, and formatting"
                 className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-surface-hover hover:bg-surface-hover/80 text-foreground transition-colors cursor-pointer"
               >
-                <Wand2 className="w-3 h-3 text-violet-500" />
+                <Wand2 className="w-3 h-3 text-foreground" />
                 <span>Polish</span>
               </button>
 
@@ -1167,7 +1242,7 @@ export const EditorCanvas: React.FC = () => {
                 title="Summarize selection into concise key takeaway bullet points"
                 className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-surface-hover hover:bg-surface-hover/80 text-foreground transition-colors cursor-pointer"
               >
-                <ListOrdered className="w-3 h-3 text-blue-500" />
+                <ListOrdered className="w-3 h-3 text-foreground" />
                 <span>Summarize</span>
               </button>
 
@@ -1176,7 +1251,7 @@ export const EditorCanvas: React.FC = () => {
                 title="Format as technical documentation with clear headings, code syntax, and parameters"
                 className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-surface-hover hover:bg-surface-hover/80 text-foreground transition-colors cursor-pointer"
               >
-                <AlignLeft className="w-3 h-3 text-emerald-500" />
+                <AlignLeft className="w-3 h-3 text-foreground" />
                 <span>Tech Docs</span>
               </button>
 
@@ -1185,7 +1260,7 @@ export const EditorCanvas: React.FC = () => {
                 title="Generate and set note title from this selected paragraph"
                 className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-surface-hover hover:bg-surface-hover/80 text-foreground transition-colors cursor-pointer"
               >
-                <FileText className="w-3 h-3 text-indigo-500" />
+                <FileText className="w-3 h-3 text-foreground" />
                 <span>Make Title</span>
               </button>
 
@@ -1209,6 +1284,10 @@ export const EditorCanvas: React.FC = () => {
           )}
         </div>
       )}
+
+
+      {/* Uncompressed Image & Local Ollama GLM-OCR Lightbox Modal */}
+      <ImageLightboxModal />
     </div>
   );
 };
