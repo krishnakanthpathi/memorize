@@ -10,7 +10,8 @@ class TestAPIRoutes(unittest.TestCase):
     def test_root_endpoint(self):
         response = client.get("/")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["service"], "Memorize REST API Service")
+        self.assertEqual(response.json()["service"], "Memorize REST API & Universal FastMCP Server")
+
 
     def test_list_memories(self):
         response = client.get("/api/memories")

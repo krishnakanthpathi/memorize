@@ -42,44 +42,90 @@ Available Categories & Auto-Classification Guide:
 
 
 import base64
+from pathlib import Path
 import re
+import requests
 
 from storage.media_store_manager import save_raw_image
 from utils.llm_client import extract_text_with_ollama_ocr
 
 
 def process_embedded_data_urls(content: str, memory_id: Optional[str] = None) -> str:
-    """Detects base64 data URIs in markdown content, saves them uncompressed to data/media/, and replaces with local media URLs."""
-    if not content or "data:image/" not in content:
+    """
+    Detects base64 data URIs, local image paths, or remote image links in markdown content,
+    saves uncompressed images into data/media/, runs local Ollama GLM-OCR, and replaces with local media URLs.
+    """
+    if not content:
         return content
 
-    def replace_data_uri(match):
-        mime_type = match.group(1)
-        b64_data = match.group(2)
-        try:
-            raw_bytes = base64.b64decode(b64_data)
-            ext = mime_type.split("/")[-1].replace("jpeg", "jpg")
-            rec = save_raw_image(
-                file_bytes=raw_bytes,
-                filename=f"embedded_image.{ext}",
-                mime_type=mime_type,
-                memory_id=memory_id,
-            )
-            ocr_text = ""
+    # 1. Process Base64 Data URIs
+    if "data:image/" in content:
+        def replace_data_uri(match):
+            mime_type = match.group(1)
+            b64_data = match.group(2)
             try:
-                ocr_text = extract_text_with_ollama_ocr(raw_bytes)
+                raw_bytes = base64.b64decode(b64_data)
+                ext = mime_type.split("/")[-1].replace("jpeg", "jpg").split(";")[0]
+                rec = save_raw_image(
+                    file_bytes=raw_bytes,
+                    filename=f"embedded_image.{ext}",
+                    mime_type=mime_type,
+                    memory_id=memory_id,
+                )
+                ocr_text = ""
+                try:
+                    ocr_text = extract_text_with_ollama_ocr(raw_bytes)
+                except Exception:
+                    pass
+
+                replacement = f"![Image]({rec['url']})"
+                if ocr_text:
+                    replacement += f"\n\n**Extracted Content (OCR):**\n{ocr_text}"
+                return replacement
             except Exception:
-                pass
+                return match.group(0)
 
-            replacement = f"![Image]({rec['url']})"
-            if ocr_text:
-                replacement += f"\n\n**Extracted Content (OCR):**\n{ocr_text}"
-            return replacement
-        except Exception:
-            return match.group(0)
+        pattern = r"data:(image/[a-zA-Z0-9\+\-\.]+);base64,([A-Za-z0-9+/=]+)"
+        content = re.sub(pattern, replace_data_uri, content)
 
-    pattern = r"data:(image/[a-zA-Z0-9\+\-\.]+);base64,([A-Za-z0-9+/=]+)"
-    return re.sub(pattern, replace_data_uri, content)
+    # 2. Process local file path image embeds: ![Alt](/path/to/image.png)
+    def replace_local_file_image(match):
+        alt_text = match.group(1)
+        path_str = match.group(2).strip()
+        
+        # Expand ~ if present
+        expanded_path = Path(path_str).expanduser()
+        if (
+            expanded_path.is_file()
+            and expanded_path.suffix.lower() in [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"]
+        ):
+            try:
+                raw_bytes = expanded_path.read_bytes()
+                mime = f"image/{expanded_path.suffix.lower().lstrip('.')}".replace("jpg", "jpeg")
+                rec = save_raw_image(
+                    file_bytes=raw_bytes,
+                    filename=expanded_path.name,
+                    mime_type=mime,
+                    memory_id=memory_id,
+                )
+                ocr_text = ""
+                try:
+                    ocr_text = extract_text_with_ollama_ocr(raw_bytes)
+                except Exception:
+                    pass
+
+                replacement = f"![{alt_text or expanded_path.name}]({rec['url']})"
+                if ocr_text:
+                    replacement += f"\n\n**Extracted Content (GLM-OCR):**\n{ocr_text}"
+                return replacement
+            except Exception:
+                return match.group(0)
+        return match.group(0)
+
+    local_img_pattern = r"!\[([^\]]*)\]\((/[^)]+|\~/[^)]+)\)"
+    content = re.sub(local_img_pattern, replace_local_file_image, content)
+
+    return content
 
 
 def store(
@@ -90,11 +136,22 @@ def store(
     memory_id: Optional[str] = None,
 ) -> dict:
     """
-    Stores knowledge into the Memorize knowledge base. Automatically creates a new note or appends to an existing topic.
+    Stores knowledge, notes, documentation, code, or media into the Memorize knowledge base. Automatically creates a new note or merges into an existing topic.
     
-    CRITICAL INSTRUCTION FOR LLM:
-    If the user does NOT explicitly provide a category, YOU MUST choose the single best matching category from this predefined taxonomy:
-    
+    CRITICAL WORKFLOW - FETCH BEFORE STORING:
+    ALWAYS call `fetch` or `hybrid_fetch` BEFORE calling `store`!
+    Check if a relevant note or memory already exists on the subject. If an existing note exists,
+    use `update` or append to it to avoid creating duplicate, fragmented notes. Only store a new note
+    when no existing note covers the topic.
+
+    IMAGE & MEDIA SUPPORT:
+    The `content` field fully supports images and visual media:
+    - Markdown image embeds: `![Alt description](https://example.com/image.png)` or `![Alt description](/api/media/filename.png)`
+    - Base64 Data URLs: `![Document](data:image/png;base64,iVBORw0KGgo...)` or raw `data:image/jpeg;base64,...`
+      (These are automatically extracted, uncompressed, stored into data/media/, and OCR-processed with local Ollama GLM-OCR).
+    - Local image file paths or diagram URLs.
+
+    CATEGORY TAXONOMY (Strictly choose the single best matching category):
     1. 'personal': Daily life, habits, health, sleep, diary, contacts, personal preferences, lifestyle.
     2. 'development': Programming languages, frameworks (React, FastAPI, Python, TypeScript), code snippets, algorithms, dev tools, CSS/UI, debugging.
     3. 'projects': Application builds, side projects, product specs, MVPs, feature roadmaps, system designs.
@@ -104,12 +161,12 @@ def store(
     7. 'gaming': Video games, game lore, strategies, game achievements, Steam/console gaming.
     8. 'achievements': Exam ranks, awards, prizes, certifications, hackathon wins, major milestones.
     9. 'integration': MCP server configs, APIs, webhooks, SSH, WSL, cloud infrastructure, OAuth.
-    10. 'media': Books, movies, podcasts, YouTube playlists, reading summaries, audio/video notes.
+    10. 'media': Books, movies, podcasts, YouTube playlists, reading summaries, audio/video notes, image OCR scans.
     11. 'others': General miscellaneous reference notes.
     
     Args:
-        title: Title or subject of the memory (e.g., 'Python Async Best Practices', 'Investment Portfolio 2026')
-        content: Detailed Markdown body content
+        title: Title or subject of the memory (e.g., 'Python Async Best Practices', 'Aadhaar Card Details')
+        content: Detailed Markdown body content (can include text, code blocks, tables, image links, or Base64 Data URLs)
         category: Category name strictly chosen from the taxonomy above (defaults to 'personal')
         tags: Optional list of 2-5 concise descriptive tags (e.g. ['python', 'async', 'backend'])
         memory_id: Optional explicit memory ID
@@ -150,15 +207,23 @@ def update(
     append: bool = False,
 ) -> dict:
     """
-    Updates an existing memory's content. Overwrites, cleanly merges, or appends new information.
+    Updates or appends content to an existing memory note in the Memorize knowledge base.
     
+    CRITICAL WORKFLOW - FETCH BEFORE UPDATING:
+    ALWAYS call `fetch` or `hybrid_fetch` FIRST to read the existing note's current markdown content and structure
+    before submitting updates. This ensures you preserve existing context and cleanly merge new details.
+
+    IMAGE & MEDIA SUPPORT:
+    The `content` field fully supports images, Markdown image links (`![caption](url)`), and Base64 Data URLs
+    (`data:image/...;base64,...`) which are automatically saved into local media storage and OCR-processed.
+
     Categories:
     'personal', 'development', 'projects', 'job', 'education', 'finance', 'gaming', 'achievements', 'integration', 'media', 'others'.
     
     Args:
         title: Title or subject of the memory to update
-        content: New content or update to apply
-        category: Category folder name (strictly one of the 11 categories)
+        content: New Markdown content to apply or append (supports images, tables, code snippets)
+        category: Category folder name strictly chosen from the 11 taxonomy categories
         tags: Optional list of updated tags
         memory_id: Optional memory ID to target
         append: If True, appends content to the end of the note rather than updating/merging
@@ -214,6 +279,10 @@ def fetch(
     """
     Fetches full memory metadata and markdown content for a specific ID/title, or lists stored memories.
     
+    MANDATORY USAGE RULE:
+    Use `fetch` or `hybrid_fetch` BEFORE calling `store` or `update` to inspect existing knowledge,
+    prevent duplicate notes, and build upon existing records.
+    
     Available category filters:
     'personal', 'development', 'projects', 'job', 'education', 'finance', 'gaming', 'achievements', 'integration', 'media', 'others'.
     
@@ -223,6 +292,7 @@ def fetch(
         category_filter: Optional category restriction to filter listed memories
         tag_filter: Optional tag restriction to filter listed memories
     """
+
     target_mem = None
 
     if memory_id:
