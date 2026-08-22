@@ -10,12 +10,6 @@ from utils import get_available_categories, get_category_dir
 def register_category_tools(mcp):
     """Register category management tools on the FastMCP server instance."""
 
-    @mcp.tool()
-    def get_categories() -> dict:
-        """
-        Returns all currently available memory categories on disk.
-        """
-        return {"status": "success", "categories": get_available_categories()}
 
     @mcp.tool()
     def add_category(category: str) -> dict:

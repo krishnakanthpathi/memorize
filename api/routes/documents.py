@@ -134,37 +134,51 @@ async def get_document_details(identifier: str):
     doc_stem = Path(doc_orig).stem
 
     all_media = list_all_media_records()
-    page_records = []
-    seen_ids = set()
+    seen_page_indices = {}
+    
+    import re
+    def extract_page_idx(filename: str) -> int:
+        match = re.search(r"_page_(\d+)", filename)
+        if match:
+            return int(match.group(1))
+        return 9999
 
     # 1. Check media items linked via memory_id
     for m in all_media:
-        if m.get("memory_id") == doc_id and m["id"] not in seen_ids:
-            if "_page_" in m["filename"] or (m["filename"].endswith(".png") and not m["filename"].endswith("_thumb.png")):
-                page_records.append({
-                    "id": m["id"],
-                    "filename": m["filename"],
-                    "url": f"/api/media/{m['filename']}",
-                    "ocr_text": m.get("ocr_text", ""),
-                    "ocr_status": m.get("ocr_status", "skipped"),
-                })
-                seen_ids.add(m["id"])
+        if m.get("memory_id") == doc_id:
+            fname = m["filename"]
+            if "_page_" in fname or (fname.endswith(".png") and not fname.endswith("_thumb.png")):
+                fpath = get_media_file_path(fname)
+                if fpath and fpath.exists():
+                    p_idx = extract_page_idx(fname)
+                    if p_idx not in seen_page_indices or (m.get("ocr_text") and not seen_page_indices[p_idx].get("ocr_text")):
+                        seen_page_indices[p_idx] = {
+                            "id": m["id"],
+                            "filename": m["filename"],
+                            "url": f"/api/media/{m['filename']}",
+                            "ocr_text": m.get("ocr_text", ""),
+                            "ocr_status": m.get("ocr_status", "skipped"),
+                        }
 
     # 2. Check matching stem if memory_id wasn't set on legacy uploads
-    if len(page_records) == 0:
+    if len(seen_page_indices) == 0:
         for m in all_media:
-            if f"{doc_stem}_page_" in m["filename"] and m["id"] not in seen_ids:
-                page_records.append({
-                    "id": m["id"],
-                    "filename": m["filename"],
-                    "url": f"/api/media/{m['filename']}",
-                    "ocr_text": m.get("ocr_text", ""),
-                    "ocr_status": m.get("ocr_status", "skipped"),
-                })
-                seen_ids.add(m["id"])
+            fname = m["filename"]
+            if f"{doc_stem}_page_" in fname:
+                fpath = get_media_file_path(fname)
+                if fpath and fpath.exists():
+                    p_idx = extract_page_idx(fname)
+                    if p_idx not in seen_page_indices or (m.get("ocr_text") and not seen_page_indices[p_idx].get("ocr_text")):
+                        seen_page_indices[p_idx] = {
+                            "id": m["id"],
+                            "filename": m["filename"],
+                            "url": f"/api/media/{m['filename']}",
+                            "ocr_text": m.get("ocr_text", ""),
+                            "ocr_status": m.get("ocr_status", "skipped"),
+                        }
 
     # 3. If still no page records, dynamically render pages from PDF file on disk
-    if len(page_records) == 0:
+    if len(seen_page_indices) == 0:
         pdf_path = Path(doc_record["file_path"])
         if pdf_path.exists() and pdf_path.is_file() and pdf_path.suffix.lower() == ".pdf":
             try:
@@ -179,29 +193,19 @@ async def get_document_details(identifier: str):
                         mime_type="image/png",
                         memory_id=doc_id,
                     )
-                    page_records.append({
+                    seen_page_indices[page_num] = {
                         "id": p_rec["id"],
                         "filename": p_rec["filename"],
                         "url": f"/api/media/{p_rec['filename']}",
                         "ocr_text": "",
                         "ocr_status": "skipped",
-                    })
+                    }
             except Exception as err:
                 logger.warning(f"On-demand PDF page rendering failed: {err}")
 
-    # Sort pages by page number extracted from filename
-    import re
-    def extract_page_idx(rec: Dict[str, Any]) -> int:
-        fname = rec["filename"]
-        try:
-            match = re.search(r"_page_(\d+)", fname)
-            if match:
-                return int(match.group(1))
-        except Exception:
-            pass
-        return 9999
-
-    page_records.sort(key=extract_page_idx)
+    # Sort pages by page index ascending
+    sorted_page_keys = sorted(seen_page_indices.keys())
+    page_records = [seen_page_indices[k] for k in sorted_page_keys]
 
     return {
         "status": "success",

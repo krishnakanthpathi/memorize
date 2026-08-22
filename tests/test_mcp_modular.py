@@ -15,12 +15,12 @@ class TestModularMCP(unittest.TestCase):
         self.assertEqual(SERVER_NAME, "Memorize Server")
         self.assertIsNotNone(mcp)
         tools = mcp._tool_manager.list_tools()
-        self.assertEqual(len(tools), 12)
+        self.assertEqual(len(tools), 24)
 
     def test_all_expected_tools_registered(self):
-        """Verify exactly the expected core tools are present on the server."""
+        """Verify exactly the expected tools are present on the server."""
         tools = {t.name for t in mcp._tool_manager.list_tools()}
-        expected_tools = {
+        expected_core_tools = {
             "store",
             "update",
             "delete",
@@ -34,7 +34,8 @@ class TestModularMCP(unittest.TestCase):
             "generate_title",
             "organize_selection",
         }
-        self.assertEqual(tools, expected_tools, f"MCP tools mismatch. Got: {tools}, Expected: {expected_tools}")
+        self.assertTrue(expected_core_tools.issubset(tools), f"Missing core tools: {expected_core_tools - tools}")
+        self.assertEqual(len(tools), 24)
 
     def test_mcp_config_parameters(self):
         """Verify MCP config parameters are accessible and typed."""

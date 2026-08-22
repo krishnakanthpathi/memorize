@@ -44,35 +44,58 @@ The FastMCP server exposes **7 focused tools**:
 
 ---
 
-## How to Run
+## 🚀 How to Run
 
-### 1. Install Backend Dependencies
+### 1. Install Dependencies
 ```bash
-pip install -r requirements.txt fastapi uvicorn
+pip install -r requirements.txt
+cd frontend && npm install && cd ..
 ```
 
-### 2. Run the FastAPI REST Service
+### 2. Start Full Stack (Backend + Frontend together)
+Run both the FastAPI backend and Vite frontend with unified logging:
 ```bash
-python3 -m uvicorn api.server:app --host 0.0.0.0 --port 7777 --reload
+python main.py
+# or
+python main.py start
 ```
-API Documentation will be available at: `http://localhost:7777/docs`
+- **Frontend UI**: `http://localhost:8888`
+- **Backend REST API**: `http://localhost:7777`
+- **Interactive Swagger Docs**: `http://localhost:7777/docs`
+- **FastMCP Endpoints**: `http://localhost:7777/sse` and `http://localhost:7777/mcp`
 
-### 3. Run the Frontend Web Application
+---
+
+### 3. Individual Service Runners
+
+#### Start Backend Only
 ```bash
-cd frontend
-npm install
-npm run dev
+python main.py backend
+# or
+python main.py server
 ```
-Open your browser at: `http://localhost:8888`
 
-### 4. Run the Universal FastMCP Server (Claude Desktop / Gemini / Cursor / Antigravity)
+#### Start Frontend Only
 ```bash
-# Stdio transport (for Claude Desktop, Cursor, Antigravity)
-python3 main.py
-
-# SSE / Streamable-HTTP transport (for Google Gemini Custom Connected Apps, remote clients)
-python3 main.py --transport sse --port 7777
+python main.py frontend
+# or
+python main.py ui
 ```
+
+#### Run FastMCP Server (for Claude Desktop, Cursor, Antigravity)
+```bash
+# Stdio transport (Claude Desktop / Cursor)
+python main.py mcp
+
+# SSE transport (for remote LLM agents)
+python main.py mcp --transport sse --port 7777
+```
+
+#### Run Interactive Terminal CLI
+```bash
+python main.py cli
+```
+
 
 
 ---

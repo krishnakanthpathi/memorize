@@ -117,7 +117,20 @@ memorize/
     ├── test_markdown_handler.py
     ├── test_index_manager.py
     └── test_chunker.py
-```
+### Step 13: Unified Server & Frontend Runner (`main.py`)
+- [x] Refactored `main.py` into a master multi-service orchestrator.
+- [x] Supports `python main.py` / `python main.py start` (concurrently runs FastAPI backend + Vite frontend with live color-coded logs and graceful SIGINT shutdown).
+- [x] Supports subcommands: `backend` (FastAPI REST + MCP on port 7777), `frontend` (Vite UI on port 8888), `mcp` (FastMCP server), and `cli` (terminal memory manager).
+
+### Step 14: Blueprint for Per-Memory Folder Architecture & Customizable Storage
+- [x] Designed **Per-Memory Folder Bundle Architecture**:
+  ```text
+  <MEMORIES_DIR>/<category>/<memory_slug>/
+  ├── <memory_slug>.md          <-- Note Markdown content & frontmatter
+  ├── media/                    <-- Original attached files (PDFs, high-res images)
+  └── thumbnails/               <-- Generated thumbnails and page preview images
+  ```
+- [x] Designed Customizable Storage Directory setting in Settings Panel with 1-click automated migration.
 
 ---
 
@@ -143,7 +156,8 @@ memorize/
 python3 -m unittest discover -s tests
 ```
 
-### 2. Run Interactive MCP Inspector:
+### 2. Run Full Stack (Backend + Frontend):
 ```bash
-npx @modelcontextprotocol/inspector python3 main.py
+python3 main.py
 ```
+

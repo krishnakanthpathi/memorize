@@ -573,46 +573,70 @@ def upsert_media_record(media_entry: Dict[str, Any]) -> Dict[str, Any]:
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            INSERT INTO media_items (
-                id, memory_id, filename, original_filename, file_path,
-                mime_type, file_size, content_hash, ocr_text, ocr_status,
-                ocr_model, created_at, updated_at
+        cursor.execute("SELECT id FROM media_items WHERE id = ? OR file_path = ?", (media_id, file_path))
+        existing_row = cursor.fetchone()
+        if existing_row:
+            target_id = existing_row["id"]
+            cursor.execute(
+                """
+                UPDATE media_items SET
+                    memory_id = ?,
+                    filename = ?,
+                    original_filename = ?,
+                    file_path = ?,
+                    mime_type = ?,
+                    file_size = ?,
+                    content_hash = ?,
+                    ocr_text = ?,
+                    ocr_status = ?,
+                    ocr_model = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    memory_id,
+                    filename,
+                    original_filename,
+                    file_path,
+                    mime_type,
+                    file_size,
+                    content_hash,
+                    ocr_text,
+                    ocr_status,
+                    ocr_model,
+                    updated_at,
+                    target_id,
+                ),
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET
-                memory_id = excluded.memory_id,
-                filename = excluded.filename,
-                original_filename = excluded.original_filename,
-                file_path = excluded.file_path,
-                mime_type = excluded.mime_type,
-                file_size = excluded.file_size,
-                content_hash = excluded.content_hash,
-                ocr_text = excluded.ocr_text,
-                ocr_status = excluded.ocr_status,
-                ocr_model = excluded.ocr_model,
-                updated_at = excluded.updated_at
-            ;
-            """,
-            (
-                media_id,
-                memory_id,
-                filename,
-                original_filename,
-                file_path,
-                mime_type,
-                file_size,
-                content_hash,
-                ocr_text,
-                ocr_status,
-                ocr_model,
-                created_at,
-                updated_at,
-            ),
-        )
+            media_entry["id"] = target_id
+        else:
+            cursor.execute(
+                """
+                INSERT INTO media_items (
+                    id, memory_id, filename, original_filename, file_path,
+                    mime_type, file_size, content_hash, ocr_text, ocr_status,
+                    ocr_model, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    media_id,
+                    memory_id,
+                    filename,
+                    original_filename,
+                    file_path,
+                    mime_type,
+                    file_size,
+                    content_hash,
+                    ocr_text,
+                    ocr_status,
+                    ocr_model,
+                    created_at,
+                    updated_at,
+                ),
+            )
         conn.commit()
-    logger.info(f"Upserted media record '{media_id}' ({filename}) in SQLite.")
+    logger.info(f"Upserted media record '{media_entry['id']}' ({filename}) in SQLite.")
     return media_entry
 
 
