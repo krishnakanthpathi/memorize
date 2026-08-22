@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, Union
 
 import config.constants as constants
+from config.settings import get_memories_dir
 from core.hashing import compute_file_hash
 from core.logger import handle_errors, logger
 from storage.db_manager import (
@@ -24,7 +25,7 @@ def backup_single_memory_file(file_path: Union[str, Path]) -> bool:
     if not file_path.exists() or not file_path.name.endswith(".md"):
         return False
 
-    mem_dir = constants.MEMORIES_DIR
+    mem_dir = get_memories_dir()
     backup_mem_dir = constants.BACKUP_MEMORIES_DIR
 
     try:
@@ -171,7 +172,7 @@ def delete_single_backup_file(file_path: Union[str, Path]) -> bool:
     Removes the backup file when a memory is explicitly deleted.
     """
     file_path = Path(file_path)
-    mem_dir = constants.MEMORIES_DIR
+    mem_dir = get_memories_dir()
     backup_mem_dir = constants.BACKUP_MEMORIES_DIR
 
     try:
@@ -193,7 +194,7 @@ def backup_all_memories() -> Dict[str, Any]:
     Scans data/memories/, backs up all Markdown files into data/backups/memories/,
     snapshots memorize.db into data/backups/memorize_backup.db, and generates README.txt.
     """
-    mem_dir = constants.MEMORIES_DIR
+    mem_dir = get_memories_dir()
     if not mem_dir.exists():
         return {"status": "success", "backed_up_count": 0}
 
@@ -221,7 +222,7 @@ def restore_memories_from_backup() -> Dict[str, Any]:
     """
     Restores any missing Markdown memory files from data/backups/memories/ into data/memories/.
     """
-    mem_dir = constants.MEMORIES_DIR
+    mem_dir = get_memories_dir()
     backup_mem_dir = constants.BACKUP_MEMORIES_DIR
     if not backup_mem_dir.exists():
         return {"status": "success", "restored_count": 0}

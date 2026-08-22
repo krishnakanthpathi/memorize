@@ -26,6 +26,8 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "auto_context": True,
     "tool_execution": True,
     "temperature": 0.3,
+    "memories_dir": str(DATA_DIR / "memories"),
+    "storage_layout": "bundle",  # "bundle" (per-memory folder with thumbnails/ and media/) or "flat"
 }
 
 
@@ -114,5 +116,64 @@ def reset_settings(filepath: Path = SETTINGS_FILE) -> bool:
     return save_settings(filepath)
 
 
+def get_memories_dir() -> Path:
+    """
+    Returns the resolved Path for the configured memories storage directory.
+    Expands ~ (user home) and ensures the directory exists.
+    Respects runtime patched constants.MEMORIES_DIR in tests.
+    """
+    import config.constants as constants
+    if constants.MEMORIES_DIR != DATA_DIR / "memories":
+        p = Path(constants.MEMORIES_DIR).resolve()
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    path_val = get_setting("memories_dir", str(DATA_DIR / "memories"))
+    if not path_val:
+        path_val = str(DATA_DIR / "memories")
+    resolved = Path(path_val).expanduser().resolve()
+    resolved.mkdir(parents=True, exist_ok=True)
+    return resolved
+
+
+def get_storage_layout() -> str:
+    """
+    Returns the configured storage layout strategy: 'bundle' (default) or 'flat'.
+    """
+    return str(get_setting("storage_layout", "bundle")).lower()
+
+
+def validate_storage_path(path_str: str) -> Dict[str, Any]:
+    """
+    Validates a target directory path for accessibility, permissions, and available disk space.
+    """
+    import os
+    import shutil
+
+    if not path_str or not path_str.strip():
+        return {"valid": False, "error": "Path cannot be empty."}
+
+    try:
+        target = Path(path_str).expanduser().resolve()
+        target.mkdir(parents=True, exist_ok=True)
+        # Test write permission
+        test_file = target / ".write_test.tmp"
+        test_file.write_text("ok", encoding="utf-8")
+        test_file.unlink(missing_ok=True)
+
+        usage = shutil.disk_usage(str(target))
+        return {
+            "valid": True,
+            "resolved_path": str(target),
+            "total_bytes": usage.total,
+            "used_bytes": usage.used,
+            "free_bytes": usage.free,
+            "free_gb": round(usage.free / (1024 ** 3), 2),
+        }
+    except Exception as e:
+        return {"valid": False, "error": str(e)}
+
+
 # Initialize settings on module load
 load_settings()
+

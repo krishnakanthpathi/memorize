@@ -27,6 +27,10 @@ import {
   Copy,
   Layers,
   Code2,
+  Folder,
+  FolderTree,
+  HardDrive,
+  AlertCircle,
 } from 'lucide-react';
 import { useNotesStore } from '@/store/useNotesStore';
 import { api } from '@/services/api';
@@ -70,6 +74,29 @@ export const SettingsPanel: React.FC = () => {
   const [auditLoading, setAuditLoading] = useState(false);
   const [fixLoading, setFixLoading] = useState(false);
 
+  // Storage paths & layout state
+  const [storagePaths, setStoragePaths] = useState<{
+    memories_dir: string;
+    storage_layout: string;
+    default_memories_dir: string;
+    media_dir: string;
+    db_path: string;
+    validation: {
+      valid: boolean;
+      resolved_path?: string;
+      free_gb?: number;
+      error?: string;
+    };
+    total_memories: number;
+    total_media: number;
+  } | null>(null);
+  const [customMemoriesDir, setCustomMemoriesDir] = useState<string>('');
+  const [storageLayout, setStorageLayout] = useState<'bundle' | 'flat'>('bundle');
+  const [pathSaveLoading, setPathSaveLoading] = useState(false);
+  const [pathSaveStatus, setPathSaveStatus] = useState<string | null>(null);
+  const [migrateLoading, setMigrateLoading] = useState(false);
+  const [migrateStatus, setMigrateStatus] = useState<string | null>(null);
+
   // Backup state
   const [backupLoading, setBackupLoading] = useState(false);
   const [backupMsg, setBackupMsg] = useState<string | null>(null);
@@ -97,6 +124,17 @@ export const SettingsPanel: React.FC = () => {
       }
     } catch (err) {
       console.error('Failed to load settings from backend:', err);
+    }
+  };
+
+  const loadStoragePaths = async () => {
+    try {
+      const sp = await api.getStoragePaths();
+      setStoragePaths(sp);
+      setCustomMemoriesDir(sp.memories_dir);
+      setStorageLayout((sp.storage_layout as 'bundle' | 'flat') || 'bundle');
+    } catch (err) {
+      console.error('Failed to load storage paths:', err);
     }
   };
 
@@ -141,9 +179,53 @@ export const SettingsPanel: React.FC = () => {
 
   useEffect(() => {
     loadBackendSettings();
+    loadStoragePaths();
     loadAllModels();
     loadAudit();
   }, []);
+
+  const handleUpdateStoragePath = async (migrateExisting: boolean = true) => {
+    setPathSaveLoading(true);
+    setPathSaveStatus(null);
+    try {
+      await api.updateStoragePaths({
+        memories_dir: customMemoriesDir,
+        storage_layout: storageLayout,
+        migrate_existing: migrateExisting,
+      });
+      setPathSaveStatus('Storage directory updated successfully!');
+      await loadStoragePaths();
+      await fetchNotes();
+      await fetchCategories();
+    } catch (err: any) {
+      setPathSaveStatus(`Error: ${err.message}`);
+    } finally {
+      setPathSaveLoading(false);
+      setTimeout(() => setPathSaveStatus(null), 4000);
+    }
+  };
+
+  const handleMigrateToBundle = async () => {
+    setMigrateLoading(true);
+    setMigrateStatus(null);
+    try {
+      const res = await api.migrateStorageLayout({
+        storage_layout: storageLayout,
+      });
+      const movedNotes = res.migration_result?.files_moved_count || 0;
+      const movedMedia = res.migration_result?.media_relocated_count || 0;
+      setMigrateStatus(`Reorganized successfully! ${movedNotes} notes & ${movedMedia} media assets moved into per-memory folders.`);
+      await loadStoragePaths();
+      await loadAudit();
+      await fetchNotes();
+      await fetchCategories();
+    } catch (err: any) {
+      setMigrateStatus(`Migration failed: ${err.message}`);
+    } finally {
+      setMigrateLoading(false);
+      setTimeout(() => setMigrateStatus(null), 5000);
+    }
+  };
 
   // Pressing Escape exits settings back to notes
   useEffect(() => {
@@ -680,20 +762,20 @@ export const SettingsPanel: React.FC = () => {
            ========================================================================= */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           
-          {/* Card 5: Storage Integrity & Snapshots */}
+          {/* Card 5: Storage Architecture & Directory Control */}
           <div className="p-5 rounded-2xl bg-card border border-border shadow-xs space-y-4">
             <div className="flex items-center justify-between pb-2.5 border-b border-border/60">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-foreground" />
+                <FolderTree className="w-4 h-4 text-foreground" />
                 <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                  Storage Integrity & Snapshots
+                  Storage & Directory Architecture
                 </h3>
               </div>
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={handleRunAuditFix}
                   disabled={fixLoading}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-foreground text-background text-[10px] font-semibold hover:opacity-90 disabled:opacity-50 cursor-pointer shadow-2xs"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface-hover border border-border text-[10px] font-semibold hover:text-foreground cursor-pointer"
                 >
                   {fixLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
                   <span>Auto-Fix</span>
@@ -709,6 +791,125 @@ export const SettingsPanel: React.FC = () => {
               </div>
             </div>
 
+            {/* Custom Memories Directory Input */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Folder className="w-3.5 h-3.5 text-foreground" />
+                  <span>Memories Storage Directory</span>
+                </label>
+                <div className="flex items-center gap-1.5">
+                  {storagePaths?.validation?.valid ? (
+                    <span className="px-2 py-0.5 rounded bg-surface-selected text-foreground font-mono text-[9px] font-semibold flex items-center gap-1">
+                      <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" />
+                      Writable ({storagePaths.validation.free_gb ?? 0} GB Free)
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-500 font-mono text-[9px] font-semibold flex items-center gap-1">
+                      <AlertCircle className="w-2.5 h-2.5" />
+                      Path Error
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={customMemoriesDir}
+                  onChange={(e) => setCustomMemoriesDir(e.target.value)}
+                  placeholder="e.g. /Users/krishnakanth/Projects/memorize/data/memories"
+                  className="flex-1 px-3 py-1.5 rounded-lg bg-surface-list border border-border/80 font-mono text-[11px] text-foreground focus:outline-none focus:border-foreground"
+                />
+                <button
+                  onClick={() => handleUpdateStoragePath(true)}
+                  disabled={pathSaveLoading || !customMemoriesDir.trim()}
+                  className="px-3 py-1.5 rounded-lg bg-foreground text-background font-semibold text-[10px] hover:opacity-90 disabled:opacity-50 cursor-pointer shrink-0 transition-opacity flex items-center gap-1"
+                >
+                  {pathSaveLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <HardDrive className="w-3 h-3" />}
+                  <span>Apply Path</span>
+                </button>
+              </div>
+
+              {pathSaveStatus && (
+                <p className={cn('text-[10px] font-mono', pathSaveStatus.includes('Error') ? 'text-rose-500' : 'text-foreground font-semibold')}>
+                  {pathSaveStatus}
+                </p>
+              )}
+            </div>
+
+            {/* Storage Layout Mode Selector */}
+            <div className="space-y-2 pt-1">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+                Organization Strategy & Layout
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <div
+                  onClick={() => setStorageLayout('bundle')}
+                  className={cn(
+                    'p-2.5 rounded-xl border cursor-pointer transition-all space-y-1',
+                    storageLayout === 'bundle'
+                      ? 'bg-surface-selected border-foreground shadow-2xs font-semibold'
+                      : 'bg-surface-hover/40 border-border hover:border-foreground/60 text-muted-foreground'
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-foreground font-bold flex items-center gap-1">
+                      <FolderTree className="w-3 h-3" />
+                      Per-Memory Bundle
+                    </span>
+                    {storageLayout === 'bundle' && <CheckCircle2 className="w-3 h-3 text-foreground" />}
+                  </div>
+                  <p className="text-[9px] opacity-80 leading-snug">
+                    Folder per memory containing <code>media/</code> & <code>thumbnails/</code> subfolders.
+                  </p>
+                </div>
+
+                <div
+                  onClick={() => setStorageLayout('flat')}
+                  className={cn(
+                    'p-2.5 rounded-xl border cursor-pointer transition-all space-y-1',
+                    storageLayout === 'flat'
+                      ? 'bg-surface-selected border-foreground shadow-2xs font-semibold'
+                      : 'bg-surface-hover/40 border-border hover:border-foreground/60 text-muted-foreground'
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-foreground font-bold flex items-center gap-1">
+                      <Folder className="w-3 h-3" />
+                      Flat Categorized
+                    </span>
+                    {storageLayout === 'flat' && <CheckCircle2 className="w-3 h-3 text-foreground" />}
+                  </div>
+                  <p className="text-[9px] opacity-80 leading-snug">
+                    Standard flat <code>.md</code> notes grouped directly inside category folders.
+                  </p>
+                </div>
+              </div>
+
+              {/* 1-Click Reorganize & Migrate Button */}
+              <div className="pt-1">
+                <button
+                  onClick={handleMigrateToBundle}
+                  disabled={migrateLoading}
+                  className="w-full py-2 px-3 rounded-xl bg-surface-hover hover:bg-surface-selected border border-border text-[11px] font-semibold text-foreground flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
+                >
+                  {migrateLoading ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  )}
+                  <span>Reorganize & Migrate All Memories to {storageLayout === 'bundle' ? 'Bundle Structure' : 'Flat Structure'}</span>
+                </button>
+              </div>
+
+              {migrateStatus && (
+                <p className={cn('text-[10px] font-mono mt-1', migrateStatus.includes('failed') ? 'text-rose-500' : 'text-foreground font-semibold')}>
+                  {migrateStatus}
+                </p>
+              )}
+            </div>
+
             {backupMsg && (
               <p className={cn('text-[11px] font-mono', backupMsg.includes('success') ? 'text-foreground font-semibold' : 'text-rose-500')}>
                 {backupMsg}
@@ -717,21 +918,21 @@ export const SettingsPanel: React.FC = () => {
 
             {/* 4 Stat Metric Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
-              <div className="p-2.5 rounded-xl bg-surface-hover/60 border border-border">
-                <span className="text-[9px] text-muted-foreground uppercase font-mono block">Files</span>
-                <span className="text-base font-bold font-mono">{auditData?.total_files || 0}</span>
+              <div className="p-2 rounded-xl bg-surface-hover/60 border border-border">
+                <span className="text-[9px] text-muted-foreground uppercase font-mono block">Notes</span>
+                <span className="text-sm font-bold font-mono">{storagePaths?.total_memories || auditData?.total_files || 0}</span>
               </div>
-              <div className="p-2.5 rounded-xl bg-surface-hover/60 border border-border">
-                <span className="text-[9px] text-muted-foreground uppercase font-mono block">SQLite</span>
-                <span className="text-base font-bold font-mono">{auditData?.total_db_records || 0}</span>
+              <div className="p-2 rounded-xl bg-surface-hover/60 border border-border">
+                <span className="text-[9px] text-muted-foreground uppercase font-mono block">Media</span>
+                <span className="text-sm font-bold font-mono">{storagePaths?.total_media || 0}</span>
               </div>
-              <div className="p-2.5 rounded-xl bg-surface-hover/60 border border-border">
+              <div className="p-2 rounded-xl bg-surface-hover/60 border border-border">
                 <span className="text-[9px] text-muted-foreground uppercase font-mono block">Vectors</span>
-                <span className="text-base font-bold font-mono">{auditData?.total_vector_chunks || 0}</span>
+                <span className="text-sm font-bold font-mono">{auditData?.total_vector_chunks || 0}</span>
               </div>
-              <div className="p-2.5 rounded-xl bg-surface-hover/60 border border-border">
+              <div className="p-2 rounded-xl bg-surface-hover/60 border border-border">
                 <span className="text-[9px] text-muted-foreground uppercase font-mono block">Status</span>
-                <span className="text-base font-bold font-mono text-foreground">
+                <span className="text-sm font-bold font-mono text-foreground">
                   {(auditData?.orphan_files_count || 0) === 0 ? 'Healthy' : `${auditData?.orphan_files_count} Issues`}
                 </span>
               </div>
@@ -743,9 +944,9 @@ export const SettingsPanel: React.FC = () => {
                 <Terminal className="w-3 h-3" />
                 <span>Backend Specifications</span>
               </div>
-              <p>• FastAPI Service: <code>http://localhost:6999</code></p>
-              <p>• Database: <code>data/memorize.db</code></p>
-              <p>• Vector Engine: <code>data/chroma_db</code> (persisted)</p>
+              <p>• Service Port: <code>7777 (REST + MCP)</code></p>
+              <p>• SQLite DB: <code>data/memorize.db</code></p>
+              <p>• Active Memories Path: <code className="break-all">{storagePaths?.memories_dir || 'data/memories'}</code></p>
             </div>
           </div>
 

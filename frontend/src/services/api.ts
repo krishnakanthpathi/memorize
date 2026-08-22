@@ -419,6 +419,63 @@ export const api = {
     return data.settings || {};
   },
 
+  async getStoragePaths(): Promise<{
+    status: string;
+    memories_dir: string;
+    storage_layout: string;
+    default_memories_dir: string;
+    media_dir: string;
+    db_path: string;
+    validation: {
+      valid: boolean;
+      resolved_path?: string;
+      total_bytes?: number;
+      used_bytes?: number;
+      free_bytes?: number;
+      free_gb?: number;
+      error?: string;
+    };
+    total_memories: number;
+    total_media: number;
+  }> {
+    const res = await fetch(`${API_BASE}/settings/storage-paths`);
+    if (!res.ok) throw new Error(`Fetch storage paths failed: ${res.statusText}`);
+    return res.json();
+  },
+
+  async updateStoragePaths(payload: {
+    memories_dir?: string;
+    storage_layout?: string;
+    migrate_existing?: boolean;
+  }): Promise<any> {
+    const res = await fetch(`${API_BASE}/settings/storage-paths`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Update storage paths failed (${res.status})`);
+    }
+    return res.json();
+  },
+
+  async migrateStorageLayout(payload: {
+    storage_layout?: string;
+    reclassify?: boolean;
+  } = {}): Promise<any> {
+    const res = await fetch(`${API_BASE}/settings/migrate-storage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Storage migration failed (${res.status})`);
+    }
+    return res.json();
+  },
+
   // AI Prompt Templates Registry
   async getPrompts(): Promise<PromptsMap> {
     try {

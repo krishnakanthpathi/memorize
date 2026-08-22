@@ -43,16 +43,18 @@ def save_raw_image(
     filename: str,
     mime_type: str = "image/png",
     memory_id: Optional[str] = None,
+    is_thumbnail: bool = False,
 ) -> Dict[str, Any]:
     """
-    Saves an original, uncompressed image file byte-for-byte into data/media/.
-    Guarantees no lossy re-encoding or compression.
-    Uses SHA-256 deduplication and indexes metadata in SQLite.
+    Saves an original, uncompressed image/document file byte-for-byte.
+    If memory_id is linked and the memory has a dedicated bundle folder,
+    saves into <memory_bundle>/thumbnails/ (if thumbnail/page render)
+    or <memory_bundle>/media/ (if original document attachment).
+    Otherwise falls back to data/media/.
     """
     if not file_bytes:
         raise ValueError("Cannot save empty image bytes.")
 
-    constants.MEDIA_DIR.mkdir(parents=True, exist_ok=True)
     content_hash = compute_bytes_hash(file_bytes)
     file_size = len(file_bytes)
 
@@ -74,7 +76,31 @@ def save_raw_image(
     clean_name = sanitize_media_filename(filename)
     prefix = content_hash[:10]
     stored_filename = f"{prefix}_{clean_name}"
-    target_path = constants.MEDIA_DIR / stored_filename
+
+    # Determine target directory
+    target_dir = constants.MEDIA_DIR
+    from config.settings import get_storage_layout
+    if memory_id and get_storage_layout() == "bundle":
+        from storage.db_manager import get_memory_by_id, get_media_record
+        from utils.category_utils import get_memory_bundle_dir
+        mem_rec = get_memory_by_id(memory_id)
+        if not mem_rec:
+            parent_doc = get_media_record(memory_id)
+            if parent_doc and parent_doc.get("memory_id"):
+                mem_rec = get_memory_by_id(parent_doc["memory_id"])
+
+        if mem_rec:
+            cat = mem_rec.get("category", "personal")
+            title = mem_rec.get("title", "")
+            bundle_dir = get_memory_bundle_dir(cat, title, create_subdirs=True)
+            if is_thumbnail or "_thumb" in clean_name or "_page_" in clean_name:
+                target_dir = bundle_dir / "thumbnails"
+            else:
+                target_dir = bundle_dir / "media"
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_path = target_dir / stored_filename
 
     # Write raw uncompressed bytes directly to disk
     with open(target_path, "wb") as f:
@@ -98,29 +124,41 @@ def save_raw_image(
     saved_record = upsert_media_record(media_entry)
     saved_record["url"] = f"/api/media/{stored_filename}"
     saved_record["is_duplicate"] = False
-    logger.info(f"Saved uncompressed image: {target_path} ({file_size} bytes)")
+    logger.info(f"Saved uncompressed asset: {target_path} ({file_size} bytes)")
     return saved_record
 
 
 @handle_errors
 def get_media_file_path(filename_or_id: str) -> Optional[Path]:
-    """Resolves local absolute Path for a given stored filename or media ID."""
-    # Try finding by media_id first
+    """Resolves local absolute Path for a given stored filename or media ID across global & bundle storage."""
+    # 1. Try finding by media_id first in DB
     record = get_media_record(filename_or_id)
     if record and Path(record["file_path"]).exists():
         return Path(record["file_path"])
 
-    # Try finding by filename in DB
+    # 2. Try finding by filename in DB
     record = get_media_record_by_filename(filename_or_id)
     if record and Path(record["file_path"]).exists():
         return Path(record["file_path"])
 
-    # Fallback to direct path check in constants.MEDIA_DIR
-    direct_path = constants.MEDIA_DIR / filename_or_id
+    # 3. Fallback to direct path check in constants.MEDIA_DIR
+    clean_name = Path(filename_or_id).name
+    direct_path = constants.MEDIA_DIR / clean_name
     if direct_path.exists() and direct_path.is_file():
         return direct_path
 
+    # 4. Search across memory bundle folders under active memories_dir
+    from config.settings import get_memories_dir
+    memories_base = get_memories_dir()
+    if memories_base.exists():
+        for root, dirs, files in os.walk(memories_base):
+            if clean_name in files:
+                candidate = Path(root) / clean_name
+                if candidate.is_file():
+                    return candidate
+
     return None
+
 
 
 @handle_errors

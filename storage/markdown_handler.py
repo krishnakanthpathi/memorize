@@ -170,17 +170,35 @@ def create_markdown_file(
     if file_path:
         target_path = Path(file_path)
     else:
-        filename = title_to_filename(title)
-        target_path = category_dir / filename
-        if target_path.exists():
-            try:
-                fm, _ = read_markdown_file(target_path)
-                existing_fm_id = fm.get("id")
-                if existing_fm_id and existing_fm_id != memory_id:
-                    target_path = category_dir / f"{memory_id}_{filename}"
-            except Exception:
-                if not overwrite:
-                    target_path = category_dir / f"{memory_id}_{filename}"
+        from config.settings import get_storage_layout
+        layout = get_storage_layout()
+        slug = title_to_slug(title)
+        
+        if layout == "bundle":
+            from utils.category_utils import get_memory_bundle_dir
+            bundle_dir = get_memory_bundle_dir(category, slug, create_subdirs=True)
+            target_path = bundle_dir / f"{slug}.md"
+            if target_path.exists() and not overwrite:
+                try:
+                    fm, _ = read_markdown_file(target_path)
+                    existing_fm_id = fm.get("id")
+                    if existing_fm_id and existing_fm_id != memory_id:
+                        bundle_dir = get_memory_bundle_dir(category, f"{memory_id}_{slug}", create_subdirs=True)
+                        target_path = bundle_dir / f"{memory_id}_{slug}.md"
+                except Exception:
+                    pass
+        else:
+            filename = title_to_filename(title)
+            target_path = category_dir / filename
+            if target_path.exists():
+                try:
+                    fm, _ = read_markdown_file(target_path)
+                    existing_fm_id = fm.get("id")
+                    if existing_fm_id and existing_fm_id != memory_id:
+                        target_path = category_dir / f"{memory_id}_{filename}"
+                except Exception:
+                    if not overwrite:
+                        target_path = category_dir / f"{memory_id}_{filename}"
 
     frontmatter = {
         "id": memory_id,
@@ -289,13 +307,25 @@ def read_markdown_file(file_path: Union[Path, str]) -> Tuple[Dict[str, Any], str
 def delete_markdown_file(file_path: Union[Path, str]) -> bool:
     """
     Deletes a Markdown file from disk if it exists.
-    Accepts either a Path object or a string file path.
+    If the file is part of a per-memory bundle (<category>/<slug>/<slug>.md),
+    deletes the entire bundle folder (including media/ and thumbnails/).
     """
+    import shutil
+    import config.constants as constants
+
     path_obj = Path(file_path) if isinstance(file_path, str) else file_path
 
     if path_obj.exists():
-        path_obj.unlink()
-        logger.info(f"Deleted Markdown memory file: {path_obj}")
+        parent = path_obj.parent
+        # Check if parent is a bundle folder (subfolder inside a category)
+        if parent.parent.name in constants.DEFAULT_CATEGORIES and parent.name == path_obj.stem:
+            shutil.rmtree(parent, ignore_errors=True)
+            logger.info(f"Deleted Markdown memory bundle directory: {parent}")
+        else:
+            path_obj.unlink()
+            logger.info(f"Deleted Markdown memory file: {path_obj}")
+
         delete_single_backup_file(path_obj)
         return True
     return False
+

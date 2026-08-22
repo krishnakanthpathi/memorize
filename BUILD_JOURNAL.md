@@ -122,15 +122,20 @@ memorize/
 - [x] Supports `python main.py` / `python main.py start` (concurrently runs FastAPI backend + Vite frontend with live color-coded logs and graceful SIGINT shutdown).
 - [x] Supports subcommands: `backend` (FastAPI REST + MCP on port 7777), `frontend` (Vite UI on port 8888), `mcp` (FastMCP server), and `cli` (terminal memory manager).
 
-### Step 14: Blueprint for Per-Memory Folder Architecture & Customizable Storage
-- [x] Designed **Per-Memory Folder Bundle Architecture**:
+### Step 14: Per-Memory Folder Bundle Architecture & Storage Management
+- [x] Implemented **Per-Memory Folder Bundle Architecture**:
   ```text
   <MEMORIES_DIR>/<category>/<memory_slug>/
-  ├── <memory_slug>.md          <-- Note Markdown content & frontmatter
+  ├── <memory_slug>.md          <-- Note Markdown content & YAML frontmatter
   ├── media/                    <-- Original attached files (PDFs, high-res images)
   └── thumbnails/               <-- Generated thumbnails and page preview images
   ```
-- [x] Designed Customizable Storage Directory setting in Settings Panel with 1-click automated migration.
+- [x] Implemented dynamic storage directory resolver in `config/settings.py` with `~` path expansion and live write validation.
+- [x] Updated `storage/markdown_handler.py`, `storage/media_store_manager.py`, and `media/pdf_processor.py` to route raw uploads to `media/` and rendered pages/thumbnails to `thumbnails/`.
+- [x] Implemented 1-click **Storage Layout Reorganization & Migration Engine** in `storage/organization_manager.py`.
+- [x] Added REST API endpoints: `GET /api/settings/storage-paths`, `POST /api/settings/storage-paths`, and `POST /api/settings/migrate-storage`.
+- [x] Built interactive **Storage & Directory Architecture** card in `SettingsPanel.tsx` with live path editing, validation badges, layout toggles, and 1-click migration.
+- [x] Added automated unit test suite in `tests/test_storage_bundle_architecture.py` (all 90 tests passing cleanly).
 
 ---
 

@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import config.constants as constants
+from config.settings import get_memories_dir
 from core.hashing import compute_string_hash
 from core.id_generator import generate_memory_id
 from core.logger import handle_errors, logger
@@ -29,7 +30,7 @@ from vector.vector_db import (
 @handle_errors
 def find_orphan_files() -> List[Dict[str, Any]]:
     """
-    Finds Markdown files on disk in MEMORIES_DIR that are not tracked in the SQLite database index.
+    Finds Markdown files on disk in the active memories directory that are not tracked in the SQLite database index.
     """
     db_memories = get_all_memories()
     indexed_paths = set()
@@ -41,7 +42,7 @@ def find_orphan_files() -> List[Dict[str, Any]]:
                 pass
 
     orphan_files = []
-    mem_dir = constants.MEMORIES_DIR
+    mem_dir = get_memories_dir()
     if mem_dir.exists():
         for path in mem_dir.rglob("*.md"):
             if path.name.startswith(".") or path.name == ".gitkeep":
@@ -344,7 +345,7 @@ def clear_all_memories(clear_backups: bool = True) -> Dict[str, Any]:
     import shutil
 
     deleted_files = 0
-    mem_dir = constants.MEMORIES_DIR
+    mem_dir = get_memories_dir()
     if mem_dir.exists():
         for item in mem_dir.iterdir():
             try:
